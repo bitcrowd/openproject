@@ -21,6 +21,7 @@ import { TimeEntryCreateService } from 'core-app/shared/components/time_entries/
 import { splitViewRoute } from 'core-app/features/work-packages/routing/split-view-routes.helper';
 import { WpDestroyModalComponent } from 'core-app/shared/components/modals/wp-destroy-modal/wp-destroy.modal';
 import isNewResource from 'core-app/features/hal/helpers/is-new-resource';
+import { menuItem } from 'core-app/features/plugins/linked/openproject-proto_plugin/context-menu';
 
 export class WorkPackageViewContextMenu extends OpContextMenuHandler {
   @InjectField() protected states!:States;
@@ -213,28 +214,7 @@ export class WorkPackageViewContextMenu extends OpContextMenuHandler {
       }
     }
 
-    const newAction:WorkPackageAction = {
-      text: 'new action',
-      key: 'newactionkey',
-      link: '/angular_kittens',
-    };
-
-    const newItem = {
-      class: undefined as string|undefined,
-      disabled: false,
-      linkText: newAction.text,
-      href: newAction.href,
-      icon: newAction.icon != null ? newAction.icon : `icon-${newAction.key}`,
-      onClick: ($event:JQuery.TriggeredEvent) => {
-        if (newAction.href && isClickedWithModifier($event)) {
-          return false;
-        }
-
-        this.triggerContextMenuAction(newAction);
-        return true;
-      },
-    };
-    items.push(newItem);
+    items.push(menuItem);
 
     return items;
   }
