@@ -213,6 +213,29 @@ export class WorkPackageViewContextMenu extends OpContextMenuHandler {
       }
     }
 
+    const newAction:WorkPackageAction = {
+      text: 'new action',
+      key: 'newactionkey',
+      link: '/angular_kittens',
+    };
+
+    const newItem = {
+      class: undefined as string|undefined,
+      disabled: false,
+      linkText: newAction.text,
+      href: newAction.href,
+      icon: newAction.icon != null ? newAction.icon : `icon-${newAction.key}`,
+      onClick: ($event:JQuery.TriggeredEvent) => {
+        if (newAction.href && isClickedWithModifier($event)) {
+          return false;
+        }
+
+        this.triggerContextMenuAction(newAction);
+        return true;
+      },
+    };
+    items.push(newItem);
+
     return items;
   }
 }
