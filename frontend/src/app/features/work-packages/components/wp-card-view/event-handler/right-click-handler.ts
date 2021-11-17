@@ -58,6 +58,7 @@ export class CardRightClickHandler implements CardEventHandler {
 
     if (!this.wpTableSelection.isSelected(wpId)) {
       this.wpTableSelection.setSelection(wpId, index);
+      console.log('multiple select - card - start: ', wpId);
     }
 
     const handler = new WorkPackageViewContextMenu(this.injector, wpId, jQuery(evt.target) as JQuery, {}, card.showInfoButton);

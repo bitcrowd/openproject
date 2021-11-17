@@ -132,7 +132,7 @@ export class WorkPackageContextMenuHelperService {
 
   private getAllowedActions(workPackage:WorkPackageResource, actions:WorkPackageAction[]):WorkPackageAction[] {
     const allowedActions:WorkPackageAction[] = [];
-
+    console.log('allowed action package: ', workPackage);
     _.each(actions, (action) => {
       if (action.link && workPackage.hasOwnProperty(action.link)) {
         action.text = action.text || I18n.t(`js.button_${action.key}`);

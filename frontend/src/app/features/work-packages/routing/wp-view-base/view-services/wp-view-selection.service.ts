@@ -125,7 +125,7 @@ export class WorkPackageViewSelectionService extends WorkPackageViewBaseService<
     const current = this._emptyState;
     current.selected[wpId] = true;
     current.activeRowIndex = position;
-
+    console.log('multiple select - selection service - end :', current);
     this.update(current);
   }
 
