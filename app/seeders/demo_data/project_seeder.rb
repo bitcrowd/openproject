@@ -35,6 +35,7 @@ module DemoData
       puts ' ↳ Updating settings'
       seed_settings
 
+      OpenProject::Configuration['edition'] = 'standard'
       seed_projects = demo_data_for('projects').keys
 
       seed_projects.each do |key|
@@ -176,7 +177,7 @@ module DemoData
 
     def seed_queries(project, key)
       Array(project_data_for(key, 'queries')).each do |config|
-        QueryBuilder.new(config, project).create!
+        DemoData::QueryBuilder.new(config, project).create!
       end
     end
 
