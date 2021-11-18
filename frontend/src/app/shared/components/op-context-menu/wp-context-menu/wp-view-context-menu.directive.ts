@@ -21,7 +21,7 @@ import { TimeEntryCreateService } from 'core-app/shared/components/time_entries/
 import { splitViewRoute } from 'core-app/features/work-packages/routing/split-view-routes.helper';
 import { WpDestroyModalComponent } from 'core-app/shared/components/modals/wp-destroy-modal/wp-destroy.modal';
 import isNewResource from 'core-app/features/hal/helpers/is-new-resource';
-import { menuItem } from 'core-app/features/plugins/linked/openproject-proto_plugin/context-menu';
+import { kittenActionHandler, kittenAction } from 'core-app/features/plugins/linked/openproject-proto_plugin/context-menu';
 
 export class WorkPackageViewContextMenu extends OpContextMenuHandler {
   @InjectField() protected states!:States;
@@ -74,7 +74,6 @@ export class WorkPackageViewContextMenu extends OpContextMenuHandler {
 
   public triggerContextMenuAction(action:WorkPackageAction) {
     const { link } = action;
-
     switch (action.key) {
       case 'delete':
         this.deleteSelectedWorkPackages();
@@ -96,6 +95,9 @@ export class WorkPackageViewContextMenu extends OpContextMenuHandler {
         this.logTimeForSelectedWorkPackage();
         break;
 
+      case (kittenAction as WorkPackageAction).key:
+        kittenActionHandler(this.getSelectedWorkPackages());
+        break;
       default:
         window.location.href = link!;
         break;
@@ -153,7 +155,7 @@ export class WorkPackageViewContextMenu extends OpContextMenuHandler {
   }
 
   protected buildItems():OpContextMenuItem[] {
-    const items = this.permittedActions.map((action:WorkPackageAction) => ({
+    const items = this.permittedActions.concat([kittenAction]).map((action:WorkPackageAction) => ({
       class: undefined as string|undefined,
       disabled: false,
       linkText: action.text,
@@ -213,8 +215,6 @@ export class WorkPackageViewContextMenu extends OpContextMenuHandler {
         });
       }
     }
-
-    items.push(menuItem);
 
     return items;
   }
