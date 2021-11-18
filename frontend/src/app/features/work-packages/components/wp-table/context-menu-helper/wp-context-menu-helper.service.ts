@@ -91,7 +91,7 @@ export class WorkPackageContextMenuHelperService {
 
     _.each(allowedActions, (allowedAction) => {
       if (allowedAction.link) {
-        console.log(`allowed wpActionLink for ${allowedAction.text}: `, workPackage[allowedAction.link]);
+        console.log(`allowed wpActionLink for ${allowedAction.text}`, allowedAction, workPackage[allowedAction.link]);
       }
       // NOTE: if action defined, throws error because wp action doesn't exist
       singularPermittedActions.push({
