@@ -96,8 +96,9 @@ export class WorkPackageViewContextMenu extends OpContextMenuHandler {
         break;
 
       case (kittenAction as WorkPackageAction).key:
-        kittenActionHandler(this.getSelectedWorkPackages());
+        kittenActionHandler(this.WorkPackageContextMenuHelper.getBulkActionLink(kittenAction, this.getSelectedWorkPackages()));
         break;
+
       default:
         window.location.href = link!;
         break;
