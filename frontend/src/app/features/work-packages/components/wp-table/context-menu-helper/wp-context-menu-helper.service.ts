@@ -90,6 +90,10 @@ export class WorkPackageContextMenuHelperService {
     allowedActions = allowedActions.concat(this.getAllowedRelationActions(workPackage, allowSplitScreenActions));
 
     _.each(allowedActions, (allowedAction) => {
+      if (allowedAction.link) {
+        console.log(`allowed wpActionLink for ${allowedAction.text}: `, workPackage[allowedAction.link]);
+      }
+      // NOTE: if action defined, throws error because wp action doesn't exist
       singularPermittedActions.push({
         key: allowedAction.key,
         text: allowedAction.text,
@@ -141,10 +145,11 @@ export class WorkPackageContextMenuHelperService {
     });
 
     _.each(this.HookService.call('workPackageTableContextMenu'), (action) => {
-      if (workPackage.hasOwnProperty(action.link)) {
-        const index = action.indexBy ? action.indexBy(allowedActions) : allowedActions.length;
-        allowedActions.splice(index, 0, action);
-      }
+      console.log('hooked actions: ', action);
+      // if (workPackage.hasOwnProperty(action.link)) {
+      const index = action.indexBy ? action.indexBy(allowedActions) : allowedActions.length;
+      allowedActions.splice(index, 0, action);
+      // }
     });
 
     return allowedActions;
