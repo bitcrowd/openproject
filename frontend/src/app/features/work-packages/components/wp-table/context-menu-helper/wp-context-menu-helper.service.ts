@@ -103,8 +103,8 @@ export class WorkPackageContextMenuHelperService {
 
   public getIntersectOfPermittedActions(workPackages:any) {
     const bulkPermittedActions:any = [];
-
-    const permittedActions = _.filter(this.BULK_ACTIONS, (action:any) => _.every(workPackages, (workPackage:WorkPackageResource) => this.getAllowedActions(workPackage, [action]).length >= 1));
+    const possibleActions = this.BULK_ACTIONS.concat(this.HookService.call('workPackageBulkContextMenu'));
+    const permittedActions = _.filter(possibleActions, (action:any) => _.every(workPackages, (workPackage:WorkPackageResource) => this.getAllowedActions(workPackage, [action]).length >= 1));
 
     _.each(permittedActions, (permittedAction:any) => {
       bulkPermittedActions.push({
