@@ -105,7 +105,7 @@ export class WorkPackageContextMenuHelperService {
     const bulkPermittedActions:any = [];
 
     const possibleActions = this.BULK_ACTIONS.concat(this.HookService.call('workPackageBulkContextMenu'));
-    const permittedActions = _.filter(possibleActions, (action:any) => _.every(workPackages, (workPackage:WorkPackageResource) => this.isActionAllowed(workPackage, action)));
+    const permittedActions = _.filter(this.BULK_ACTIONS, (action:any) => _.every(workPackages, (workPackage:WorkPackageResource) => this.isActionAllowed(workPackage, action)));
 
     _.each(permittedActions, (permittedAction:any) => {
       bulkPermittedActions.push({
