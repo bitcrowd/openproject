@@ -111,6 +111,7 @@ export class WorkPackageContextMenuHelperService {
       bulkPermittedActions.push({
         key: permittedAction.key,
         text: permittedAction.text,
+        icon!: permittedAction.icon,
         link: this.getBulkActionLink(permittedAction, workPackages),
       });
     });
