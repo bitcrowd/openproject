@@ -103,7 +103,6 @@ export class WorkPackageContextMenuHelperService {
 
   public getIntersectOfPermittedActions(workPackages:any) {
     const bulkPermittedActions:any = [];
-
     const possibleActions = this.BULK_ACTIONS.concat(this.HookService.call('workPackageBulkContextMenu'));
     const permittedActions = _.filter(possibleActions, (action:any) => _.every(workPackages, (workPackage:WorkPackageResource) => this.isActionAllowed(workPackage, action)));
 
@@ -111,8 +110,6 @@ export class WorkPackageContextMenuHelperService {
       bulkPermittedActions.push({
         key: permittedAction.key,
         text: permittedAction.text,
-        // the icon field is necessary for custom plugins
-        icon: permittedAction.icon,
         link: this.getBulkActionLink(permittedAction, workPackages),
       });
     });
