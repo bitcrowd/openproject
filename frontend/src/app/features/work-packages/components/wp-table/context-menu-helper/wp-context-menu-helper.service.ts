@@ -111,6 +111,7 @@ export class WorkPackageContextMenuHelperService {
       bulkPermittedActions.push({
         key: permittedAction.key,
         text: permittedAction.text,
+        // the optional icon field is necessary for custom plugins
         icon!: permittedAction.icon,
         link: this.getBulkActionLink(permittedAction, workPackages),
       });
