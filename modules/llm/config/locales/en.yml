@@ -2,6 +2,14 @@
 en:
   activerecord:
     attributes:
+      embedding_set:
+        context_token_length: "Context length"
+        description: "Description"
+        embedding_vector_dimensions: "Dimensions"
+        # ActiveRecord::Base.human_attribute_name strips the _id suffix.
+        model: "Model"
+        state: "Status"
+        title: "Display name"
       llm_capability_verdict:
         capability: "Capability"
         model_id: "Model"
@@ -27,6 +35,10 @@ en:
         external: "Model name"
     errors:
       models:
+        embedding_set:
+          attributes:
+            model_id:
+              not_offered: "is not an embedding model offered by the configured LLM server."
         llm_connection:
           attributes:
             api_format:
