@@ -79,6 +79,32 @@ en:
             external_id:
               conflicting_capabilities: "has capability assertions stored under it that conflict with those of this model."
   admin:
+    embedding_sets:
+      box:
+        blank_description: "Create an embedding set to choose the model, context length and dimensions used to index work packages."
+        blank_title: "No embedding sets yet"
+        caption: "Each set describes one way of indexing work packages for semantic search."
+        new: "New embedding set"
+        title: "Embedding sets"
+      destroy:
+        description: "The set and its settings will be removed. This cannot be undone."
+        heading: "Delete %{title}?"
+        title: "Delete embedding set"
+      dialog:
+        edit_title: "Edit \"%{title}\""
+        new_title: "New embedding set"
+      form:
+        context_token_length_caption: "Maximum number of tokens embedded per work package."
+        embedding_vector_dimensions_caption: "How many numbers each vector has."
+        model_caption: "Only models known to create embeddings are offered."
+        option_unqualified: "%{model} (no longer eligible)"
+      menu:
+        delete: "Delete…"
+      states:
+        created: "Not ingested"
+        error: "Failed"
+        ingesting: "Ingesting"
+        ready: "Ready"
     llm_connections:
       delete_api_key:
         configured_from_env: "This connection is configured through the environment and cannot be changed here."

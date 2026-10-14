@@ -59,6 +59,17 @@ Rails.application.routes.draw do
     # of a registered feature, and a feature may not have a row yet.
     resources :llm_feature_bindings, only: %i[index update], controller: "admin/llm_feature_bindings"
 
+    resources :embedding_sets, only: %i[create update destroy], controller: "admin/embedding_sets" do
+      collection do
+        get :new_dialog, defaults: { format: :turbo_stream }
+      end
+
+      member do
+        get :edit_dialog, defaults: { format: :turbo_stream }
+        get :deletion_dialog, defaults: { format: :turbo_stream }
+      end
+    end
+
     resources :work_package_embeddings, only: [], controller: "admin/work_package_embeddings" do
       collection do
         post :reindex
