@@ -116,4 +116,20 @@ RSpec.describe SemanticIndex do
       expect { semantic_index.fail_indexing!("Some Error") }.to raise_error(SemanticIndex::InvalidTransitionError)
     end
   end
+
+  describe "#active?" do
+    let(:semantic_index) { create(:semantic_index, state: "ready") }
+
+    it "is active once the semantic search binding references it" do
+      expect { connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:) }
+        .to change(semantic_index, :active?).from(false).to(true)
+    end
+
+    it "cannot be destroyed while active" do
+      connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:)
+
+      expect(semantic_index.destroy).to be(false)
+      expect(described_class.exists?(semantic_index.id)).to be(true)
+    end
+  end
 end

@@ -34,6 +34,8 @@ class SemanticIndex < ApplicationRecord
   INDEXABLE_STATES = %w[not_indexed failed].freeze
   PARAMETERS = %w[model_id embedding_vector_dimensions context_token_length].freeze
 
+  has_many :llm_feature_bindings, dependent: :restrict_with_error
+
   enum :state, {
     not_indexed: "not_indexed",
     indexing: "indexing",
@@ -47,6 +49,12 @@ class SemanticIndex < ApplicationRecord
             numericality: { only_integer: true, greater_than: 0 }
 
   validate :model_offered, if: -> { model_id.present? && model_id_changed? }
+
+  def self.semantic_search_binding
+    LlmConnection.active_connection.feature_bindings.find_or_initialize_by(feature_key: "semantic_search")
+  end
+
+  def active? = llm_feature_bindings.exists?
 
   def indexable? = INDEXABLE_STATES.include?(state)
 

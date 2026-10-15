@@ -22,6 +22,7 @@ en:
         feature_key: "Feature"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
         model: "Model"
+        semantic_index: "Semantic Index"
       llm_model:
         admin_context_window: "Context window"
         display_name: "Display name"
@@ -31,6 +32,7 @@ en:
         context_token_length: "Context length"
         description: "Description"
         embedding_vector_dimensions: "Dimensions"
+        llm_feature_bindings: "Feature configuration"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
         model: "Model"
         state: "Status"
@@ -72,6 +74,9 @@ en:
             model_id:
               locked: "cannot be changed while data indexed with it still exists. Re-index to switch models."
               not_available: "is not offered by the configured LLM server."
+            semantic_index:
+              not_for_chat_feature: "only applies to features that create embeddings."
+              not_ready: "must be ready before it can be activated."
         llm_model:
           attributes:
             external_id:
@@ -80,6 +85,7 @@ en:
           locked_once_indexed: "cannot be changed once the Semantic Index has been indexed."
           attributes:
             base:
+              active: "The Semantic Index is active. Activate another Semantic Index first."
               locked_while_indexing: "cannot be changed while it is being indexed."
             model_id:
               not_offered: "is not an embedding model offered by the configured LLM server."
