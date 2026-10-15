@@ -41,6 +41,14 @@ RSpec.describe SemanticIndexes::UpdateContract do
 
   it_behaves_like "contract is valid for active admins and invalid for regular users"
 
+  context "when the Semantic Index is being indexed" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    before { semantic_index.update!(state: "indexing") }
+
+    it_behaves_like "contract is invalid", base: :locked_while_indexing
+  end
+
   include_examples "contract reuses the model errors" do
     let(:current_user) { build_stubbed(:admin) }
   end

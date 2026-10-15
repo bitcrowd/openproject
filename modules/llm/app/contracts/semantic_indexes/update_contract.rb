@@ -30,5 +30,12 @@
 
 module SemanticIndexes
   class UpdateContract < BaseContract
+    validate :not_indexing
+
+    private
+
+    def not_indexing
+      errors.add(:base, :locked_while_indexing) if model.indexing?
+    end
   end
 end

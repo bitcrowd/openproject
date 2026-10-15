@@ -31,5 +31,13 @@
 module SemanticIndexes
   class DeleteContract < ::DeleteContract
     delete_permission :admin
+
+    validate :not_indexing
+
+    private
+
+    def not_indexing
+      errors.add(:base, :locked_while_indexing) if model.indexing?
+    end
   end
 end

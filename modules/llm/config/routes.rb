@@ -62,11 +62,13 @@ Rails.application.routes.draw do
     resources :semantic_indexes, only: %i[create update destroy], controller: "admin/semantic_indexes" do
       collection do
         get :new_dialog, defaults: { format: :turbo_stream }
+        get :status, defaults: { format: :turbo_stream }
       end
 
       member do
         get :edit_dialog, defaults: { format: :turbo_stream }
         get :deletion_dialog, defaults: { format: :turbo_stream }
+        post :start_indexing
       end
     end
 

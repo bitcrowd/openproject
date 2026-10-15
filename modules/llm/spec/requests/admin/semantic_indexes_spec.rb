@@ -149,5 +149,42 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(response).to redirect_to(llm_feature_bindings_path)
       expect(SemanticIndex.count).to eq(0)
     end
+
+    it "starts indexing" do
+      post start_indexing_semantic_index_path(semantic_index)
+
+      expect(response).to redirect_to(llm_feature_bindings_path)
+      expect(flash[:notice]).to eq("Indexing of \"Qwen3 baseline\" has started.")
+      expect(semantic_index.reload).to be_indexing
+      expect(Llm::BuildSemanticIndexJob).to have_been_enqueued.with(semantic_index.id)
+    end
+
+    it "refuses to start indexing twice" do
+      semantic_index.update!(state: "indexing")
+
+      post start_indexing_semantic_index_path(semantic_index)
+
+      expect(flash[:error]).to eq("This Semantic Index is already being indexed or has been indexed.")
+      expect(Llm::BuildSemanticIndexJob).not_to have_been_enqueued
+    end
+  end
+
+  describe "GET status" do
+    it "answers with no content while a Semantic Index is indexing" do
+      create(:semantic_index, state: "indexing")
+
+      get status_semantic_indexes_path, headers: turbo_headers
+
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "replaces the box once indexing has finished" do
+      create(:semantic_index, state: "failed", error_message: "Some Error")
+
+      get status_semantic_indexes_path, headers: turbo_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("turbo-stream", "Failed", "Some Error")
+    end
   end
 end

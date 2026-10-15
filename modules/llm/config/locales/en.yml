@@ -78,6 +78,8 @@ en:
               conflicting_capabilities: "has capability assertions stored under it that conflict with those of this model."
         semantic_index:
           attributes:
+            base:
+              locked_while_indexing: "cannot be changed while it is being indexed."
             model_id:
               not_offered: "is not an embedding model offered by the configured LLM server."
   admin:
@@ -102,8 +104,17 @@ en:
         option_unqualified: "%{model} (no longer eligible)"
       menu:
         delete: "Delete…"
+        locked_while_indexing: "Available after indexing"
+        retry_indexing: "Retry indexing"
+        start_indexing: "Start indexing"
+      start_indexing:
+        not_indexable: "This Semantic Index is already being indexed or has been indexed."
+        started: "Indexing of \"%{title}\" has started."
       states:
+        failed: "Failed"
+        indexing: "Indexing"
         not_indexed: "Not indexed"
+        ready: "Ready"
     llm_connections:
       delete_api_key:
         configured_from_env: "This connection is configured through the environment and cannot be changed here."

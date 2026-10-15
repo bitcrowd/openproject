@@ -39,7 +39,7 @@ module Admin
     before_action :require_admin
     before_action :set_connection
     before_action :require_enabled_connection
-    before_action :find_semantic_index, only: %i[edit_dialog update deletion_dialog destroy]
+    before_action :find_semantic_index, only: %i[edit_dialog update deletion_dialog destroy start_indexing]
 
     def new_dialog
       respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(SemanticIndex.new, connection: @connection)
@@ -81,6 +81,29 @@ module Admin
       end
 
       redirect_to llm_feature_bindings_path, status: :see_other
+    end
+
+    def start_indexing
+      result = ::SemanticIndexes::StartIndexingService
+                 .new(user: current_user, model: @semantic_index)
+                 .call
+
+      if result.success?
+        flash[:notice] = t(".started", title: @semantic_index.title)
+      else
+        flash[:error] = result.message
+      end
+
+      redirect_to llm_feature_bindings_path, status: :see_other
+    end
+
+    def status
+      return head :no_content if SemanticIndex.indexing.exists?
+
+      replace_via_turbo_stream(
+        component: LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.order(:created_at))
+      )
+      respond_with_turbo_streams
     end
 
     private

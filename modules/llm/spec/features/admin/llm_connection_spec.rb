@@ -331,6 +331,25 @@ RSpec.describe "LLM connection administration",
         expect_flash(message: "Successful deletion.")
         expect(page).to have_no_test_selector("llm-semantic-index--row-#{semantic_index.id}")
       end
+
+      it "indexes a Semantic Index and shows the outcome without a reload" do
+        semantic_index = create(:semantic_index, title: "Nomic small")
+        allow(Random).to receive(:rand).and_return(0.0)
+
+        visit llm_feature_bindings_path
+
+        within_semantic_index_menu(semantic_index) { click_on "Start indexing" }
+
+        expect_flash(message: "Indexing of \"Nomic small\" has started.")
+        expect(page).to have_test_selector("llm-semantic-index--row-#{semantic_index.id}", text: "Indexing")
+
+        perform_enqueued_jobs
+
+        within_test_selector("llm-semantic-index--row-#{semantic_index.id}") do
+          expect(page).to have_text("Failed")
+          expect(page).to have_text("Some Error")
+        end
+      end
     end
   end
 end
