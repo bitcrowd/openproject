@@ -30,12 +30,16 @@
 
 module SemanticIndexes
   class UpdateContract < BaseContract
-    validate :not_indexing
+    validate :parameters_unchanged_once_indexed
 
     private
 
-    def not_indexing
-      errors.add(:base, :locked_while_indexing) if model.indexing?
+    def parameters_unchanged_once_indexed
+      return unless model.parameters_locked?
+
+      SemanticIndex::PARAMETERS.each do |attribute|
+        errors.add(attribute, :locked_once_indexed) if model.public_send(:"#{attribute}_changed?")
+      end
     end
   end
 end

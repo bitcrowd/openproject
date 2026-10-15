@@ -32,6 +32,7 @@ class SemanticIndex < ApplicationRecord
   class InvalidTransitionError < StandardError; end
 
   INDEXABLE_STATES = %w[not_indexed failed].freeze
+  PARAMETERS = %w[model_id embedding_vector_dimensions context_token_length].freeze
 
   enum :state, {
     not_indexed: "not_indexed",
@@ -48,6 +49,8 @@ class SemanticIndex < ApplicationRecord
   validate :model_offered, if: -> { model_id.present? && model_id_changed? }
 
   def indexable? = INDEXABLE_STATES.include?(state)
+
+  def parameters_locked? = !not_indexed?
 
   def start_indexing!
     with_lock do

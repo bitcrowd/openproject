@@ -38,6 +38,8 @@ module LlmConnections
 
       options :connection
 
+      def locked? = model.parameters_locked?
+
       private
 
       def http_method

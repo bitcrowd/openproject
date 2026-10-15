@@ -128,6 +128,14 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(response.body).to include("Edit &quot;Qwen3 baseline&quot;")
     end
 
+    it "locks the parameters in the edit dialog once indexed" do
+      semantic_index.update!(state: "failed")
+
+      get edit_dialog_semantic_index_path(semantic_index), headers: turbo_headers
+
+      expect(response.body).to include("Create a new Semantic Index to use different parameters.")
+    end
+
     it "updates the set" do
       patch semantic_index_path(semantic_index),
             params: { semantic_index: { title: "Qwen3 production", context_token_length: 4096 } }
