@@ -39,15 +39,23 @@ module LlmConnections
 
       mobile_labels :status
 
+      options active: false
+
       def has_actions? = true
 
       def has_footer? = false
 
-      def mobile_title = I18n.t("admin.semantic_indexes.box.title")
+      def blank_title = I18n.t("admin.semantic_indexes.box.no_active_title")
+
+      def blank_description = I18n.t("admin.semantic_indexes.box.no_active_description")
+
+      def blank_icon = :search
+
+      def mobile_title = title_caption
 
       def headers
         [
-          [:title, { caption: SemanticIndex.human_attribute_name(:title) }],
+          [:title, { caption: title_caption }],
           [:model_id, { caption: SemanticIndex.human_attribute_name(:model_id) }],
           [:context_token_length, { caption: SemanticIndex.human_attribute_name(:context_token_length) }],
           [:embedding_vector_dimensions, { caption: SemanticIndex.human_attribute_name(:embedding_vector_dimensions) }],
@@ -55,11 +63,17 @@ module LlmConnections
         ]
       end
 
-      def blank_title = I18n.t("admin.semantic_indexes.box.blank_title")
+      private
 
-      def blank_description = I18n.t("admin.semantic_indexes.box.blank_description")
-
-      def blank_icon = :database
+      def title_caption
+        if !active
+          I18n.t("admin.semantic_indexes.box.others_heading")
+        elsif rows.empty?
+          I18n.t("admin.semantic_indexes.box.active_heading")
+        else
+          SemanticIndex.human_attribute_name(:title)
+        end
+      end
     end
   end
 end

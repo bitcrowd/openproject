@@ -38,6 +38,14 @@ module LlmConnections
 
       options :semantic_indexes
 
+      def active_semantic_index
+        semantic_indexes.find { it.id == active_semantic_index_id }
+      end
+
+      def other_semantic_indexes
+        semantic_indexes.reject { it.id == active_semantic_index_id }
+      end
+
       def wrapper_data_attrs
         return {} unless semantic_indexes.any?(&:indexing?)
 
@@ -48,6 +56,12 @@ module LlmConnections
             poll_for_changes_interval_value: POLL_INTERVAL_MS
           }
         }
+      end
+
+      private
+
+      def active_semantic_index_id
+        @active_semantic_index_id ||= SemanticIndex.semantic_search_binding.semantic_index_id
       end
     end
   end

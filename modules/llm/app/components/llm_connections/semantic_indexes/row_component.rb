@@ -40,7 +40,7 @@ module LlmConnections
       def title
         safe_join(
           [
-            render(Primer::Beta::Text.new(font_weight: :bold)) { semantic_index.title },
+            render(Primer::Beta::Text.new(font_weight: :bold, font_size: active? ? 4 : nil)) { semantic_index.title },
             description
           ].compact
         )
@@ -73,10 +73,39 @@ module LlmConnections
       end
 
       def button_links
-        [action_menu]
+        [activation, action_menu].compact
       end
 
       private
+
+      def active? = table.active
+
+      def activation
+        if active?
+          active_marker
+        elsif semantic_index.ready?
+          activate_button
+        end
+      end
+
+      def active_marker
+        render(Primer::Beta::Label.new(size: :large, classes: "op-semantic-index-active-card--marker",
+                                       test_selector: "llm-semantic-index--active-marker")) do
+          safe_join([render(Primer::Beta::Octicon.new(icon: :check, mr: 1)), I18n.t("admin.semantic_indexes.active")])
+        end
+      end
+
+      def activate_button
+        render(
+          Primer::Beta::Button.new(
+            size: :small,
+            tag: :a,
+            href: activation_dialog_semantic_index_path(semantic_index),
+            data: { controller: "async-dialog" },
+            test_selector: "llm-semantic-index--activate-#{semantic_index.id}"
+          )
+        ) { I18n.t("admin.semantic_indexes.activate.button") }
+      end
 
       def description
         return if semantic_index.description.blank?
@@ -102,7 +131,7 @@ module LlmConnections
           start_indexing_item(menu) if semantic_index.indexable?
           edit_item(menu)
           menu.with_divider
-          delete_item(menu)
+          active? ? locked_delete_item(menu) : delete_item(menu)
         end
       end
 
@@ -118,14 +147,19 @@ module LlmConnections
 
       def edit_item(menu)
         menu.with_item(
-          label: I18n.t(:button_edit),
+          label: I18n.t(semantic_index.parameters_locked? ? "admin.semantic_indexes.menu.edit_locked" : :button_edit),
           tag: :a,
           href: edit_dialog_semantic_index_path(semantic_index),
-          disabled: semantic_index.indexing?,
           content_arguments: { data: { controller: "async-dialog" } }
         ) do |item|
           item.with_leading_visual_icon(icon: :pencil)
-          item.with_description { I18n.t("admin.semantic_indexes.menu.locked_while_indexing") } if semantic_index.indexing?
+        end
+      end
+
+      def locked_delete_item(menu)
+        menu.with_item(label: I18n.t("admin.semantic_indexes.menu.delete"), scheme: :danger, disabled: true) do |item|
+          item.with_leading_visual_icon(icon: :trash)
+          item.with_description { I18n.t("admin.semantic_indexes.menu.locked_while_active") }
         end
       end
 

@@ -55,9 +55,9 @@ See COPYRIGHT and LICENSE files for more details.
           connection: @connection,
           binding: @bindings[feature.key.to_s]
         )
-      ) %>
-<% end %>
-
-<% if OpenProject::FeatureDecisions.semantic_search_active? %>
-  <%= render(LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.order(:created_at))) %>
+      ) do %>
+    <% if feature.key.to_s == "semantic_search" %>
+      <%= render(LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.order(:created_at))) %>
+    <% end %>
+  <% end %>
 <% end %>

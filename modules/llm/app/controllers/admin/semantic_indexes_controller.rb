@@ -39,7 +39,8 @@ module Admin
     before_action :require_admin
     before_action :set_connection
     before_action :require_enabled_connection
-    before_action :find_semantic_index, only: %i[edit_dialog update deletion_dialog destroy start_indexing]
+    before_action :find_semantic_index,
+                  only: %i[edit_dialog update deletion_dialog destroy start_indexing activation_dialog activate]
 
     def new_dialog
       respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(SemanticIndex.new, connection: @connection)
@@ -90,6 +91,26 @@ module Admin
 
       if result.success?
         flash[:notice] = t(".started", title: @semantic_index.title)
+      else
+        flash[:error] = result.message
+      end
+
+      redirect_to llm_feature_bindings_path, status: :see_other
+    end
+
+    def activation_dialog
+      respond_with_dialog LlmConnections::SemanticIndexes::ActivateDialogComponent.new(
+        @semantic_index, current: SemanticIndex.semantic_search_binding.semantic_index
+      )
+    end
+
+    def activate
+      result = ::SemanticIndexes::ActivateService
+                 .new(user: current_user, model: @semantic_index)
+                 .call
+
+      if result.success?
+        flash[:notice] = t(".success", title: @semantic_index.title)
       else
         flash[:error] = result.message
       end

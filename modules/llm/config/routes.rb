@@ -69,6 +69,8 @@ Rails.application.routes.draw do
         get :edit_dialog, defaults: { format: :turbo_stream }
         get :deletion_dialog, defaults: { format: :turbo_stream }
         post :start_indexing
+        get :activation_dialog, defaults: { format: :turbo_stream }
+        post :activate
       end
     end
 
