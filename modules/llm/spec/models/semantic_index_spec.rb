@@ -72,4 +72,62 @@ RSpec.describe SemanticIndex do
 
     expect(semantic_index).to be_valid
   end
+
+  describe "#start_indexing!" do
+    %w[not_indexed failed ready].each do |state|
+      it "starts indexing from #{state} and clears the previous error" do
+        semantic_index = create(:semantic_index, state:, error_message: "Some Error")
+
+        semantic_index.start_indexing!
+
+        expect(semantic_index.reload).to have_attributes(state: "indexing", error_message: nil)
+      end
+    end
+
+    it "refuses to start while indexing" do
+      semantic_index = create(:semantic_index, state: "indexing")
+
+      expect { semantic_index.start_indexing! }.to raise_error(SemanticIndex::InvalidTransitionError)
+      expect(semantic_index.reload).to be_indexing
+    end
+  end
+
+  describe "finishing indexing" do
+    let(:semantic_index) { create(:semantic_index, state: "indexing") }
+
+    it "becomes ready" do
+      semantic_index.finish_indexing!
+
+      expect(semantic_index.reload).to be_ready
+    end
+
+    it "fails with an error message" do
+      semantic_index.fail_indexing!("Some Error")
+
+      expect(semantic_index.reload).to have_attributes(state: "failed", error_message: "Some Error")
+    end
+
+    it "refuses unless indexing" do
+      semantic_index.update!(state: "not_indexed")
+
+      expect { semantic_index.finish_indexing! }.to raise_error(SemanticIndex::InvalidTransitionError)
+      expect { semantic_index.fail_indexing!("Some Error") }.to raise_error(SemanticIndex::InvalidTransitionError)
+    end
+  end
+
+  describe "#active?" do
+    let(:semantic_index) { create(:semantic_index, state: "ready") }
+
+    it "is active once the semantic search binding references it" do
+      expect { connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:) }
+        .to change(semantic_index, :active?).from(false).to(true)
+    end
+
+    it "cannot be destroyed while active" do
+      connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:)
+
+      expect(semantic_index.destroy).to be(false)
+      expect(described_class.exists?(semantic_index.id)).to be(true)
+    end
+  end
 end

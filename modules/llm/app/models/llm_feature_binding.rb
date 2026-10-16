@@ -35,6 +35,7 @@
 # does not lose the administrator's choice.
 class LlmFeatureBinding < ApplicationRecord
   belongs_to :llm_connection, optional: false
+  belongs_to :semantic_index, optional: true
 
   # Settings that describe how vectors are written, and so only mean anything
   # for an embedding feature.
@@ -52,6 +53,7 @@ class LlmFeatureBinding < ApplicationRecord
   validate :model_offered_by_connection, if: :model_id_changed?
   validate :embedding_settings_only_for_embedding_features
   validate :locked_settings_unchanged
+  validate :semantic_index_activatable, if: :semantic_index_id_changed?
 
   def feature
     OpenProject::Llm::Features[feature_key]
@@ -114,6 +116,16 @@ class LlmFeatureBinding < ApplicationRecord
     return if llm_connection.models.active.exists?(external_id: model_id)
 
     errors.add(:model_id, :not_available)
+  end
+
+  def semantic_index_activatable
+    return if semantic_index.nil?
+
+    if !feature&.embedding?
+      errors.add(:semantic_index, :not_for_chat_feature)
+    elsif !semantic_index.ready?
+      errors.add(:semantic_index, :not_ready)
+    end
   end
 
   def embedding_settings_only_for_embedding_features

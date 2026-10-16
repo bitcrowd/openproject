@@ -79,6 +79,15 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(page).to have_test_selector("llm-semantic-index--box", text: "Not indexed")
     end
 
+    it "shows an empty state while no Semantic Index is active" do
+      create(:semantic_index, title: "Qwen3 baseline")
+
+      get llm_feature_bindings_path
+
+      expect(page).to have_test_selector("llm-semantic-index--no-active",
+                                         text: "Create a new Semantic Index or choose one from the list below.")
+    end
+
     it "hides the box without the semantic search flag", with_flag: { llm_connection: true, semantic_search: false } do
       get llm_feature_bindings_path
 
@@ -128,6 +137,14 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(response.body).to include("Edit &quot;Qwen3 baseline&quot;")
     end
 
+    it "locks the parameters in the edit dialog once indexed" do
+      semantic_index.update!(state: "failed")
+
+      get edit_dialog_semantic_index_path(semantic_index), headers: turbo_headers
+
+      expect(response.body).to include("Create a new Semantic Index to use different parameters.")
+    end
+
     it "updates the set" do
       patch semantic_index_path(semantic_index),
             params: { semantic_index: { title: "Qwen3 production", context_token_length: 4096 } }
@@ -148,6 +165,101 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
 
       expect(response).to redirect_to(llm_feature_bindings_path)
       expect(SemanticIndex.count).to eq(0)
+    end
+
+    it "starts indexing" do
+      post start_indexing_semantic_index_path(semantic_index)
+
+      expect(response).to redirect_to(llm_feature_bindings_path)
+      expect(flash[:notice]).to eq("Indexing of \"Qwen3 baseline\" has started.")
+      expect(semantic_index.reload).to be_indexing
+      expect(Llm::BuildSemanticIndexJob).to have_been_enqueued.with(semantic_index.id)
+    end
+
+    it "re-indexes a ready Semantic Index" do
+      semantic_index.update!(state: "ready")
+
+      post start_indexing_semantic_index_path(semantic_index)
+
+      expect(semantic_index.reload).to be_indexing
+      expect(Llm::BuildSemanticIndexJob).to have_been_enqueued.with(semantic_index.id)
+    end
+
+    it "refuses to start indexing twice" do
+      semantic_index.update!(state: "indexing")
+
+      post start_indexing_semantic_index_path(semantic_index)
+
+      expect(flash[:error]).to eq("This Semantic Index is already being indexed.")
+      expect(Llm::BuildSemanticIndexJob).not_to have_been_enqueued
+    end
+  end
+
+  describe "activation" do
+    let!(:current) { create(:semantic_index, title: "Qwen3 baseline", state: "ready") }
+    let!(:candidate) { create(:semantic_index, title: "Nomic small", state: "ready") }
+
+    before { connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index: current) }
+
+    it "groups the active Semantic Index above the others" do
+      get llm_feature_bindings_path
+
+      expect(page).to have_test_selector("llm-semantic-index--active", text: "Qwen3 baseline")
+      expect(page).to have_test_selector("llm-semantic-index--active", text: "Ready")
+      expect(page).to have_no_test_selector("llm-semantic-index--no-active")
+      expect(page).to have_no_test_selector("llm-semantic-index--active", text: "Nomic small")
+      expect(page).to have_test_selector("llm-semantic-index--activate-#{candidate.id}")
+      expect(page).to have_no_test_selector("llm-semantic-index--activate-#{current.id}")
+    end
+
+    it "names both Semantic Indexes in the confirmation dialog" do
+      get activation_dialog_semantic_index_path(candidate), headers: turbo_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("switches from <b>Qwen3 baseline</b> to <b>Nomic small</b>")
+    end
+
+    it "activates a ready Semantic Index" do
+      post activate_semantic_index_path(candidate)
+
+      expect(response).to redirect_to(llm_feature_bindings_path)
+      expect(flash[:notice]).to eq("\"Nomic small\" is now the active Semantic Index.")
+      expect(SemanticIndex.semantic_search_binding.semantic_index).to eq(candidate)
+    end
+
+    it "refuses a Semantic Index that is not ready" do
+      candidate.update!(state: "failed")
+
+      post activate_semantic_index_path(candidate)
+
+      expect(flash[:error]).to eq("Semantic Index must be ready before it can be activated.")
+      expect(SemanticIndex.semantic_search_binding.semantic_index).to eq(current)
+    end
+
+    it "refuses to delete the active Semantic Index" do
+      delete semantic_index_path(current)
+
+      expect(flash[:error]).to include("The Semantic Index is active. Activate another Semantic Index first.")
+      expect(SemanticIndex.exists?(current.id)).to be(true)
+    end
+  end
+
+  describe "GET status" do
+    it "answers with no content while a Semantic Index is indexing" do
+      create(:semantic_index, state: "indexing")
+
+      get status_semantic_indexes_path, headers: turbo_headers
+
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "replaces the box once indexing has finished" do
+      create(:semantic_index, state: "failed", error_message: "Some Error")
+
+      get status_semantic_indexes_path, headers: turbo_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("turbo-stream", "Failed", "Some Error")
     end
   end
 end

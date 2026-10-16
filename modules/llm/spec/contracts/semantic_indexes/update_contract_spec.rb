@@ -44,4 +44,35 @@ RSpec.describe SemanticIndexes::UpdateContract do
   include_examples "contract reuses the model errors" do
     let(:current_user) { build_stubbed(:admin) }
   end
+
+  context "when the Semantic Index has not been indexed" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    it "allows changing the parameters" do
+      semantic_index.context_token_length = 4096
+
+      expect(contract.validate).to be(true)
+    end
+  end
+
+  %w[indexing ready failed].each do |state|
+    context "when the Semantic Index is #{state}" do
+      let(:current_user) { build_stubbed(:admin) }
+
+      before { semantic_index.update!(state:) }
+
+      it "allows renaming" do
+        semantic_index.title = "Renamed"
+
+        expect(contract.validate).to be(true)
+      end
+
+      it "locks the parameters" do
+        semantic_index.context_token_length = 4096
+
+        expect(contract.validate).to be(false)
+        expect(contract.errors.details[:context_token_length]).to include(error: :locked_once_indexed)
+      end
+    end
+  end
 end

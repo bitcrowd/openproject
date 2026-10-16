@@ -27,31 +27,57 @@ See COPYRIGHT and LICENSE files for more details.
 
 ++#%>
 
-<%= render(Primer::Box.new(border: true, border_radius: 2, p: 3, mb: 3, test_selector: "llm-semantic-index--box")) do %>
-  <%=
-    flex_layout(justify_content: :space_between, align_items: :flex_start, mb: 3) do |header|
-      header.with_column do
-        concat(render(Primer::Beta::Text.new(tag: :h3, font_size: 4, font_weight: :bold, mb: 1)) { t("admin.semantic_indexes.box.title") })
-        concat(render(Primer::Beta::Text.new(tag: :p, color: :muted, mb: 0)) { t("admin.semantic_indexes.box.caption") })
-      end
+<%= component_wrapper(**wrapper_data_attrs) do %>
+  <%= render(Primer::Box.new(mt: 4, test_selector: "llm-semantic-index--box")) do %>
+    <%=
+      flex_layout(justify_content: :space_between, align_items: :flex_start, mb: 3) do |header|
+        header.with_column do
+          concat(render(Primer::Beta::Text.new(tag: :h4, font_weight: :bold, mb: 1)) { t("admin.semantic_indexes.box.title") })
+          concat(render(Primer::Beta::Text.new(tag: :p, color: :muted, mb: 0)) { t("admin.semantic_indexes.box.caption") })
+        end
 
-      header.with_column(ml: 3) do
-        render(
-          Primer::Beta::Button.new(
-            scheme: :primary,
-            size: :small,
-            tag: :a,
-            href: new_dialog_semantic_indexes_path,
-            data: { controller: "async-dialog" },
-            test_selector: "llm-semantic-index--new-button"
-          )
-        ) do |button|
-          button.with_leading_visual_icon(icon: :plus)
-          t("admin.semantic_indexes.box.new")
+        header.with_column(ml: 3) do
+          render(
+            Primer::Beta::Button.new(
+              scheme: :primary,
+              size: :small,
+              tag: :a,
+              href: new_dialog_semantic_indexes_path,
+              data: { controller: "async-dialog" },
+              test_selector: "llm-semantic-index--new-button"
+            )
+          ) do |button|
+            button.with_leading_visual_icon(icon: :plus)
+            t("admin.semantic_indexes.box.new")
+          end
         end
       end
-    end
-  %>
+    %>
 
-  <%= render(LlmConnections::SemanticIndexes::TableComponent.new(rows: semantic_indexes)) %>
+    <% if active_semantic_index %>
+      <%= render(Primer::Box.new(mb: 4, classes: "op-semantic-index-active-card", test_selector: "llm-semantic-index--active")) do %>
+        <%=
+          flex_layout(
+            justify_content: :space_between, align_items: :center, flex_wrap: :wrap,
+            px: 3, py: 2, classes: "op-semantic-index-active-card--header"
+          ) do |header|
+            header.with_column(font_weight: :bold) do
+              concat(render(Primer::Beta::Octicon.new(icon: :"check-circle-fill", mr: 2)))
+              concat(t("admin.semantic_indexes.box.active_heading"))
+            end
+            header.with_column(font_size: :small) { t("admin.semantic_indexes.box.active_caption") }
+          end
+        %>
+        <%= render(LlmConnections::SemanticIndexes::TableComponent.new(rows: [active_semantic_index], active: true)) %>
+      <% end %>
+    <% else %>
+      <%= render(Primer::Box.new(mb: 4, test_selector: "llm-semantic-index--no-active")) do %>
+        <%= render(LlmConnections::SemanticIndexes::TableComponent.new(rows: [], active: true)) %>
+      <% end %>
+    <% end %>
+
+    <% if other_semantic_indexes.any? %>
+      <%= render(LlmConnections::SemanticIndexes::TableComponent.new(rows: other_semantic_indexes)) %>
+    <% end %>
+  <% end %>
 <% end %>

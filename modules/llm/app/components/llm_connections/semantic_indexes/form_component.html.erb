@@ -27,8 +27,12 @@ See COPYRIGHT and LICENSE files for more details.
 
 ++#%>
 
-<%=
-  component_wrapper do
+<%= component_wrapper do %>
+  <% if locked? %>
+    <%= render(Primer::Alpha::Banner.new(scheme: :warning, icon: :lock, mb: 3)) { t("admin.semantic_indexes.form.locked_once_indexed") } %>
+  <% end %>
+
+  <%=
     primer_form_with(
       id: FORM_ID,
       model:,
@@ -37,7 +41,7 @@ See COPYRIGHT and LICENSE files for more details.
       method: http_method,
       data: { turbo: true }
     ) do |f|
-      render(::SemanticIndexes::Form.new(f, model_options:))
+      render(::SemanticIndexes::Form.new(f, model_options:, locked: locked?))
     end
-  end
-%>
+  %>
+<% end %>

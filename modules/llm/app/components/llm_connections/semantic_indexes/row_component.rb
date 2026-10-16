@@ -40,7 +40,7 @@ module LlmConnections
       def title
         safe_join(
           [
-            render(Primer::Beta::Text.new(font_weight: :bold)) { semantic_index.title },
+            render(Primer::Beta::Text.new(font_weight: :bold, font_size: active? ? 4 : nil)) { semantic_index.title },
             description
           ].compact
         )
@@ -48,17 +48,64 @@ module LlmConnections
 
       delegate :model_id, :context_token_length, :embedding_vector_dimensions, to: :semantic_index
 
+      STATE_LABEL_SCHEMES = {
+        "not_indexed" => :secondary,
+        "indexing" => :attention,
+        "ready" => :accent,
+        "failed" => :danger
+      }.freeze
+
+      def column_css_class(column)
+        return "#{super} -no-ellipsis" if column == :status
+
+        super
+      end
+
       def status
-        render(Primer::Beta::Label.new(scheme: :secondary)) do
-          I18n.t("admin.semantic_indexes.states.#{semantic_index.state}")
-        end
+        safe_join(
+          [
+            render(Primer::Beta::Label.new(scheme: STATE_LABEL_SCHEMES.fetch(semantic_index.state))) do
+              I18n.t("admin.semantic_indexes.states.#{semantic_index.state}")
+            end,
+            error_message
+          ].compact
+        )
       end
 
       def button_links
-        [action_menu]
+        [activation, action_menu].compact
       end
 
       private
+
+      def active? = table.active
+
+      def activation
+        if active?
+          active_marker
+        elsif semantic_index.ready?
+          activate_button
+        end
+      end
+
+      def active_marker
+        render(Primer::Beta::Label.new(size: :large, classes: "op-semantic-index-active-card--marker",
+                                       test_selector: "llm-semantic-index--active-marker")) do
+          safe_join([render(Primer::Beta::Octicon.new(icon: :check, mr: 1)), I18n.t("admin.semantic_indexes.active")])
+        end
+      end
+
+      def activate_button
+        render(
+          Primer::Beta::Button.new(
+            size: :small,
+            tag: :a,
+            href: activation_dialog_semantic_index_path(semantic_index),
+            data: { controller: "async-dialog" },
+            test_selector: "llm-semantic-index--activate-#{semantic_index.id}"
+          )
+        ) { I18n.t("admin.semantic_indexes.activate.button") }
+      end
 
       def description
         return if semantic_index.description.blank?
@@ -68,29 +115,64 @@ module LlmConnections
         end
       end
 
+      def error_message
+        return unless semantic_index.failed? && semantic_index.error_message.present?
+
+        render(Primer::Beta::Text.new(tag: :div, color: :danger, font_size: :small, mt: 1)) do
+          semantic_index.error_message
+        end
+      end
+
       def action_menu
         render(Primer::Alpha::ActionMenu.new(anchor_align: :end,
                                              test_selector: "llm-semantic-index--menu-#{semantic_index.id}")) do |menu|
           menu.with_show_button(icon: "kebab-horizontal", "aria-label": I18n.t(:label_more), scheme: :invisible)
 
-          menu.with_item(
-            label: I18n.t(:button_edit),
-            tag: :a,
-            href: edit_dialog_semantic_index_path(semantic_index),
-            content_arguments: { data: { controller: "async-dialog" } }
-          ) do |item|
-            item.with_leading_visual_icon(icon: :pencil)
-          end
+          start_indexing_item(menu) if semantic_index.indexable?
+          edit_item(menu)
+          menu.with_divider
+          active? ? locked_delete_item(menu) : delete_item(menu)
+        end
+      end
 
-          menu.with_item(
-            label: I18n.t("admin.semantic_indexes.menu.delete"),
-            scheme: :danger,
-            tag: :a,
-            href: deletion_dialog_semantic_index_path(semantic_index),
-            content_arguments: { data: { controller: "async-dialog" } }
-          ) do |item|
-            item.with_leading_visual_icon(icon: :trash)
-          end
+      def start_indexing_item(menu)
+        menu.with_item(
+          label: I18n.t(semantic_index.state, scope: "admin.semantic_indexes.menu.start_indexing"),
+          href: start_indexing_semantic_index_path(semantic_index),
+          form_arguments: { method: :post }
+        ) do |item|
+          item.with_leading_visual_icon(icon: :play)
+        end
+      end
+
+      def edit_item(menu)
+        menu.with_item(
+          label: I18n.t(semantic_index.parameters_locked? ? "admin.semantic_indexes.menu.edit_locked" : :button_edit),
+          tag: :a,
+          href: edit_dialog_semantic_index_path(semantic_index),
+          content_arguments: { data: { controller: "async-dialog" } }
+        ) do |item|
+          item.with_leading_visual_icon(icon: :pencil)
+        end
+      end
+
+      def locked_delete_item(menu)
+        menu.with_item(label: I18n.t("admin.semantic_indexes.menu.delete"), scheme: :danger, disabled: true) do |item|
+          item.with_leading_visual_icon(icon: :trash)
+          item.with_description { I18n.t("admin.semantic_indexes.menu.locked_while_active") }
+        end
+      end
+
+      def delete_item(menu)
+        menu.with_item(
+          label: I18n.t("admin.semantic_indexes.menu.delete"),
+          scheme: :danger,
+          tag: :a,
+          href: deletion_dialog_semantic_index_path(semantic_index),
+          disabled: semantic_index.indexing?,
+          content_arguments: { data: { controller: "async-dialog" } }
+        ) do |item|
+          item.with_leading_visual_icon(icon: :trash)
         end
       end
     end

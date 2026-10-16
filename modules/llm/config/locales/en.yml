@@ -22,6 +22,7 @@ en:
         feature_key: "Feature"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
         model: "Model"
+        semantic_index: "Semantic Index"
       llm_model:
         admin_context_window: "Context window"
         display_name: "Display name"
@@ -31,6 +32,7 @@ en:
         context_token_length: "Context length"
         description: "Description"
         embedding_vector_dimensions: "Dimensions"
+        llm_feature_bindings: "Feature configuration"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
         model: "Model"
         state: "Status"
@@ -72,21 +74,39 @@ en:
             model_id:
               locked: "cannot be changed while data indexed with it still exists. Re-index to switch models."
               not_available: "is not offered by the configured LLM server."
+            semantic_index:
+              not_for_chat_feature: "only applies to features that create embeddings."
+              not_ready: "must be ready before it can be activated."
         llm_model:
           attributes:
             external_id:
               conflicting_capabilities: "has capability assertions stored under it that conflict with those of this model."
         semantic_index:
+          locked_once_indexed: "cannot be changed once the Semantic Index has been indexed."
           attributes:
+            base:
+              active: "The Semantic Index is active. Activate another Semantic Index first."
+              locked_while_indexing: "cannot be changed while it is being indexed."
             model_id:
               not_offered: "is not an embedding model offered by the configured LLM server."
   admin:
     semantic_indexes:
+      activate:
+        body_html: "Semantic search will use <b>%{title}</b> immediately."
+        body_switch_html: "Semantic search switches from <b>%{current}</b> to <b>%{title}</b> immediately. %{current} stays ready and can be reactivated."
+        button: "Activate"
+        confirm: "Activate"
+        success: "\"%{title}\" is now the active Semantic Index."
+        title: "Activate \"%{title}\"?"
+      active: "Active"
       box:
-        blank_description: "Create a Semantic Index to choose the model, context length and dimensions used to index work packages."
-        blank_title: "No Semantic Indexes yet"
+        active_caption: "Semantic search uses this index right now"
+        active_heading: "Active Semantic Index"
         caption: "Each Semantic Index describes one way of indexing work packages for semantic search."
         new: "New Semantic Index"
+        no_active_description: "Create a new Semantic Index or choose one from the list below."
+        no_active_title: "No active Semantic Index"
+        others_heading: "Other Semantic Indexes"
         title: "Semantic Indexes"
       destroy:
         description: "The Semantic Index and its settings will be removed. This cannot be undone."
@@ -98,12 +118,25 @@ en:
       form:
         context_token_length_caption: "Maximum number of tokens embedded per work package."
         embedding_vector_dimensions_caption: "How many numbers each vector has."
+        locked_once_indexed: "This Semantic Index has been indexed. Model, context length and dimensions can't be changed. Create a new Semantic Index to use different parameters."
         model_caption: "Only models known to create embeddings are offered."
         option_unqualified: "%{model} (no longer eligible)"
       menu:
         delete: "Delete…"
+        edit_locked: "Edit name & description"
+        locked_while_active: "Activate another Semantic Index first"
+        start_indexing:
+          failed: "Retry indexing"
+          not_indexed: "Start indexing"
+          ready: "Re-index"
+      start_indexing:
+        not_indexable: "This Semantic Index is already being indexed."
+        started: "Indexing of \"%{title}\" has started."
       states:
+        failed: "Failed"
+        indexing: "Indexing"
         not_indexed: "Not indexed"
+        ready: "Ready"
     llm_connections:
       delete_api_key:
         configured_from_env: "This connection is configured through the environment and cannot be changed here."

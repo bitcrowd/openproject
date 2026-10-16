@@ -1,0 +1,23 @@
+.op-semantic-index-active-card
+  --op-semantic-index-active-emphasis: var(--borderColor-success-emphasis)
+  --op-semantic-index-active-muted: var(--bgColor-success-muted)
+  --op-semantic-index-active-fg: var(--fgColor-success)
+
+  border: var(--borderWidth-thin) solid var(--op-semantic-index-active-emphasis)
+  border-left-width: 4px
+  border-radius: var(--borderRadius-medium)
+  box-shadow: 0 0 0 3px var(--op-semantic-index-active-muted)
+  overflow: hidden
+
+  &--header
+    background: var(--op-semantic-index-active-muted)
+    color: var(--op-semantic-index-active-fg)
+
+  .Box
+    border: 0
+    border-radius: 0
+
+  &--marker
+    background: var(--op-semantic-index-active-muted)
+    border-color: transparent
+    color: var(--op-semantic-index-active-fg)

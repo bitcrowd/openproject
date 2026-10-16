@@ -331,6 +331,58 @@ RSpec.describe "LLM connection administration",
         expect_flash(message: "Successful deletion.")
         expect(page).to have_no_test_selector("llm-semantic-index--row-#{semantic_index.id}")
       end
+
+      it "activates a ready Semantic Index and locks its parameters" do
+        current = create(:semantic_index, title: "Qwen3 baseline", state: "ready")
+        candidate = create(:semantic_index, title: "Nomic small", state: "ready")
+        connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index: current)
+
+        visit llm_feature_bindings_path
+
+        find_test_selector("llm-semantic-index--activate-#{candidate.id}").click
+
+        within_test_selector("llm-semantic-index-activate-dialog") do
+          expect(page).to have_text("switches from Qwen3 baseline to Nomic small")
+          click_on "Activate"
+        end
+
+        expect_flash(message: "\"Nomic small\" is now the active Semantic Index.")
+        within_test_selector("llm-semantic-index--active") do
+          expect(page).to have_text("Nomic small")
+          expect(page).to have_test_selector("llm-semantic-index--active-marker")
+        end
+
+        within_semantic_index_menu(candidate) { click_on "Edit name & description" }
+
+        within_test_selector("llm-semantic-index-dialog") do
+          expect(page).to have_text("This Semantic Index has been indexed.")
+          expect(page).to have_field("Context length", disabled: true)
+          fill_in "Display name", with: "Nomic production"
+          click_on "Save"
+        end
+
+        expect_flash(message: "Successful update.")
+        expect(candidate.reload.title).to eq("Nomic production")
+      end
+
+      it "indexes a Semantic Index and shows the outcome without a reload" do
+        semantic_index = create(:semantic_index, title: "Nomic small")
+        allow(Random).to receive(:rand).and_return(0.0)
+
+        visit llm_feature_bindings_path
+
+        within_semantic_index_menu(semantic_index) { click_on "Start indexing" }
+
+        expect_flash(message: "Indexing of \"Nomic small\" has started.")
+        expect(page).to have_test_selector("llm-semantic-index--row-#{semantic_index.id}", text: "Indexing")
+
+        perform_enqueued_jobs
+
+        within_test_selector("llm-semantic-index--row-#{semantic_index.id}") do
+          expect(page).to have_text("Failed")
+          expect(page).to have_text("Some Error")
+        end
+      end
     end
   end
 end

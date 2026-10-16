@@ -32,9 +32,10 @@ module SemanticIndexes
   class Form < ApplicationForm
     # Primer::Forms::Base.new assigns the builder itself and calls this with the
     # remaining keywords, so the builder must not appear in the signature.
-    def initialize(model_options:)
+    def initialize(model_options:, locked: false)
       super()
       @model_options = model_options
+      @locked = locked
     end
 
     form do |f|
@@ -51,7 +52,45 @@ module SemanticIndexes
         rows: 3
       )
 
-      f.autocompleter(
+      if locked
+        f.text_field(
+          name: :model_id,
+          label: SemanticIndex.human_attribute_name(:model_id),
+          disabled: true
+        )
+      else
+        model_autocompleter(f)
+      end
+
+      f.text_field(
+        name: :context_token_length,
+        type: :number,
+        min: 1,
+        label: SemanticIndex.human_attribute_name(:context_token_length),
+        caption: I18n.t("admin.semantic_indexes.form.context_token_length_caption"),
+        required: true,
+        disabled: locked,
+        input_width: :small
+      )
+
+      f.text_field(
+        name: :embedding_vector_dimensions,
+        type: :number,
+        min: 1,
+        label: SemanticIndex.human_attribute_name(:embedding_vector_dimensions),
+        caption: I18n.t("admin.semantic_indexes.form.embedding_vector_dimensions_caption"),
+        required: true,
+        disabled: locked,
+        input_width: :small
+      )
+    end
+
+    private
+
+    attr_reader :model_options, :locked
+
+    def model_autocompleter(form)
+      form.autocompleter(
         name: :model_id,
         label: SemanticIndex.human_attribute_name(:model_id),
         caption: I18n.t("admin.semantic_indexes.form.model_caption"),
@@ -69,31 +108,7 @@ module SemanticIndexes
                       selected: selected_model_id == option.model_id)
         end
       end
-
-      f.text_field(
-        name: :context_token_length,
-        type: :number,
-        min: 1,
-        label: SemanticIndex.human_attribute_name(:context_token_length),
-        caption: I18n.t("admin.semantic_indexes.form.context_token_length_caption"),
-        required: true,
-        input_width: :small
-      )
-
-      f.text_field(
-        name: :embedding_vector_dimensions,
-        type: :number,
-        min: 1,
-        label: SemanticIndex.human_attribute_name(:embedding_vector_dimensions),
-        caption: I18n.t("admin.semantic_indexes.form.embedding_vector_dimensions_caption"),
-        required: true,
-        input_width: :small
-      )
     end
-
-    private
-
-    attr_reader :model_options
 
     def selected_model_id = model.model_id
 
