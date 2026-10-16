@@ -224,7 +224,10 @@ RSpec.describe "LLM connection administration",
         click_on "Disconnect"
       end
 
-      wait_for { Setting.llm_features_enabled? }.to be(false)
+      wait_for do
+        Setting.clear_cache
+        Setting.llm_features_enabled?
+      end.to be(false)
       expect(connection.reload.api_key).to be_blank
       # The point of disconnecting rather than deleting.
       expect(connection.models.count).to eq(2)
