@@ -125,10 +125,12 @@ en:
         delete: "Delete…"
         edit_locked: "Edit name & description"
         locked_while_active: "Activate another Semantic Index first"
-        retry_indexing: "Retry indexing"
-        start_indexing: "Start indexing"
+        start_indexing:
+          failed: "Retry indexing"
+          not_indexed: "Start indexing"
+          ready: "Re-index"
       start_indexing:
-        not_indexable: "This Semantic Index is already being indexed or has been indexed."
+        not_indexable: "This Semantic Index is already being indexed."
         started: "Indexing of \"%{title}\" has started."
       states:
         failed: "Failed"

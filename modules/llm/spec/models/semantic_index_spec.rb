@@ -74,7 +74,7 @@ RSpec.describe SemanticIndex do
   end
 
   describe "#start_indexing!" do
-    %w[not_indexed failed].each do |state|
+    %w[not_indexed failed ready].each do |state|
       it "starts indexing from #{state} and clears the previous error" do
         semantic_index = create(:semantic_index, state:, error_message: "Some Error")
 
@@ -84,13 +84,11 @@ RSpec.describe SemanticIndex do
       end
     end
 
-    %w[indexing ready].each do |state|
-      it "refuses to start from #{state}" do
-        semantic_index = create(:semantic_index, state:)
+    it "refuses to start while indexing" do
+      semantic_index = create(:semantic_index, state: "indexing")
 
-        expect { semantic_index.start_indexing! }.to raise_error(SemanticIndex::InvalidTransitionError)
-        expect(semantic_index.reload.state).to eq(state)
-      end
+      expect { semantic_index.start_indexing! }.to raise_error(SemanticIndex::InvalidTransitionError)
+      expect(semantic_index.reload).to be_indexing
     end
   end
 

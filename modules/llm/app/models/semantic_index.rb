@@ -31,7 +31,7 @@
 class SemanticIndex < ApplicationRecord
   class InvalidTransitionError < StandardError; end
 
-  INDEXABLE_STATES = %w[not_indexed failed].freeze
+  INDEXABLE_STATES = %w[not_indexed failed ready].freeze
   PARAMETERS = %w[model_id embedding_vector_dimensions context_token_length].freeze
 
   has_many :llm_feature_bindings, dependent: :restrict_with_error

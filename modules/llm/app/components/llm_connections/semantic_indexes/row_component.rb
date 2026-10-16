@@ -137,7 +137,7 @@ module LlmConnections
 
       def start_indexing_item(menu)
         menu.with_item(
-          label: I18n.t("admin.semantic_indexes.menu.#{semantic_index.failed? ? 'retry_indexing' : 'start_indexing'}"),
+          label: I18n.t(semantic_index.state, scope: "admin.semantic_indexes.menu.start_indexing"),
           href: start_indexing_semantic_index_path(semantic_index),
           form_arguments: { method: :post }
         ) do |item|

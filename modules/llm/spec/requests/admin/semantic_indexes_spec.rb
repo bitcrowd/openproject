@@ -176,12 +176,21 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(Llm::BuildSemanticIndexJob).to have_been_enqueued.with(semantic_index.id)
     end
 
+    it "re-indexes a ready Semantic Index" do
+      semantic_index.update!(state: "ready")
+
+      post start_indexing_semantic_index_path(semantic_index)
+
+      expect(semantic_index.reload).to be_indexing
+      expect(Llm::BuildSemanticIndexJob).to have_been_enqueued.with(semantic_index.id)
+    end
+
     it "refuses to start indexing twice" do
       semantic_index.update!(state: "indexing")
 
       post start_indexing_semantic_index_path(semantic_index)
 
-      expect(flash[:error]).to eq("This Semantic Index is already being indexed or has been indexed.")
+      expect(flash[:error]).to eq("This Semantic Index is already being indexed.")
       expect(Llm::BuildSemanticIndexJob).not_to have_been_enqueued
     end
   end
