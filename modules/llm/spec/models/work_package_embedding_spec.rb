@@ -44,8 +44,9 @@ RSpec.describe WorkPackageEmbedding do
   end
 
   it "stores embeddings of any width" do
-    create(:work_package_embedding, embedding: [0.1, 0.2, 0.3])
-    create(:work_package_embedding, embedding: Array.new(4096, 0.1))
+    semantic_index = create(:semantic_index)
+    create(:work_package_embedding, semantic_index:, embedding: [0.1, 0.2, 0.3])
+    create(:work_package_embedding, semantic_index:, embedding: Array.new(4096, 0.1))
 
     expect(described_class.count).to eq(2)
   end

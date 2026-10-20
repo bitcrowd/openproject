@@ -44,9 +44,10 @@ class Queries::WorkPackages::Selects::SemanticSimilaritySelect < Queries::WorkPa
     filter = query&.filters&.find { |f| f.field.to_s == "semantic_search" }
     return NO_SIMILARITY_SQL unless filter
 
+    semantic_index = Llm::WorkPackages::SemanticSearch.active_semantic_index
     vector = Llm::WorkPackages::SemanticSearch.query_vector(filter.values.first)
-    return NO_SIMILARITY_SQL if vector.nil?
+    return NO_SIMILARITY_SQL if semantic_index.nil? || vector.nil?
 
-    WorkPackageEmbedding.distance_to_work_package_sql(vector)
+    WorkPackageEmbedding.distance_to_work_package_sql(vector, semantic_index_id: semantic_index.id)
   end
 end

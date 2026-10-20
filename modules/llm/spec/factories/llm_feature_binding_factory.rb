@@ -33,7 +33,5 @@ FactoryBot.define do
     llm_connection
     feature_key { "description_assistant" }
     model_id { nil }
-    dimensions { nil }
-    locked_at { nil }
   end
 end

@@ -29,20 +29,76 @@
 #++
 
 class SemanticIndex < ApplicationRecord
-  enum :state, { not_indexed: "not_indexed" }
+  class InvalidTransitionError < StandardError; end
+
+  INDEXABLE_STATES = %w[not_indexed failed ready].freeze
+  PARAMETERS = %w[model_id embedding_vector_dimensions context_token_length].freeze
+
+  has_many :llm_feature_bindings, dependent: :restrict_with_error
+
+  enum :state, {
+    not_indexed: "not_indexed",
+    indexing: "indexing",
+    ready: "ready",
+    failed: "failed"
+  }
 
   validates :title, presence: true
   validates :model_id, presence: true, length: { maximum: LlmModel::MAX_EXTERNAL_ID_LENGTH }
   validates :embedding_vector_dimensions, :context_token_length,
             numericality: { only_integer: true, greater_than: 0 }
 
-  validate :model_offered, if: -> { model_id.present? && model_id_changed? }
+  def self.semantic_search_binding
+    semantic_search_bindings.first_or_initialize
+  end
+
+  def self.semantic_search_bindings
+    LlmConnection.active_connection.feature_bindings.where(feature_key: "semantic_search")
+  end
+
+  def self.active
+    joins(:llm_feature_bindings).merge(semantic_search_bindings).first
+  end
+
+  def self.active_id
+    semantic_search_bindings.pick(:semantic_index_id)
+  end
+
+  def active? = persisted? && self.class.active_id == id
+
+  def indexing_batch
+    return if indexing_batch_id.nil?
+
+    GoodJob::BatchRecord.find_by(id: indexing_batch_id)
+  end
+
+  def indexable? = INDEXABLE_STATES.include?(state)
+
+  def parameters_locked? = !not_indexed?
+
+  def start_indexing!
+    with_lock do
+      raise InvalidTransitionError, "cannot start indexing from #{state}" unless indexable?
+
+      update!(state: :indexing, error_message: nil)
+    end
+  end
+
+  def finish_indexing!
+    transition_from_indexing!(state: :ready)
+  end
+
+  def fail_indexing!(error_message)
+    transition_from_indexing!(state: :failed, error_message:)
+  end
 
   private
 
-  def model_offered
-    return if LlmConnection.active_connection.embedding_model_ids.include?(model_id)
+  def transition_from_indexing!(**attributes)
+    with_lock do
+      raise InvalidTransitionError, "cannot finish indexing from #{state}" unless indexing?
 
-    errors.add(:model_id, :not_offered)
+      update!(**attributes)
+    end
   end
 end

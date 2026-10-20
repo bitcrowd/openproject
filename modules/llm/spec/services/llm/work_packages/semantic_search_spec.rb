@@ -32,34 +32,38 @@ require "spec_helper"
 require_module_spec_helper
 
 RSpec.describe Llm::WorkPackages::SemanticSearch, with_flag: { semantic_search: true } do
-  let(:connection) { create(:llm_connection, :with_models) }
+  include_context "with an embedding model offered"
+
   let(:session_double) { instance_double(Llm::Session) }
   let(:embedding_double) { instance_double(RubyLLM::Embedding, vectors: [0.1, 0.2, 0.3]) }
+  let(:semantic_index) { create(:semantic_index, state: "ready", embedding_vector_dimensions: 3) }
 
-  def create_binding(locked_at: Time.current)
-    create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search",
-                                 model_id: "bge-m3", dimensions: 3, locked_at:)
+  def activate(semantic_index)
+    create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search", semantic_index:)
   end
 
   describe ".available?" do
-    it "is false without a binding" do
-      expect(described_class).not_to be_available
-    end
-
-    it "is false while the binding is not locked" do
-      create_binding(locked_at: nil)
+    it "is false without an active Semantic Index" do
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search")
 
       expect(described_class).not_to be_available
     end
 
-    it "is true once the binding is locked" do
-      create_binding
+    it "is true once a Semantic Index is active" do
+      activate(semantic_index)
+
+      expect(described_class).to be_available
+    end
+
+    it "stays true while the active Semantic Index is re-indexed" do
+      activate(semantic_index)
+      semantic_index.start_indexing!
 
       expect(described_class).to be_available
     end
 
     it "is false with the feature flag off", with_flag: { semantic_search: false } do
-      create_binding
+      activate(semantic_index)
 
       expect(described_class).not_to be_available
     end
@@ -71,16 +75,14 @@ RSpec.describe Llm::WorkPackages::SemanticSearch, with_flag: { semantic_search: 
       allow(session_double).to receive(:embed).and_return(embedding_double)
     end
 
-    it "returns nothing without a locked binding" do
-      create_binding(locked_at: nil)
-
+    it "returns nothing without an active Semantic Index" do
       expect(described_class.query_vector("some query")).to be_nil
     end
 
-    context "with a locked binding" do
-      before { create_binding }
+    context "with an active Semantic Index" do
+      before { activate(semantic_index) }
 
-      it "embeds the query as a vector literal" do
+      it "embeds the query with the parameters of the Semantic Index" do
         expect(described_class.query_vector("some query")).to eq("[0.1,0.2,0.3]")
         expect(session_double).to have_received(:embed).with("some query", model: "bge-m3", dimensions: 3)
       end

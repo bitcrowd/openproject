@@ -32,29 +32,20 @@ module Llm
   class IndexWorkPackagesJob < ApplicationJob
     include GoodJob::ActiveJobExtensions::Batches
 
-    BATCH_DESCRIPTION = name
-
     queue_with_priority :low
 
-    def self.enqueue_batch
-      GoodJob::Batch.enqueue(description: BATCH_DESCRIPTION) { perform_later }
+    def self.enqueue_for(semantic_index)
+      GoodJob::Batch.enqueue(on_finish: Llm::FinishSemanticIndexingJob, semantic_index_id: semantic_index.id) do
+        perform_later(semantic_index.id)
+      end
     end
 
-    def self.latest_batch
-      GoodJob::BatchRecord.where(description: BATCH_DESCRIPTION).order(created_at: :desc).first
-    end
-
-    def self.running?
-      batch = latest_batch
-      batch.present? && !batch.finished?
-    end
-
-    def perform
+    def perform(semantic_index_id)
       return unless OpenProject::FeatureDecisions.semantic_search_active?
 
       batch.add do
         WorkPackage.find_in_batches(batch_size: 100) do |work_packages|
-          Llm::EmbedWorkPackagesJob.perform_later(work_packages.map(&:id))
+          Llm::EmbedWorkPackagesJob.perform_later(semantic_index_id, work_packages.map(&:id))
         end
       end
     end

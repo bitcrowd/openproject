@@ -40,14 +40,18 @@ RSpec.describe Queries::WorkPackages::Filter::SemanticSearchFilter do
   shared_let(:similar_closed) { create(:work_package, status: closed_status) }
   shared_let(:unrelated) { create(:work_package, status: open_status) }
   shared_let(:not_embedded) { create(:work_package, status: open_status) }
+  shared_let(:semantic_index) { create(:semantic_index) }
+  shared_let(:other_index) { create(:semantic_index) }
 
   shared_let(:embeddings) do
-    create(:work_package_embedding, work_package: similar_open, embedding: [0.1, 0.2, 0.3])
-    create(:work_package_embedding, work_package: similar_closed, embedding: [0.2, 0.2, 0.2])
-    create(:work_package_embedding, work_package: unrelated, embedding: [-0.1, -0.2, -0.3])
+    create(:work_package_embedding, semantic_index: other_index, work_package: unrelated, embedding: [0.1, 0.2, 0.3])
+    create(:work_package_embedding, semantic_index:, work_package: similar_open, embedding: [0.1, 0.2, 0.3])
+    create(:work_package_embedding, semantic_index:, work_package: similar_closed, embedding: [0.2, 0.2, 0.2])
+    create(:work_package_embedding, semantic_index:, work_package: unrelated, embedding: [-0.1, -0.2, -0.3])
   end
 
   before do
+    allow(Llm::WorkPackages::SemanticSearch).to receive(:active_semantic_index).and_return(semantic_index)
     allow(Llm::WorkPackages::SemanticSearch).to receive(:query_vector).with("login problems").and_return("[0.1,0.2,0.3]")
   end
 
@@ -62,12 +66,18 @@ RSpec.describe Queries::WorkPackages::Filter::SemanticSearchFilter do
   end
 
   describe "#where" do
-    it "restricts to the work packages within the semantic distance" do
+    it "restricts to the work packages within the semantic distance in the active Semantic Index" do
       expect(WorkPackage.where(instance.where)).to contain_exactly(similar_open, similar_closed)
     end
 
     it "matches nothing when the query cannot be embedded" do
       allow(Llm::WorkPackages::SemanticSearch).to receive(:query_vector).and_return(nil)
+
+      expect(WorkPackage.where(instance.where)).to be_empty
+    end
+
+    it "matches nothing without an active Semantic Index" do
+      allow(Llm::WorkPackages::SemanticSearch).to receive(:active_semantic_index).and_return(nil)
 
       expect(WorkPackage.where(instance.where)).to be_empty
     end
@@ -94,7 +104,7 @@ RSpec.describe Queries::WorkPackages::Filter::SemanticSearchFilter do
 
     it "only finds work packages visible to the user" do
       invisible_similar = create(:work_package, status: open_status)
-      create(:work_package_embedding, work_package: invisible_similar, embedding: [0.1, 0.2, 0.3])
+      create(:work_package_embedding, semantic_index:, work_package: invisible_similar, embedding: [0.1, 0.2, 0.3])
 
       query.user = create(:user, member_with_permissions: { similar_open.project => %i[view_work_packages] })
       login_as(query.user)

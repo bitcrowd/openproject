@@ -33,11 +33,14 @@ module Llm
     queue_with_priority :low
     retry_on Llm::Errors::RateLimitedError, wait: :polynomially_longer, attempts: 10
 
-    def perform(work_package_ids)
+    def perform(semantic_index_id, work_package_ids)
       return unless OpenProject::FeatureDecisions.semantic_search_active?
 
+      semantic_index = SemanticIndex.find_by(id: semantic_index_id)
+      return unless semantic_index&.indexing?
+
       work_packages = WorkPackage.where(id: work_package_ids)
-      Llm::WorkPackages::EmbedService.new(work_packages).call
+      Llm::WorkPackages::EmbedService.new(semantic_index, work_packages).call
     end
   end
 end

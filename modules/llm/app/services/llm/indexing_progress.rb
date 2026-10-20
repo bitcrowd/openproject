@@ -23,58 +23,32 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-module LlmConnections
-  class IndexingStatusComponent < ApplicationComponent
-    include OpTurbo::Streamable
-
-    POLL_INTERVAL_MS = 2000
-
-    def render? = batch.present?
-
-    def state
-      return :running unless batch.finished?
-
-      batch.discarded? ? :failed : :succeeded
+module Llm
+  class IndexingProgress
+    def initialize(batch)
+      @batch = batch
     end
 
-    def running? = state == :running
+    def percentage
+      return 0 if total_count.zero?
 
-    def progress_color = state == :failed ? :danger_emphasis : :success_emphasis
+      finished_count * 100 / total_count
+    end
 
     def failed_count
       @failed_count ||= embed_jobs.where.not(finished_at: nil).where.not(error: nil).count
     end
 
-    def percentage
-      return state == :succeeded ? 100 : 0 if total_count.zero?
-
-      finished_count * 100 / total_count
-    end
-
-    def wrapper_data_attrs
-      return {} unless running?
-
-      {
-        data: {
-          controller: "poll-for-changes",
-          poll_for_changes_url_value: status_work_package_embeddings_path,
-          poll_for_changes_interval_value: POLL_INTERVAL_MS
-        }
-      }
-    end
-
     private
 
-    def batch
-      @batch ||= Llm::IndexWorkPackagesJob.latest_batch
-    end
+    attr_reader :batch
 
-    def embed_jobs = batch.jobs.where(job_class: Llm::EmbedWorkPackagesJob.name)
+    def embed_jobs = GoodJob::Job.where(batch_id: batch.id, job_class: Llm::EmbedWorkPackagesJob.name)
 
     def total_count
       @total_count ||= embed_jobs.count

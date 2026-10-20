@@ -32,8 +32,37 @@ module LlmConnections
   module SemanticIndexes
     class BoxComponent < ApplicationComponent
       include OpPrimer::ComponentHelpers
+      include OpTurbo::Streamable
+
+      POLL_INTERVAL_MS = 2000
 
       options :semantic_indexes
+
+      def active_semantic_index
+        semantic_indexes.find { it.id == active_semantic_index_id }
+      end
+
+      def other_semantic_indexes
+        semantic_indexes.reject { it.id == active_semantic_index_id }
+      end
+
+      def wrapper_data_attrs
+        return {} unless semantic_indexes.any?(&:indexing?)
+
+        {
+          data: {
+            controller: "poll-for-changes",
+            poll_for_changes_url_value: status_semantic_indexes_path,
+            poll_for_changes_interval_value: POLL_INTERVAL_MS
+          }
+        }
+      end
+
+      private
+
+      def active_semantic_index_id
+        @active_semantic_index_id ||= SemanticIndex.active_id
+      end
     end
   end
 end

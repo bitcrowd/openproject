@@ -28,36 +28,32 @@
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-module Admin
-  class WorkPackageEmbeddingsController < ApplicationController
-    include OpTurbo::ComponentStream
+module SemanticIndexes
+  class StartIndexingService < ::BaseServices::BaseCallable
+    attr_reader :user, :model
 
-    layout "admin"
-
-    before_action :require_admin
-    before_action :require_feature
-
-    def reindex
-      if Llm::IndexWorkPackagesJob.running?
-        flash[:warning] = t(".already_running")
-      else
-        Llm::IndexWorkPackagesJob.enqueue_batch
-        flash[:notice] = t(".enqueued")
-      end
-
-      redirect_to llm_feature_bindings_path, status: :see_other
+    def initialize(user:, model:)
+      super()
+      @user = user
+      @model = model
     end
 
-    def status
-      replace_via_turbo_stream(component: LlmConnections::IndexingStatusComponent.new)
-      respond_with_turbo_streams
+    protected
+
+    def perform
+      return failure(I18n.t(:notice_not_authorized)) unless user.admin? && user.active?
+
+      model.start_indexing!
+      batch = Llm::IndexWorkPackagesJob.enqueue_for(model)
+      model.update!(indexing_batch_id: batch.id)
+
+      ServiceResult.success(result: model)
+    rescue SemanticIndex::InvalidTransitionError
+      failure(I18n.t("admin.semantic_indexes.start_indexing.not_indexable"))
     end
 
     private
 
-    def require_feature
-      render_404 unless OpenProject::FeatureDecisions.llm_connection_active? &&
-                        OpenProject::FeatureDecisions.semantic_search_active?
-    end
+    def failure(message) = ServiceResult.failure(result: model, message:)
   end
 end

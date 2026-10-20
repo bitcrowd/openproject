@@ -33,23 +33,39 @@ require_module_spec_helper
 
 RSpec.describe Llm::EmbedWorkPackagesJob, with_flag: { semantic_search: true } do
   let(:work_package) { create(:work_package) }
+  let(:semantic_index) { create(:semantic_index, state: "indexing") }
 
-  it "calls EmbedService with the resolved work packages" do
+  before { allow(Llm::WorkPackages::EmbedService).to receive(:new).and_call_original }
+
+  it "embeds the work packages into the Semantic Index" do
     service_double = instance_double(Llm::WorkPackages::EmbedService, call: :ok)
     allow(Llm::WorkPackages::EmbedService).to receive(:new).and_return(service_double)
 
-    described_class.perform_now([work_package.id])
+    described_class.perform_now(semantic_index.id, [work_package.id])
 
-    expect(Llm::WorkPackages::EmbedService).to have_received(:new) do |wps|
+    expect(Llm::WorkPackages::EmbedService).to have_received(:new) do |index, wps|
+      expect(index).to eq(semantic_index)
       expect(wps.map(&:id)).to contain_exactly(work_package.id)
     end
     expect(service_double).to have_received(:call)
   end
 
-  it "does nothing with the feature flag off", with_flag: { semantic_search: false } do
-    allow(Llm::WorkPackages::EmbedService).to receive(:new)
+  it "does nothing once the Semantic Index is no longer indexing" do
+    semantic_index.update!(state: "failed")
 
-    described_class.perform_now([work_package.id])
+    described_class.perform_now(semantic_index.id, [work_package.id])
+
+    expect(Llm::WorkPackages::EmbedService).not_to have_received(:new)
+  end
+
+  it "does nothing once the Semantic Index is gone" do
+    described_class.perform_now(0, [work_package.id])
+
+    expect(Llm::WorkPackages::EmbedService).not_to have_received(:new)
+  end
+
+  it "does nothing with the feature flag off", with_flag: { semantic_search: false } do
+    described_class.perform_now(semantic_index.id, [work_package.id])
 
     expect(Llm::WorkPackages::EmbedService).not_to have_received(:new)
   end
