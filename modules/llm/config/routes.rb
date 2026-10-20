@@ -73,12 +73,5 @@ Rails.application.routes.draw do
         post :activate
       end
     end
-
-    resources :work_package_embeddings, only: [], controller: "admin/work_package_embeddings" do
-      collection do
-        post :reindex
-        get :status
-      end
-    end
   end
 end

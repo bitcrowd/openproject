@@ -61,7 +61,7 @@ module LlmConnections
       private
 
       def active_semantic_index_id
-        @active_semantic_index_id ||= SemanticIndex.semantic_search_binding.semantic_index_id
+        @active_semantic_index_id ||= SemanticIndex.active_id
       end
     end
   end

@@ -29,27 +29,33 @@
 #++
 
 module Llm
-  # Simulates indexing until the real pipeline writes into a Semantic Index.
-  class BuildSemanticIndexJob < ApplicationJob
-    SIMULATED_DURATION = 5.seconds
-    SIMULATED_FAILURE_RATE = 0.3
-    SIMULATED_ERROR_MESSAGE = "Some Error"
-
-    queue_with_priority :low
-
-    def self.enqueue_for(semantic_index)
-      set(wait: SIMULATED_DURATION).perform_later(semantic_index.id)
+  class IndexingProgress
+    def initialize(batch)
+      @batch = batch
     end
 
-    def perform(semantic_index_id)
-      semantic_index = SemanticIndex.find_by(id: semantic_index_id)
-      return unless semantic_index&.indexing?
+    def percentage
+      return 0 if total_count.zero?
 
-      if Random.rand < SIMULATED_FAILURE_RATE
-        semantic_index.fail_indexing!(SIMULATED_ERROR_MESSAGE)
-      else
-        semantic_index.finish_indexing!
-      end
+      finished_count * 100 / total_count
+    end
+
+    def failed_count
+      @failed_count ||= embed_jobs.where.not(finished_at: nil).where.not(error: nil).count
+    end
+
+    private
+
+    attr_reader :batch
+
+    def embed_jobs = GoodJob::Job.where(batch_id: batch.id, job_class: Llm::EmbedWorkPackagesJob.name)
+
+    def total_count
+      @total_count ||= embed_jobs.count
+    end
+
+    def finished_count
+      @finished_count ||= embed_jobs.where.not(finished_at: nil).count
     end
   end
 end

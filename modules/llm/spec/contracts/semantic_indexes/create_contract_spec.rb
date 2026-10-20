@@ -44,4 +44,15 @@ RSpec.describe SemanticIndexes::CreateContract do
   include_examples "contract reuses the model errors" do
     let(:current_user) { build_stubbed(:admin) }
   end
+
+  context "with a chat model" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    before { semantic_index.model_id = "qwen3.6-27b" }
+
+    it "is invalid" do
+      expect(contract.validate).to be(false)
+      expect(contract.errors.details[:model_id]).to include(error: :not_offered)
+    end
+  end
 end

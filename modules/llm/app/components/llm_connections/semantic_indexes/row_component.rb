@@ -67,13 +67,14 @@ module LlmConnections
             render(Primer::Beta::Label.new(scheme: STATE_LABEL_SCHEMES.fetch(semantic_index.state))) do
               I18n.t("admin.semantic_indexes.states.#{semantic_index.state}")
             end,
+            indexing_progress,
             error_message
           ].compact
         )
       end
 
       def button_links
-        [activation, action_menu].compact
+        [start_indexing_button, activation, action_menu].compact
       end
 
       private
@@ -115,6 +116,45 @@ module LlmConnections
         end
       end
 
+      def indexing_progress
+        return unless semantic_index.indexing?
+
+        batch = semantic_index.indexing_batch
+        percentage = batch ? Llm::IndexingProgress.new(batch).percentage : 0
+
+        render(Primer::Box.new(mt: 1, test_selector: "llm-semantic-index--progress-#{semantic_index.id}")) do
+          safe_join(
+            [
+              render(Primer::Beta::ProgressBar.new(size: :small)) do |bar|
+                bar.with_item(percentage:, bg: :success_emphasis)
+              end,
+              render(Primer::Beta::Text.new(tag: :div, color: :subtle, font_size: :small, mt: 1)) do
+                I18n.t("admin.semantic_indexes.indexing.progress", percentage:)
+              end
+            ]
+          )
+        end
+      end
+
+      def start_indexing_button
+        return unless semantic_index.indexable?
+
+        helpers.form_with(url: start_indexing_semantic_index_path(semantic_index),
+                          method: :post,
+                          class: "d-inline-block") do
+          render(
+            Primer::Beta::Button.new(
+              type: :submit,
+              size: :small,
+              test_selector: "llm-semantic-index--start-indexing-#{semantic_index.id}"
+            )
+          ) do |button|
+            button.with_leading_visual_icon(icon: semantic_index.not_indexed? ? :play : :sync)
+            I18n.t(semantic_index.state, scope: "admin.semantic_indexes.start_indexing.button")
+          end
+        end
+      end
+
       def error_message
         return unless semantic_index.failed? && semantic_index.error_message.present?
 
@@ -128,20 +168,9 @@ module LlmConnections
                                              test_selector: "llm-semantic-index--menu-#{semantic_index.id}")) do |menu|
           menu.with_show_button(icon: "kebab-horizontal", "aria-label": I18n.t(:label_more), scheme: :invisible)
 
-          start_indexing_item(menu) if semantic_index.indexable?
           edit_item(menu)
           menu.with_divider
           active? ? locked_delete_item(menu) : delete_item(menu)
-        end
-      end
-
-      def start_indexing_item(menu)
-        menu.with_item(
-          label: I18n.t(semantic_index.state, scope: "admin.semantic_indexes.menu.start_indexing"),
-          href: start_indexing_semantic_index_path(semantic_index),
-          form_arguments: { method: :post }
-        ) do |item|
-          item.with_leading_visual_icon(icon: :play)
         end
       end
 

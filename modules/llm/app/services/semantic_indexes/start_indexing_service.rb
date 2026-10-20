@@ -44,7 +44,8 @@ module SemanticIndexes
       return failure(I18n.t(:notice_not_authorized)) unless user.admin? && user.active?
 
       model.start_indexing!
-      Llm::BuildSemanticIndexJob.enqueue_for(model)
+      batch = Llm::IndexWorkPackagesJob.enqueue_for(model)
+      model.update!(indexing_batch_id: batch.id)
 
       ServiceResult.success(result: model)
     rescue SemanticIndex::InvalidTransitionError

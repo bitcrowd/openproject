@@ -28,36 +28,18 @@
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-module Admin
-  class WorkPackageEmbeddingsController < ApplicationController
-    include OpTurbo::ComponentStream
+class AddSemanticIndexToWorkPackageEmbeddings < ActiveRecord::Migration[8.1]
+  def up
+    remove_index :work_package_embeddings, :work_package_id
+    add_reference :work_package_embeddings, :semantic_index,
+                  null: false, index: false, foreign_key: { on_delete: :cascade }
+    add_index :work_package_embeddings, %i[semantic_index_id work_package_id], unique: true
+    add_index :work_package_embeddings, :work_package_id
+  end
 
-    layout "admin"
-
-    before_action :require_admin
-    before_action :require_feature
-
-    def reindex
-      if Llm::IndexWorkPackagesJob.running?
-        flash[:warning] = t(".already_running")
-      else
-        Llm::IndexWorkPackagesJob.enqueue_batch
-        flash[:notice] = t(".enqueued")
-      end
-
-      redirect_to llm_feature_bindings_path, status: :see_other
-    end
-
-    def status
-      replace_via_turbo_stream(component: LlmConnections::IndexingStatusComponent.new)
-      respond_with_turbo_streams
-    end
-
-    private
-
-    def require_feature
-      render_404 unless OpenProject::FeatureDecisions.llm_connection_active? &&
-                        OpenProject::FeatureDecisions.semantic_search_active?
-    end
+  def down
+    remove_index :work_package_embeddings, :work_package_id
+    remove_reference :work_package_embeddings, :semantic_index, foreign_key: true, index: false
+    add_index :work_package_embeddings, :work_package_id, unique: true
   end
 end

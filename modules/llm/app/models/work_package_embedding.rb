@@ -31,6 +31,7 @@
 class WorkPackageEmbedding < ApplicationRecord
   MAX_SEARCH_DISTANCE = 0.5
 
+  belongs_to :semantic_index
   belongs_to :work_package
 
   def self.vector_literal(vector)
@@ -41,17 +42,19 @@ class WorkPackageEmbedding < ApplicationRecord
     super(self.class.vector_literal(vector))
   end
 
-  def self.work_package_ids_within_search_distance_sql(vector_literal)
+  def self.work_package_ids_within_search_distance_sql(vector_literal, semantic_index_id:)
     <<~SQL.squish
       SELECT work_package_id FROM #{table_name}
-      WHERE embedding <=> '#{vector_literal}' < #{MAX_SEARCH_DISTANCE}
+      WHERE semantic_index_id = #{Integer(semantic_index_id)}
+      AND embedding <=> '#{vector_literal}' < #{MAX_SEARCH_DISTANCE}
     SQL
   end
 
-  def self.distance_to_work_package_sql(vector_literal)
+  def self.distance_to_work_package_sql(vector_literal, semantic_index_id:)
     <<~SQL.squish
       (SELECT embedding <=> '#{vector_literal}' FROM #{table_name}
-       WHERE #{table_name}.work_package_id = #{WorkPackage.table_name}.id)
+       WHERE #{table_name}.semantic_index_id = #{Integer(semantic_index_id)}
+       AND #{table_name}.work_package_id = #{WorkPackage.table_name}.id)
     SQL
   end
 end

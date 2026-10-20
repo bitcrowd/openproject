@@ -31,53 +31,45 @@
 module Llm
   module WorkPackages
     class EmbedService
-      def initialize(work_packages)
+      def initialize(semantic_index, work_packages)
+        @semantic_index = semantic_index
         @work_packages = Array(work_packages)
       end
 
       def call
-        raise Llm::Errors::ConfigurationError, "binding not ready" unless binding_ready?
+        raise Llm::Errors::ConfigurationError, "no active connection" if connection.nil?
 
-        result = session.embed(texts, model: binding.resolved_model_id, dimensions: binding.dimensions)
+        result = session.embed(texts,
+                               model: semantic_index.model_id,
+                               dimensions: semantic_index.embedding_vector_dimensions)
 
         store(result.vectors)
-        lock_binding_on_first_write
       end
 
       private
 
-      attr_reader :work_packages
+      attr_reader :semantic_index, :work_packages
 
-      def binding
-        @binding ||= LlmConnection.active_connection
-                                  &.feature_bindings
-                                  &.find_or_initialize_by(feature_key: "semantic_search")
+      def connection
+        @connection ||= LlmConnection.active_connection
       end
 
-      def binding_ready?
-        binding.present? && binding.resolved_model_id.present?
-      end
-
-      def session = Llm::Session.for(binding.llm_connection)
+      def session = Llm::Session.for(connection)
 
       def texts
-        context_window = binding.llm_connection.models.find_by(external_id: binding.resolved_model_id)&.context_window
-
-        work_packages.map { |wp| EmbeddableText.for(wp, context_window: context_window) }
+        work_packages.map { |wp| EmbeddableText.for(wp, context_window: semantic_index.context_token_length) }
       end
 
       def store(vectors)
         rows = work_packages.zip(vectors).map do |work_package, vector|
-          { work_package_id: work_package.id, embedding: WorkPackageEmbedding.vector_literal(vector) }
+          {
+            semantic_index_id: semantic_index.id,
+            work_package_id: work_package.id,
+            embedding: WorkPackageEmbedding.vector_literal(vector)
+          }
         end
 
-        WorkPackageEmbedding.upsert_all(rows, unique_by: :work_package_id)
-      end
-
-      def lock_binding_on_first_write
-        return if binding.locked?
-
-        binding.update!(locked_at: Time.current)
+        WorkPackageEmbedding.upsert_all(rows, unique_by: %i[semantic_index_id work_package_id])
       end
     end
   end

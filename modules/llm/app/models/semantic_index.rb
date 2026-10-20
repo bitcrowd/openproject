@@ -48,13 +48,29 @@ class SemanticIndex < ApplicationRecord
   validates :embedding_vector_dimensions, :context_token_length,
             numericality: { only_integer: true, greater_than: 0 }
 
-  validate :model_offered, if: -> { model_id.present? && model_id_changed? }
-
   def self.semantic_search_binding
-    LlmConnection.active_connection.feature_bindings.find_or_initialize_by(feature_key: "semantic_search")
+    semantic_search_bindings.first_or_initialize
   end
 
-  def active? = llm_feature_bindings.exists?
+  def self.semantic_search_bindings
+    LlmConnection.active_connection.feature_bindings.where(feature_key: "semantic_search")
+  end
+
+  def self.active
+    joins(:llm_feature_bindings).merge(semantic_search_bindings).first
+  end
+
+  def self.active_id
+    semantic_search_bindings.pick(:semantic_index_id)
+  end
+
+  def active? = persisted? && self.class.active_id == id
+
+  def indexing_batch
+    return if indexing_batch_id.nil?
+
+    GoodJob::BatchRecord.find_by(id: indexing_batch_id)
+  end
 
   def indexable? = INDEXABLE_STATES.include?(state)
 
@@ -84,11 +100,5 @@ class SemanticIndex < ApplicationRecord
 
       update!(**attributes)
     end
-  end
-
-  def model_offered
-    return if LlmConnection.active_connection.embedding_model_ids.include?(model_id)
-
-    errors.add(:model_id, :not_offered)
   end
 end

@@ -100,7 +100,7 @@ module Admin
 
     def activation_dialog
       respond_with_dialog LlmConnections::SemanticIndexes::ActivateDialogComponent.new(
-        @semantic_index, current: SemanticIndex.semantic_search_binding.semantic_index
+        @semantic_index, current: SemanticIndex.active
       )
     end
 
@@ -119,8 +119,6 @@ module Admin
     end
 
     def status
-      return head :no_content if SemanticIndex.indexing.exists?
-
       replace_via_turbo_stream(
         component: LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.order(:created_at))
       )

@@ -45,6 +45,18 @@ RSpec.describe SemanticIndexes::UpdateContract do
     let(:current_user) { build_stubbed(:admin) }
   end
 
+  context "when the stored model is no longer offered" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    before { connection.capability_verdicts.destroy_all }
+
+    it "still allows renaming" do
+      semantic_index.title = "Renamed"
+
+      expect(contract.validate).to be(true)
+    end
+  end
+
   context "when the Semantic Index has not been indexed" do
     let(:current_user) { build_stubbed(:admin) }
 

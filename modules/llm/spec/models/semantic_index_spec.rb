@@ -57,22 +57,6 @@ RSpec.describe SemanticIndex do
     end
   end
 
-  it "rejects a chat model" do
-    semantic_index.model_id = "qwen3.6-27b"
-
-    expect(semantic_index).not_to be_valid
-    expect(semantic_index.errors.details[:model_id]).to include(error: :not_offered)
-  end
-
-  it "keeps a stored model that is no longer offered" do
-    semantic_index.save!
-    connection.capability_verdicts.destroy_all
-
-    semantic_index.title = "Renamed"
-
-    expect(semantic_index).to be_valid
-  end
-
   describe "#start_indexing!" do
     %w[not_indexed failed ready].each do |state|
       it "starts indexing from #{state} and clears the previous error" do

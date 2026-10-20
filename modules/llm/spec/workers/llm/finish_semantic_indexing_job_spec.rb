@@ -31,36 +31,38 @@
 require "spec_helper"
 require_module_spec_helper
 
-RSpec.describe Llm::BuildSemanticIndexJob do
-  include_context "with an embedding model offered"
-
+RSpec.describe Llm::FinishSemanticIndexingJob do
   let(:semantic_index) { create(:semantic_index, state: "indexing") }
+  let(:batch) { GoodJob::Batch.new(semantic_index_id: semantic_index.id).tap(&:save) }
 
-  it "makes the Semantic Index ready when the simulation succeeds" do
-    allow(Random).to receive(:rand).and_return(described_class::SIMULATED_FAILURE_RATE)
+  def embed_job(finished_at: Time.current, error: nil)
+    GoodJob::Job.create!(id: SecureRandom.uuid, active_job_id: SecureRandom.uuid, batch_id: batch.id,
+                         job_class: Llm::EmbedWorkPackagesJob.name, queue_name: "default",
+                         serialized_params: {}, finished_at:, error:)
+  end
 
-    described_class.perform_now(semantic_index.id)
+  it "marks the Semantic Index ready when every request succeeded" do
+    embed_job
+
+    described_class.perform_now(batch, { event: :finish })
 
     expect(semantic_index.reload).to be_ready
   end
 
-  it "fails the Semantic Index with an error message when the simulation fails" do
-    allow(Random).to receive(:rand).and_return(0.0)
+  it "marks the Semantic Index failed with the number of failed requests" do
+    embed_job
+    embed_job(error: "Llm::Errors::ApiError: boom")
 
-    described_class.perform_now(semantic_index.id)
+    described_class.perform_now(batch, { event: :finish })
 
-    expect(semantic_index.reload).to have_attributes(state: "failed", error_message: "Some Error")
+    expect(semantic_index.reload).to have_attributes(state: "failed", error_message: "1 request failed.")
   end
 
   it "leaves a Semantic Index alone that is no longer indexing" do
-    semantic_index.update!(state: "not_indexed")
+    semantic_index.update!(state: "ready")
 
-    described_class.perform_now(semantic_index.id)
+    described_class.perform_now(batch, { event: :finish })
 
-    expect(semantic_index.reload).to be_not_indexed
-  end
-
-  it "ignores a deleted Semantic Index" do
-    expect { described_class.perform_now(0) }.not_to raise_error
+    expect(semantic_index.reload).to be_ready
   end
 end

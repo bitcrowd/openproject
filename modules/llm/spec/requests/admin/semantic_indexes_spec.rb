@@ -167,31 +167,35 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(SemanticIndex.count).to eq(0)
     end
 
-    it "starts indexing" do
-      post start_indexing_semantic_index_path(semantic_index)
+    context "when indexing", with_good_job_batches: [Llm::IndexWorkPackagesJob] do
+      def index_jobs = GoodJob::Job.where(job_class: Llm::IndexWorkPackagesJob.name)
 
-      expect(response).to redirect_to(llm_feature_bindings_path)
-      expect(flash[:notice]).to eq("Indexing of \"Qwen3 baseline\" has started.")
-      expect(semantic_index.reload).to be_indexing
-      expect(Llm::BuildSemanticIndexJob).to have_been_enqueued.with(semantic_index.id)
-    end
+      it "starts indexing" do
+        post start_indexing_semantic_index_path(semantic_index)
 
-    it "re-indexes a ready Semantic Index" do
-      semantic_index.update!(state: "ready")
+        expect(response).to redirect_to(llm_feature_bindings_path)
+        expect(flash[:notice]).to eq("Indexing of \"Qwen3 baseline\" has started.")
+        expect(semantic_index.reload).to be_indexing
+        expect(index_jobs.pluck(:batch_id)).to eq([semantic_index.indexing_batch_id])
+      end
 
-      post start_indexing_semantic_index_path(semantic_index)
+      it "re-indexes a ready Semantic Index" do
+        semantic_index.update!(state: "ready")
 
-      expect(semantic_index.reload).to be_indexing
-      expect(Llm::BuildSemanticIndexJob).to have_been_enqueued.with(semantic_index.id)
-    end
+        post start_indexing_semantic_index_path(semantic_index)
 
-    it "refuses to start indexing twice" do
-      semantic_index.update!(state: "indexing")
+        expect(semantic_index.reload).to be_indexing
+        expect(index_jobs.count).to eq(1)
+      end
 
-      post start_indexing_semantic_index_path(semantic_index)
+      it "refuses to start indexing twice" do
+        semantic_index.update!(state: "indexing")
 
-      expect(flash[:error]).to eq("This Semantic Index is already being indexed.")
-      expect(Llm::BuildSemanticIndexJob).not_to have_been_enqueued
+        post start_indexing_semantic_index_path(semantic_index)
+
+        expect(flash[:error]).to eq("This Semantic Index is already being indexed.")
+        expect(index_jobs).to be_empty
+      end
     end
   end
 
@@ -245,12 +249,19 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
   end
 
   describe "GET status" do
-    it "answers with no content while a Semantic Index is indexing" do
-      create(:semantic_index, state: "indexing")
+    it "reports the progress of a Semantic Index that is indexing and keeps polling" do
+      batch = GoodJob::Batch.new.tap(&:save)
+      create(:semantic_index, state: "indexing", indexing_batch_id: batch.id)
+      [Time.current, nil, nil, nil].each do |finished_at|
+        GoodJob::Job.create!(id: SecureRandom.uuid, active_job_id: SecureRandom.uuid, batch_id: batch.id,
+                             job_class: Llm::EmbedWorkPackagesJob.name, queue_name: "default",
+                             serialized_params: {}, finished_at:)
+      end
 
       get status_semantic_indexes_path, headers: turbo_headers
 
-      expect(response).to have_http_status(:no_content)
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("turbo-stream", "25% done", "poll-for-changes")
     end
 
     it "replaces the box once indexing has finished" do

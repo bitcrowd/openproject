@@ -40,9 +40,13 @@ class Queries::WorkPackages::Filter::SemanticSearchFilter <
   end
 
   def where
+    semantic_index = Llm::WorkPackages::SemanticSearch.active_semantic_index
     vector = Llm::WorkPackages::SemanticSearch.query_vector(values.first)
-    return "1=0" if vector.nil?
+    return "1=0" if semantic_index.nil? || vector.nil?
 
-    "#{WorkPackage.table_name}.id IN (#{WorkPackageEmbedding.work_package_ids_within_search_distance_sql(vector)})"
+    matching_ids_sql = WorkPackageEmbedding.work_package_ids_within_search_distance_sql(
+      vector, semantic_index_id: semantic_index.id
+    )
+    "#{WorkPackage.table_name}.id IN (#{matching_ids_sql})"
   end
 end

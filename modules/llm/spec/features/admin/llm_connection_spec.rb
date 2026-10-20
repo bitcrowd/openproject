@@ -266,12 +266,12 @@ RSpec.describe "LLM connection administration",
       mock_llm_embeddings_response(base_url)
     end
 
-    it "offers the vector settings only for features that embed" do
+    it "offers a model selection only for features that do not embed" do
       visit llm_feature_bindings_path
 
       expect(page).to have_test_selector("llm-settings--tabs")
-      expect(page).to have_test_selector("llm-feature-binding--dimensions-semantic_search")
-      expect(page).to have_no_test_selector("llm-feature-binding--dimensions-description_assistant")
+      expect(page).to have_test_selector("llm-feature-binding--model-description_assistant")
+      expect(page).to have_no_test_selector("llm-feature-binding--model-semantic_search")
       expect(page).to be_axe_clean.within("#content")
     end
 
@@ -367,20 +367,24 @@ RSpec.describe "LLM connection administration",
 
       it "indexes a Semantic Index and shows the outcome without a reload" do
         semantic_index = create(:semantic_index, title: "Nomic small")
-        allow(Random).to receive(:rand).and_return(0.0)
 
         visit llm_feature_bindings_path
 
-        within_semantic_index_menu(semantic_index) { click_on "Start indexing" }
+        find_test_selector("llm-semantic-index--start-indexing-#{semantic_index.id}").click
 
         expect_flash(message: "Indexing of \"Nomic small\" has started.")
-        expect(page).to have_test_selector("llm-semantic-index--row-#{semantic_index.id}", text: "Indexing")
+        within_test_selector("llm-semantic-index--row-#{semantic_index.id}") do
+          expect(page).to have_text("Indexing")
+          expect(page).to have_test_selector("llm-semantic-index--progress-#{semantic_index.id}", text: "0% done")
+        end
 
-        perform_enqueued_jobs
+        semantic_index.reload.fail_indexing!("1 request failed.")
 
         within_test_selector("llm-semantic-index--row-#{semantic_index.id}") do
           expect(page).to have_text("Failed")
-          expect(page).to have_text("Some Error")
+          expect(page).to have_text("1 request failed.")
+          expect(page).to have_test_selector("llm-semantic-index--start-indexing-#{semantic_index.id}",
+                                             text: "Retry indexing")
         end
       end
     end

@@ -32,78 +32,54 @@ require "spec_helper"
 require_module_spec_helper
 
 RSpec.describe Llm::WorkPackages::EmbedService do
+  include_context "with an embedding model offered"
+
   let(:work_package) { create(:work_package, subject: "Fix bug") }
-  let(:connection) { create(:llm_connection, :with_models) }
-  let(:binding) do
-    create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search",
-                                 model_id: "bge-m3", dimensions: 3)
+  let(:semantic_index) do
+    create(:semantic_index, model_id: "bge-m3", embedding_vector_dimensions: 3, context_token_length: 512)
   end
   let(:session_double) { instance_double(Llm::Session) }
   let(:embedding_double) { instance_double(RubyLLM::Embedding, vectors: [[1.0, 2.0, 3.0]]) }
 
-  subject(:service) { described_class.new([work_package]) }
+  subject(:service) { described_class.new(semantic_index, [work_package]) }
 
-  context "when no binding exists" do
-    it "raises" do
-      expect { service.call }.to raise_error(Llm::Errors::ConfigurationError, "binding not ready")
-    end
+  before do
+    allow(Llm::Session).to receive(:for).with(connection).and_return(session_double)
+    allow(session_double).to receive(:embed).and_return(embedding_double)
   end
 
-  context "when a binding exists but has no resolved model" do
-    before do
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search",
-                                   model_id: nil, dimensions: nil)
-    end
+  it "embeds with the parameters of the Semantic Index" do
+    allow(Llm::WorkPackages::EmbeddableText).to receive(:for).and_call_original
 
-    it "raises" do
-      expect { service.call }.to raise_error(Llm::Errors::ConfigurationError, "binding not ready")
-    end
+    service.call
+
+    expect(session_double).to have_received(:embed).with(anything, model: "bge-m3", dimensions: 3)
+    expect(Llm::WorkPackages::EmbeddableText).to have_received(:for).with(work_package, context_window: 512)
   end
 
-  context "when no binding exists but the connection has a default embedding model" do
-    let(:connection) { create(:llm_connection, :with_models, default_embedding_model_identifier: "bge-m3") }
+  it "stores the embedding in the Semantic Index" do
+    service.call
 
-    before do
-      allow(Llm::Session).to receive(:for).with(connection).and_return(session_double)
-      allow(session_double).to receive(:embed).and_return(embedding_double)
-    end
-
-    it "embeds with the default model and locks the binding to it" do
-      service.call
-
-      expect(session_double).to have_received(:embed).with(anything, model: "bge-m3", dimensions: nil)
-
-      binding = connection.feature_bindings.find_by!(feature_key: "semantic_search")
-      expect(binding).to be_locked
-      expect(binding.model_id).to eq("bge-m3")
-    end
+    record = WorkPackageEmbedding.find_by!(semantic_index:, work_package:)
+    expect(record.embedding).to eq("[1,2,3]")
   end
 
-  context "when a ready binding exists" do
-    before do
-      binding
-      allow(Llm::Session).to receive(:for).with(connection).and_return(session_double)
-      allow(session_double).to receive(:embed).and_return(embedding_double)
-    end
+  it "replaces an earlier embedding of the same work package" do
+    service.call
+    allow(session_double).to receive(:embed)
+      .and_return(instance_double(RubyLLM::Embedding, vectors: [[4.0, 5.0, 6.0]]))
 
-    it "stores the embedding" do
-      service.call
+    described_class.new(semantic_index, [work_package]).call
 
-      record = WorkPackageEmbedding.find_by!(work_package:)
-      expect(record.embedding).to eq("[1,2,3]")
-    end
+    expect(WorkPackageEmbedding.where(semantic_index:).pluck(:embedding)).to eq(["[4,5,6]"])
+  end
 
-    it "locks the binding on first write" do
-      expect { service.call }.to change { binding.reload.locked? }.from(false).to(true)
-    end
+  it "leaves the embeddings of other Semantic Indexes alone" do
+    other_index = create(:semantic_index)
+    create(:work_package_embedding, semantic_index: other_index, work_package:)
 
-    it "does not modify locked_at on a subsequent write" do
-      binding.update!(locked_at: 1.hour.ago)
-      locked_at_before = binding.locked_at
+    service.call
 
-      service.call
-
-      expect(binding.reload.locked_at).to be_within(1.second).of(locked_at_before)
-    end
+    expect(WorkPackageEmbedding.where(work_package:).count).to eq(2)
   end
 end

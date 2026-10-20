@@ -31,7 +31,7 @@
 require "spec_helper"
 require_module_spec_helper
 
-RSpec.describe SemanticIndexes::StartIndexingService do
+RSpec.describe SemanticIndexes::StartIndexingService, with_good_job_batches: [Llm::IndexWorkPackagesJob] do
   include_context "with an embedding model offered"
 
   let(:semantic_index) { create(:semantic_index) }
@@ -39,10 +39,12 @@ RSpec.describe SemanticIndexes::StartIndexingService do
 
   subject(:result) { described_class.new(user:, model: semantic_index).call }
 
-  it "starts indexing and enqueues the job" do
+  def index_jobs = GoodJob::Job.where(job_class: Llm::IndexWorkPackagesJob.name)
+
+  it "starts indexing in a batch it remembers" do
     expect(result).to be_success
     expect(semantic_index.reload).to be_indexing
-    expect(Llm::BuildSemanticIndexJob).to have_been_enqueued.with(semantic_index.id)
+    expect(index_jobs.pluck(:batch_id)).to eq([semantic_index.indexing_batch_id])
   end
 
   context "when the Semantic Index is already indexing" do
@@ -50,7 +52,7 @@ RSpec.describe SemanticIndexes::StartIndexingService do
 
     it "fails without enqueuing" do
       expect(result).to be_failure
-      expect(Llm::BuildSemanticIndexJob).not_to have_been_enqueued
+      expect(index_jobs).to be_empty
     end
   end
 

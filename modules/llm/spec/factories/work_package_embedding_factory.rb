@@ -30,7 +30,8 @@
 
 FactoryBot.define do
   factory :work_package_embedding do
-    association :work_package
+    work_package
+    semantic_index
     embedding { [0.1, 0.2, 0.3] }
   end
 end

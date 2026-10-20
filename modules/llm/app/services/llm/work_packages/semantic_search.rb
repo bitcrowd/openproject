@@ -34,7 +34,11 @@ module Llm
       def self.available?
         return false unless OpenProject::FeatureDecisions.semantic_search_active?
 
-        active_binding&.locked? || false
+        active_semantic_index.present?
+      end
+
+      def self.active_semantic_index
+        RequestStore.fetch(:semantic_search_active_index) { SemanticIndex.active }
       end
 
       # Memoized per request: the query filter and the similarity sort both need it.
@@ -45,21 +49,17 @@ module Llm
       private_class_method def self.fetch_query_vector(query)
         return if query.blank? || !OpenProject::FeatureDecisions.semantic_search_active?
 
-        binding = active_binding
-        return unless binding&.locked?
+        semantic_index = active_semantic_index
+        return if semantic_index.nil?
 
-        embed(query, binding)
+        embed(query, semantic_index)
       end
 
-      private_class_method def self.active_binding
-        LlmConnection.active_connection
-                     &.feature_bindings
-                     &.find_by(feature_key: "semantic_search")
-      end
-
-      private_class_method def self.embed(query, binding)
-        session = Llm::Session.for(binding.llm_connection)
-        vector = session.embed(query, model: binding.resolved_model_id, dimensions: binding.dimensions).vectors
+      private_class_method def self.embed(query, semantic_index)
+        session = Llm::Session.for(LlmConnection.active_connection)
+        vector = session.embed(query,
+                               model: semantic_index.model_id,
+                               dimensions: semantic_index.embedding_vector_dimensions).vectors
         WorkPackageEmbedding.vector_literal(vector) if vector.present?
       rescue Llm::Errors::Error
         nil
