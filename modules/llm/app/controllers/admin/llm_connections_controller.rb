@@ -29,75 +29,31 @@
 
 module Admin
   class LlmConnectionsController < ApplicationController
-    include OpTurbo::ComponentStream
-
     layout "admin"
     menu_item :llm_connection
 
     before_action :require_feature
     before_action :require_admin
     before_action :set_connection
-    before_action :require_stored_connection,
-                  only: %i[disconnect disconnect_dialog delete_api_key delete_api_key_dialog]
 
     def show; end
 
     def update
-      result = ::LlmConnections::UpdateService
-                 .new(user: current_user, model: @connection)
+      result = ::Settings::UpdateService
+                 .new(user: current_user)
                  .call(**llm_connection_params)
-
-      result.on_success { refresh_models_then_redirect(result.result) }
-      result.on_failure { render_form_with_errors }
-    end
-
-    def disconnect_dialog
-      respond_with_dialog LlmConnections::DisconnectDialogComponent.new(@connection)
-    end
-
-    # Clears the credential and switches the AI features off, keeping the endpoint
-    # and the catalogue. Deliberately not a destroy.
-    def disconnect
-      cleared = clear_api_key_unless_configured_from_env do
-        Setting.llm_features_enabled = false if Setting.llm_features_enabled_writable?
-      end
-      return redirect_with_error(t(".configured_from_env")) unless cleared
-
+      # Switching the AI features on or off decides whether the scheduled health
+      # check has anything to do.
       Llm::HealthCheckJob.toggle_cron_job
 
-      redirect_with_notice(t(".success"))
-    end
-
-    def delete_api_key_dialog
-      respond_with_dialog LlmConnections::DeleteApiKeyDialogComponent.new(@connection)
-    end
-
-    # The environment guard is checked explicitly because this write bypasses
-    # the contract: removing a credential must always be possible, even against
-    # a server that would reject the resulting unauthenticated probe.
-    def delete_api_key
-      return redirect_with_error(t(".configured_from_env")) unless clear_api_key_unless_configured_from_env
-
-      redirect_with_notice(t(".success"))
+      result.on_success { redirect_after_save }
+      result.on_failure do
+        flash[:error] = result.message
+        redirect_to llm_connection_path, status: :see_other
+      end
     end
 
     private
-
-    def require_stored_connection
-      render_404 unless @connection.persisted?
-    end
-
-    # Judged on the committed row under the connection's advisory lock: a seed
-    # applying the environment's values holds that lock until it commits.
-    def clear_api_key_unless_configured_from_env
-      OpenProject::Mutex.with_advisory_lock_transaction(@connection) do
-        next false if @connection.reload.configured_from_env?
-
-        @connection.update_columns(api_key: nil, env_provisioned_at: nil, env_fingerprint: nil, updated_at: Time.current)
-        yield if block_given?
-        true
-      end
-    end
 
     def set_connection
       @connection = LlmConnection.active_connection
@@ -109,24 +65,13 @@ module Admin
       render_404 unless OpenProject::FeatureDecisions.llm_connection_active?
     end
 
-    # Synchronous, because the flash below reports what the catalogue holds. The
-    # contract has already proven the server reachable when the credentials
-    # changed, so this cannot be the thing that fails the save: a sync failure is
-    # logged by the service and shows up as the "no models" warning.
-    def refresh_models_then_redirect(connection)
-      ::LlmConnections::SyncModelsService.new(connection).call if
-        ::LlmConnections::UpdateService.models_to_refresh?(connection)
-
-      redirect_after_save
-    end
-
     # A connection can be perfectly usable without offering a model list, so the
     # save succeeds either way; the administrator is told what to do next rather
     # than being left with an empty table and no explanation.
     def redirect_after_save
-      return redirect_with_notice(t(".disabled")) unless @connection.llm_features_enabled
+      return redirect_with_notice(t(".disabled")) unless Setting.llm_features_enabled?
 
-      if @connection.reload.models.none?
+      if @connection.configured? && @connection.models.none?
         flash[:warning] = t(".no_models")
       else
         flash[:notice] = t(".success")
@@ -135,31 +80,13 @@ module Admin
       redirect_to llm_connection_path, status: :see_other
     end
 
-    def render_form_with_errors
-      update_via_turbo_stream(component: ::LlmConnections::FormComponent.new(@connection))
-      respond_with_turbo_streams do |format|
-        format.html { render :show }
-      end
-    end
-
     def redirect_with_notice(message)
       flash[:notice] = message
       redirect_to llm_connection_path, status: :see_other
     end
 
-    def redirect_with_error(message)
-      flash[:error] = message
-      redirect_to llm_connection_path, status: :see_other
-    end
-
-    # A blank API key means "keep the stored one": the form never renders the
-    # saved value, so submitting it unchanged posts an empty string.
     def llm_connection_params
-      permitted = params.expect(
-        llm_connection: %i[llm_features_enabled api_format base_url api_key]
-      )
-      permitted.delete(:api_key) if permitted[:api_key].blank?
-      permitted.to_h.symbolize_keys
+      params.expect(llm_connection: %i[llm_features_enabled]).to_h.symbolize_keys
     end
   end
 end

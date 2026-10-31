@@ -48,7 +48,7 @@ RSpec.describe Llm::Session, :llm_server_helpers, :webmock do
 
   describe "#initialize" do
     it "refuses a format whose credentials cannot be stored" do
-      connection.update_column(:api_format, "bedrock")
+      connection.inference_provider.update_column(:api_format, "bedrock")
 
       expect { described_class.for(connection) }
         .to raise_error(Llm::Errors::ConfigurationError, /bedrock/)
@@ -68,7 +68,7 @@ RSpec.describe Llm::Session, :llm_server_helpers, :webmock do
     end
 
     it "sends the connection's custom headers" do
-      connection.update!(custom_headers: { "apikey" => "gateway-secret" })
+      connection.inference_provider.update!(custom_headers: { "apikey" => "gateway-secret" })
       mock_llm_chat_response(base_url)
 
       described_class.for(connection, max_retries: 0).chat("qwen3.6-27b").ask("ping")
@@ -97,7 +97,7 @@ RSpec.describe Llm::Session, :llm_server_helpers, :webmock do
     # A self-hosted OpenAI-compatible server commonly needs no credential, but
     # RubyLLM's ensure_configured! raises unless one is set.
     it "reaches a server that needs no API key" do
-      connection.update!(api_key: nil)
+      connection.inference_provider.update!(api_key: nil)
       mock_llm_chat_response(base_url)
 
       expect { described_class.for(connection, max_retries: 0).chat("qwen3.6-27b").ask("ping") }
@@ -107,7 +107,7 @@ RSpec.describe Llm::Session, :llm_server_helpers, :webmock do
 
   describe "#embed" do
     it "requests a vector and carries the custom headers" do
-      connection.update!(custom_headers: { "apikey" => "gateway-secret" })
+      connection.inference_provider.update!(custom_headers: { "apikey" => "gateway-secret" })
       mock_llm_embeddings_response(base_url, dimensions: 8)
 
       embedding = described_class.for(connection, max_retries: 0).embed("hello", model: "bge-m3")

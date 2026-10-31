@@ -30,34 +30,31 @@
 require "spec_helper"
 
 RSpec.describe LlmConnection do
-  describe "#api_key", with_config: { "database_cipher_key" => "secret" } do
-    it "is stored as it was given, even with a cipher key configured" do
-      connection = create(:llm_connection, api_key: "sk-plain-key")
+  describe "the settings of its provider" do
+    it "are read from the provider" do
+      provider = create(:inference_provider, base_url: "https://example.com/v1", api_key: "sk-test",
+                                             api_format: "openrouter", custom_headers: { "api-version" => "2" })
 
-      expect(connection.reload.api_key).to eq("sk-plain-key")
-      expect(described_class.where(id: connection.id).pick(:api_key)).to eq("sk-plain-key")
+      expect(build(:llm_connection, inference_provider: provider))
+        .to have_attributes(base_url: "https://example.com/v1", api_key: "sk-test",
+                            api_format: "openrouter", custom_headers: { "api-version" => "2" })
+    end
+
+    # +active_connection+ hands this record out on an instance with no provider.
+    it "are empty on an unsaved connection, with the default format" do
+      expect(described_class.new)
+        .to have_attributes(base_url: nil, api_key: nil, api_format: "openai", custom_headers: nil)
     end
   end
 
-  describe "#api_key_stored?" do
-    it "is false for a connection that was never saved" do
-      expect(build(:llm_connection, api_key: "sk-test-key")).not_to be_api_key_stored
-    end
+  describe "#release_from_environment!" do
+    it "clears the markers even on a connection that no longer passes validation" do
+      connection = create(:llm_connection, :provisioned_from_env, env_fingerprint: "applied")
+      connection.update_column(:identifier, "")
 
-    it "is false for a saved connection without a key" do
-      expect(create(:llm_connection, api_key: nil)).not_to be_api_key_stored
-    end
+      connection.release_from_environment!
 
-    it "is true for a saved connection with a key" do
-      expect(create(:llm_connection, api_key: "sk-test-key")).to be_api_key_stored
-    end
-
-    it "is false when a key was assigned but the save failed" do
-      connection = create(:llm_connection, api_key: nil)
-      connection.assign_attributes(api_key: "sk-test-key", base_url: "")
-
-      expect(connection.save).to be(false)
-      expect(connection).not_to be_api_key_stored
+      expect(connection.reload).to have_attributes(env_provisioned_at: nil, env_fingerprint: nil)
     end
   end
 
@@ -97,15 +94,21 @@ RSpec.describe LlmConnection do
     subject(:connection) { build(:llm_connection, base_url: "https://example.com/v1", api_key: "sk-test") }
 
     it "changes with the API format" do
-      expect { connection.api_format = "anthropic" }.to change(connection, :settings_fingerprint)
+      expect { connection.inference_provider.api_format = "anthropic" }.to change(connection, :settings_fingerprint)
     end
 
     it "changes with the host URL" do
-      expect { connection.base_url = "https://elsewhere.example/v1" }.to change(connection, :settings_fingerprint)
+      expect { connection.inference_provider.base_url = "https://elsewhere.example/v1" }
+        .to change(connection, :settings_fingerprint)
     end
 
     it "does not change with the API key" do
-      expect { connection.api_key = "sk-rotated" }.not_to change(connection, :settings_fingerprint)
+      expect { connection.inference_provider.api_key = "sk-rotated" }.not_to change(connection, :settings_fingerprint)
+    end
+
+    it "stays the same for another provider on the same server" do
+      expect { connection.inference_provider = build(:inference_provider, base_url: "https://example.com/v1") }
+        .not_to change(connection, :settings_fingerprint)
     end
   end
 
@@ -122,16 +125,16 @@ RSpec.describe LlmConnection do
       expect(connection).not_to be_models_stale
     end
 
-    it "is true once a connection setting changed" do
+    it "is true once the connection points at another server" do
       connection.update!(connection_fingerprint: connection.settings_fingerprint)
-      connection.update!(base_url: "https://elsewhere.example/v1")
+      connection.update!(inference_provider: create(:inference_provider, base_url: "https://elsewhere.example/v1"))
 
       expect(connection).to be_models_stale
     end
 
     it "stays false when only the API key is rotated" do
       connection.update!(connection_fingerprint: connection.settings_fingerprint)
-      connection.update!(api_key: "sk-rotated")
+      connection.inference_provider.update!(api_key: "sk-rotated")
 
       expect(connection).not_to be_models_stale
     end
@@ -373,8 +376,6 @@ RSpec.describe LlmConnection do
     end
   end
 
-  # The environment seeder and direct writes reach the model without the
-  # contract, so these have to hold on the model itself.
   describe "validations" do
     it "requires an identifier, rather than failing on the NOT NULL column" do
       connection = build(:llm_connection, identifier: nil)
@@ -383,69 +384,11 @@ RSpec.describe LlmConnection do
       expect(connection.errors).to be_of_kind(:identifier, :blank)
     end
 
-    it "refuses a format no adapter serves" do
-      connection = build(:llm_connection, api_format: "no-such-format")
+    it "requires a provider, rather than failing on the NOT NULL column" do
+      connection = build(:llm_connection, inference_provider: nil)
 
       expect(connection).not_to be_valid
-      expect(connection.errors).to be_of_kind(:api_format, :inclusion)
-    end
-
-    it "accepts custom headers that map names to plain strings" do
-      expect(build(:llm_connection, custom_headers: { "api-version" => "2024-02-01" })).to be_valid
-    end
-
-    it "refuses a header value that is not a string" do
-      connection = build(:llm_connection, custom_headers: { "x-retries" => 3 })
-
-      expect(connection).not_to be_valid
-      expect(connection.errors).to be_of_kind(:custom_headers, :invalid)
-    end
-
-    it "refuses a nested header value" do
-      expect(build(:llm_connection, custom_headers: { "x-gateway" => { "key" => "value" } })).not_to be_valid
-    end
-
-    it "refuses a header value carrying a line break" do
-      expect(build(:llm_connection, custom_headers: { "x-gateway" => "one\r\nInjected: two" })).not_to be_valid
-    end
-
-    it "refuses a header name carrying a line break" do
-      connection = build(:llm_connection, custom_headers: { "x-gateway\r\nInjected" => "two" })
-
-      expect(connection).not_to be_valid
-      expect(connection.errors).to be_of_kind(:custom_headers, :invalid)
-    end
-
-    it "refuses a header name that is not an HTTP token", :aggregate_failures do
-      ["x gateway", "x-gateway:", "x-gäteway", "(x-gateway)", ""].each do |name|
-        expect(build(:llm_connection, custom_headers: { name => "value" })).not_to be_valid, name.inspect
-      end
-    end
-
-    it "accepts a header name built from any HTTP token character" do
-      expect(build(:llm_connection, custom_headers: { "X-Gateway_1.v2!\#$%&'*+^`|~" => "value" })).to be_valid
-    end
-
-    it "accepts an absolute http or https base URL", :aggregate_failures do
-      %w[https://example.com/v1 http://10.0.0.5:8000/v1].each do |base_url|
-        expect(build(:llm_connection, base_url:)).to be_valid, base_url
-      end
-    end
-
-    it "refuses a base URL without an http scheme or a host", :aggregate_failures do
-      %w[//host/path http:host http:// localhost:8080/v1 ftp://example.com].each do |base_url|
-        connection = build(:llm_connection, base_url:)
-
-        expect(connection).not_to be_valid, base_url
-        expect(connection.errors).to be_of_kind(:base_url, :invalid_url)
-      end
-    end
-
-    it "refuses a base URL that cannot be parsed" do
-      connection = build(:llm_connection, base_url: "https://example.com/a b")
-
-      expect(connection).not_to be_valid
-      expect(connection.errors).to be_of_kind(:base_url, :invalid_url)
+      expect(connection.errors).to include(:inference_provider)
     end
   end
 end

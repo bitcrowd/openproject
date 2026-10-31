@@ -29,19 +29,12 @@
 
 module LlmConnections
   # Validations that hold for every write, including provisioning from the
-  # environment. Deliberately makes no network request; see UpdateContract.
+  # environment.
   class BaseContract < ModelContract
     attribute :llm_features_enabled
-    attribute :api_format
-    attribute :base_url
-    attribute :api_key
     attribute :default_chat_model_id
     attribute :default_embedding_model_id
 
-    validates :api_format, exclusion: { in: Llm::Session::UNSUPPORTED_FORMATS, message: :not_supported },
-                           unless: -> { api_format.blank? }
-
-    validate :features_require_connection
     validate :default_models_offered_by_server
     validate :default_chat_model_can_chat
     validate :default_embedding_model_can_embed
@@ -76,13 +69,6 @@ module LlmConnections
       return unless model.changed_attributes.include?("default_chat_model_id")
 
       errors.add(:default_chat_model_id, :cannot_chat) if llm_model.embedding?
-    end
-
-    def features_require_connection
-      return unless model.llm_features_enabled
-      return if model.base_url.present?
-
-      errors.add :llm_features_enabled, :requires_connection
     end
 
     # A designated default must be a model the server actually reported. Validated

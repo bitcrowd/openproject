@@ -39,7 +39,7 @@ module LlmConnections
     # in here would hold an open transaction and the connection's advisory lock
     # for up to the client's twenty-second probe timeout.
     def self.models_to_refresh?(connection)
-      connection.saved_changes.keys.intersect?(LlmServerValidator::CONNECTION_ATTRIBUTES)
+      connection.saved_change_to_inference_provider_id?
     end
 
     private

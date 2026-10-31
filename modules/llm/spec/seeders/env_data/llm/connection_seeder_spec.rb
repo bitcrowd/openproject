@@ -48,8 +48,8 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
       "default_chat_model" => "qwen3.6-35b-a3b"
     }
   } do
-    it "seeds the connection without contacting the server" do
-      expect { seed }.to change(LlmConnection, :count).from(0).to(1)
+    it "seeds the connection and its provider without contacting the server" do
+      expect { seed }.to change(LlmConnection, :count).from(0).to(1).and change(InferenceProvider, :count).from(0).to(1)
 
       connection = LlmConnection.first
       expect(connection.default_chat_model.external_id).to eq("qwen3.6-35b-a3b")
@@ -210,8 +210,9 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
     end
   end
 
-  # The environment is the source of truth while the form is read-only under it,
-  # so a value removed from the environment must not linger in the database.
+  # The environment is the source of truth at every seed, so a value removed from
+  # it must not stay in use. The provider holding it stays stored for the
+  # administrator to delete.
   context "when a previously set key is removed from the environment", with_settings: {
     llm_connection: { "base_url" => "https://example.com/v1" }
   } do
@@ -222,7 +223,7 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
                                                                 external_id: "old-default"))
     end
 
-    it "clears the values the environment no longer provides" do
+    it "stops using the values the environment no longer provides" do
       expect { seed }.not_to change(LlmConnection, :count)
 
       connection = LlmConnection.first

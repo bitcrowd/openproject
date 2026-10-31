@@ -39,25 +39,10 @@ module LlmConnections
 
     private
 
-    def configured_from_env_text
-      safe_join([t("admin.banners.environment_configured_readonly"),
-                 t("admin.llm_connections.form.env_applied", time: applied_at)], " ")
-    end
-
-    def env_changed_text
-      safe_join([t("admin.banners.environment_configured_readonly"),
-                 t("admin.llm_connections.form.env_changed", time: applied_at)], " ")
-    end
-
     def applied_at = format_time(connection.env_provisioned_at_in_database)
 
     def wrapper_options
-      {
-        data: {
-          controller: "llm--connection-form show-when-checked show-when-value-selected",
-          test_selector: "llm-connection--form"
-        }
-      }
+      { data: { test_selector: "llm-connection--form" } }
     end
 
     # The save can turn the connection on, which adds the tabs to the page

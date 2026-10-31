@@ -125,13 +125,14 @@ RSpec.describe LlmConnections::EnvSyncService do
     end
   end
 
-  context "when an administrator's save commits while the seed waits for the connection's lock" do
+  context "when an administrator's activation commits while the seed waits for the connection's lock" do
     let(:env_config) { { "base_url" => "https://example.com/v1", "api_key" => "sk-stored" } }
+    let!(:administrators_provider) { create(:inference_provider, base_url: "https://admin.example/v1") }
 
     before do
       saved = false
       allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction).and_wrap_original do |original, *args, &block|
-        LlmConnection.where(id: connection.id).update_all(base_url: "https://admin.example/v1") unless saved
+        LlmConnection.where(id: connection.id).update_all(inference_provider_id: administrators_provider.id) unless saved
         saved = true
         original.call(*args, &block)
       end
@@ -141,6 +142,147 @@ RSpec.describe LlmConnections::EnvSyncService do
       expect(result).to be_success
 
       expect(connection.reload.base_url).to eq("https://example.com/v1")
+    end
+  end
+
+  describe "the provider it points the connection at" do
+    let(:env_config) { { "base_url" => "https://example.com/v1", "api_key" => "sk-stored" } }
+
+    it "reuses the connection's provider when the values match" do
+      provider_id = connection.inference_provider_id
+
+      expect { result }.not_to change(InferenceProvider, :count)
+
+      expect(connection.reload.inference_provider_id).to eq(provider_id)
+    end
+
+    context "when a re-seed finds the values it applied before" do
+      it "reuses its provider" do
+        described_class.new({ "base_url" => "https://other.example.com/v1", "api_key" => "sk-from-env" }).call
+        provider_id = connection.reload.inference_provider_id
+
+        expect { described_class.new({ "base_url" => "https://other.example.com/v1/", "api_key" => "sk-from-env" }).call }
+          .not_to change(InferenceProvider, :count)
+
+        expect(connection.reload.inference_provider_id).to eq(provider_id)
+      end
+    end
+
+    context "when an administrator activated another provider since" do
+      let(:administrators_provider) { create(:inference_provider, base_url: "https://admin.example/v1") }
+
+      before { connection.update!(inference_provider: administrators_provider) }
+
+      it "points the connection back at the stored one with the environment's values" do
+        stored = InferenceProvider.find_by!(base_url: "https://example.com/v1")
+
+        expect { result }.not_to change(InferenceProvider, :count)
+
+        expect(connection.reload.inference_provider).to eq(stored)
+      end
+
+      it "leaves the administrator's provider stored" do
+        expect(result).to be_success
+
+        expect(administrators_provider.reload.base_url).to eq("https://admin.example/v1")
+      end
+    end
+
+    context "when only the API key differs" do
+      let(:env_config) { { "base_url" => "https://example.com/v1", "api_key" => "sk-rotated" } }
+
+      it "adds a provider and keeps the previous one stored" do
+        previous = connection.inference_provider
+
+        expect { result }.to change(InferenceProvider, :count).by(1)
+
+        expect(connection.reload.api_key).to eq("sk-rotated")
+        expect(previous.reload.api_key).to eq("sk-stored")
+      end
+    end
+
+    context "when only the custom headers differ" do
+      let(:env_config) do
+        { "base_url" => "https://example.com/v1", "api_key" => "sk-stored",
+          "custom_headers" => '{"api-version":"2024-02-01"}' }
+      end
+
+      it "adds a provider" do
+        expect { result }.to change(InferenceProvider, :count).by(1)
+
+        expect(connection.reload.custom_headers).to eq("api-version" => "2024-02-01")
+      end
+    end
+
+    context "when the same custom headers are written in another order" do
+      let(:env_config) do
+        { "base_url" => "https://example.com/v1", "api_key" => "sk-stored",
+          "custom_headers" => '{"b":"2","a":"1"}' }
+      end
+
+      before { connection.inference_provider.update!(custom_headers: { "a" => "1", "b" => "2" }) }
+
+      it "reuses the provider" do
+        expect { result }.not_to change(InferenceProvider, :count)
+      end
+    end
+
+    context "when the environment moves to a new server" do
+      let(:env_config) { { "base_url" => "https://other.example.com:8443/v1/" } }
+
+      before { connection.inference_provider.update!(api_format: "openrouter") }
+
+      it "names the new provider after the host and port" do
+        expect(result).to be_success
+
+        expect(connection.reload.inference_provider.title).to eq("other.example.com:8443")
+      end
+
+      it "takes the format of the active provider, since no variable sets one" do
+        expect(result).to be_success
+
+        expect(connection.reload.api_format).to eq("openrouter")
+      end
+    end
+
+    context "when a stored provider with the same values speaks another format" do
+      let(:env_config) { { "base_url" => "https://admin.example/v1", "api_key" => "sk-admin" } }
+      let!(:stored) do
+        create(:inference_provider, base_url: "https://admin.example/v1", api_key: "sk-admin", api_format: "openrouter")
+      end
+
+      it "reuses it, since no variable sets a format" do
+        expect { result }.not_to change(InferenceProvider, :count)
+
+        expect(connection.reload.inference_provider).to eq(stored)
+      end
+    end
+
+    context "on an installation with no connection stored" do
+      let(:env_config) { { "base_url" => "https://example.com/v1", "api_key" => "sk-from-env" } }
+      let!(:connection) { nil }
+
+      it "creates both, with the default format" do
+        expect(result).to be_success
+
+        expect(LlmConnection.active_connection)
+          .to have_attributes(base_url: "https://example.com/v1", api_key: "sk-from-env", api_format: "openai")
+      end
+    end
+
+    context "when the connection cannot take the environment's values" do
+      let(:env_config) { { "base_url" => "https://other.example.com/v1", "default_chat_model" => "bge-m3" } }
+
+      before do
+        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+                                        state: "supported", source: "admin")
+      end
+
+      it "stores no provider either" do
+        expect { result }.not_to change(InferenceProvider, :count)
+
+        expect(result).to be_failure
+      end
     end
   end
 
@@ -169,9 +311,9 @@ RSpec.describe LlmConnections::EnvSyncService do
   context "without custom headers while some are stored" do
     let(:env_config) { { "base_url" => "https://example.com/v1" } }
 
-    before { connection.update!(custom_headers: { "api-version" => "2024-02-01" }) }
+    before { connection.inference_provider.update!(custom_headers: { "api-version" => "2024-02-01" }) }
 
-    it "clears them" do
+    it "no longer sends them" do
       expect(result).to be_success
       expect(connection.reload.custom_headers).to eq({})
     end
@@ -180,7 +322,7 @@ RSpec.describe LlmConnections::EnvSyncService do
   context "with custom headers that are not a JSON object" do
     let(:env_config) { { "base_url" => "https://example.com/v1", "custom_headers" => '["api-version"]' } }
 
-    before { connection.update!(custom_headers: { "api-version" => "2024-02-01" }) }
+    before { connection.inference_provider.update!(custom_headers: { "api-version" => "2024-02-01" }) }
 
     it "fails and keeps the stored headers" do
       expect(result).to be_failure

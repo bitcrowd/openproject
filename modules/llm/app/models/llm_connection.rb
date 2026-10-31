@@ -27,7 +27,8 @@
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-# The connection to an OpenAI-API-compatible LLM server.
+# The connection to an OpenAI-API-compatible LLM server, whose settings live on
+# +inference_provider+.
 #
 # Only one connection may be active at a time, capped by a validation and a
 # partial unique index. +active+ picks the connection features resolve against.
@@ -36,13 +37,16 @@
 # is a change to the validation and the index.
 class LlmConnection < ApplicationRecord
   DEFAULT_IDENTIFIER = "default"
-  HEADER_NAME_TOKEN = /\A[!#$%&'*+\-.^_`|~0-9A-Za-z]+\z/
+
+  belongs_to :inference_provider, optional: false
+
+  delegate :base_url, :api_key, :custom_headers, :base_url_without_credentials,
+           to: :inference_provider, allow_nil: true
 
   has_many :health_reports, as: :subject, dependent: :delete_all
 
-  # Written through to Setting.llm_features_enabled by
-  # LlmConnections::UpdateService, so the form can offer the instance-wide
-  # switch beside the connection's own fields.
+  # The instance-wide switch, for the form to show and for the seed to write
+  # through to Setting.llm_features_enabled by LlmConnections::UpdateService.
   attribute :llm_features_enabled, :boolean, default: -> { Setting.llm_features_enabled? }
 
   scope :active, -> { where(active: true) }
@@ -54,18 +58,11 @@ class LlmConnection < ApplicationRecord
   has_many :capability_verdicts, class_name: "LlmCapabilityVerdict", dependent: :delete_all
   has_many :feature_bindings, class_name: "LlmFeatureBinding", dependent: :delete_all
 
-  validates :base_url, presence: true
-  validate :base_url_is_absolute_http, if: -> { base_url.present? }
   # The column is NOT NULL and +active_connection+ hands back an unsaved record
   # with no identifier, so without this a save raises NotNullViolation instead of
   # surfacing an error a caller can render.
   validates :identifier, presence: true
-  # Not only the contract's: the environment seeder and any direct write reach
-  # the model alone, and an unknown format is an UnsupportedFormat raised at read
-  # time rather than an error at write time.
-  validates :api_format, inclusion: { in: Llm::Adapters::FORMATS }
   validate :single_active_connection, if: :active?
-  validate :custom_headers_are_flat_strings
 
   class << self
     # Identifying attributes are left unset here and filled in by
@@ -106,8 +103,8 @@ class LlmConnection < ApplicationRecord
     end
   end
 
-  # A key assigned but not saved, as after a failed update, is not stored.
-  def api_key_stored? = persisted? && api_key_in_database.present?
+  # An unsaved connection has no provider yet and still needs an answer here.
+  def api_format = inference_provider&.api_format || InferenceProvider.column_defaults["api_format"]
 
   # Deliberately does not consider +last_connected_at+: a connection provisioned
   # from the environment is never probed, and must still count as configured.
@@ -124,6 +121,10 @@ class LlmConnection < ApplicationRecord
   def provisioned_from_env? = persisted? && env_provisioned_at_in_database.present?
 
   def env_pending? = Setting.llm_connection.present? && !provisioned_from_env?
+
+  def release_from_environment!
+    update_columns(env_provisioned_at: nil, env_fingerprint: nil, updated_at: Time.current)
+  end
 
   def env_changed_since_applied?
     applied = env_fingerprint_in_database
@@ -215,45 +216,9 @@ class LlmConnection < ApplicationRecord
 
   private
 
-  def base_url_without_credentials
-    uri = URI.parse(base_url)
-    uri.user = nil
-    uri.query = nil
-    uri.fragment = nil
-    uri.to_s
-  rescue URI::InvalidURIError
-    nil
-  end
-
-  def base_url_is_absolute_http
-    uri = URI.parse(base_url)
-    return if uri.is_a?(URI::HTTP) && uri.host.present?
-
-    errors.add(:base_url, :invalid_url)
-  rescue URI::InvalidURIError
-    errors.add(:base_url, :invalid_url)
-  end
-
   def single_active_connection
     return unless self.class.active.where.not(id:).exists?
 
     errors.add(:base, :singleton)
-  end
-
-  # The value goes into Faraday's header serialization unchanged, where a nested
-  # hash or a non-string fails at request time rather than at save time.
-  def custom_headers_are_flat_strings
-    return if custom_headers.blank?
-
-    return errors.add(:custom_headers, :invalid) unless custom_headers.is_a?(Hash)
-
-    return if custom_headers.all? { |name, value| header_pair?(name, value) }
-
-    errors.add(:custom_headers, :invalid)
-  end
-
-  def header_pair?(name, value)
-    name.is_a?(String) && name.match?(HEADER_NAME_TOKEN) &&
-      value.is_a?(String) && !value.match?(/[[:cntrl:]]/)
   end
 end

@@ -27,27 +27,10 @@
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-module LlmConnections
-  # Confirms disconnecting from the LLM server.
-  #
-  # Disconnecting clears the credential and switches the connection off. It does
-  # not delete anything: the endpoint, the model catalogue, the capability
-  # verdicts and every feature binding are kept, so reconnecting is a matter of
-  # entering the key again.
-  class DisconnectDialogComponent < ApplicationComponent
-    include OpTurbo::Streamable
-    include OpPrimer::ComponentHelpers
-
-    TEST_SELECTOR = "llm-connection--disconnect-dialog"
-
-    alias_method :connection, :model
-
-    def form_arguments
-      { action: url_helpers.disconnect_llm_connection_path, method: :post }
-    end
-
-    def bound_features
-      connection.feature_bindings.filter_map { |binding| binding.feature&.label if binding.model_id.present? }
-    end
+FactoryBot.define do
+  factory :inference_provider do
+    sequence(:title) { |n| "Provider #{n}" }
+    sequence(:base_url) { |n| "https://provider-#{n}.example.com/v1" }
+    api_key { "sk-provider-key" }
   end
 end

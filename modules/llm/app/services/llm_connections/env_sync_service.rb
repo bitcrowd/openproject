@@ -28,11 +28,13 @@
 #++
 
 module LlmConnections
-  # Applies an environment-provided configuration to the connection record.
+  # Points the connection at a provider holding the environment's configuration,
+  # reusing a stored one with the same values or creating one.
   #
   # Uses EnvironmentUpdateContract, which lifts the "configured from environment
-  # is read-only" guard and, crucially, does not probe the LLM server: the
-  # container running the seed may well start before the server does.
+  # is read-only" guard. It and InferenceProviders::EnvironmentCreateContract,
+  # crucially, do not probe the LLM server: the container running the seed may
+  # well start before the server does.
   class EnvSyncService
     # A JSON string from the environment variable, since nested variable names
     # cannot spell a header name such as api-version, or a Hash from
@@ -61,10 +63,7 @@ module LlmConnections
           # Loaded again under the lock. A copy read before an administrator's
           # save committed would take the environment's values for unchanged
           # and not write them.
-          result = write(attributes, model: LlmConnection.active_connection)
-          raise ActiveRecord::Rollback if result.failure?
-
-          result = write(default_model_references(result.result), model: result.result)
+          result = apply_to(LlmConnection.active_connection)
           raise ActiveRecord::Rollback if result.failure?
         end
       end
@@ -76,16 +75,38 @@ module LlmConnections
 
     attr_reader :config
 
-    # Absent connection keys are cleared on purpose: the environment is the source
-    # of truth here, and the form is read-only while it is. Keeping a stored
-    # value that was removed from the environment would leave, for example, an
-    # obsolete API key in use with no supported way to clear it.
-    def attributes
-      {
+    def apply_to(connection)
+      provider_for(connection)
+        .bind { |provider| write({ inference_provider_id: provider.id, llm_features_enabled: }, model: connection) }
+        .bind { |written| write(default_model_references(written), model: written) }
+    end
+
+    def provider_for(connection)
+      stored = stored_provider
+      return ServiceResult.success(result: stored) if stored
+
+      ::InferenceProviders::CreateService
+        .new(user: User.system, contract_class: ::InferenceProviders::EnvironmentCreateContract)
+        .call(**provider_settings, api_format: connection.api_format)
+    end
+
+    # The headers are compared here because +where+ takes a hash value for a table
+    # reference. The format is no part of it, since no variable sets one.
+    def stored_provider
+      InferenceProvider
+        .where(provider_settings.slice(:base_url, :api_key))
+        .order(:id)
+        .detect { |provider| provider.custom_headers == provider_settings[:custom_headers] }
+    end
+
+    # Absent connection keys count as empty on purpose: the environment is the
+    # source of truth here. Keeping a stored value that was removed from the
+    # environment would leave, for example, an obsolete API key in use.
+    def provider_settings
+      @provider_settings ||= {
         base_url: config.fetch(:base_url),
         api_key: config[:api_key],
-        custom_headers: self.class.custom_headers(config[:custom_headers]),
-        llm_features_enabled:
+        custom_headers: self.class.custom_headers(config[:custom_headers])
       }
     end
 

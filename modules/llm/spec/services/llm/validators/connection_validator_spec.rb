@@ -160,7 +160,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
   end
 
   context "without a base URL" do
-    let(:connection) { create(:llm_connection).tap { |c| c.update_column(:base_url, "") } }
+    let(:connection) { create(:llm_connection).tap { |c| c.inference_provider.update_column(:base_url, "") } }
 
     it "fails and does not ask the server anything" do
       expect(result_for(:configuration, :base_url_present).state).to eq(:failure)

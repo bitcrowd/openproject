@@ -203,7 +203,7 @@ RSpec.describe "LLM connection health status", :llm_server_helpers, :skip_csrf, 
     end
 
     it "strips credentials carried in the base URL" do
-      connection.update_column(:base_url, "https://user:url-password@example.com/v1?api-key=query-secret")
+      connection.inference_provider.update_column(:base_url, "https://user:url-password@example.com/v1?api-key=query-secret")
 
       get llm_connection_health_status_report_path(format: :txt)
 

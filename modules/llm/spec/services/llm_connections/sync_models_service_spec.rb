@@ -44,8 +44,8 @@ RSpec.describe LlmConnections::SyncModelsService, :llm_server_helpers, :webmock 
                                       state: "supported", source: "admin")
       create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen3.6-27b", capability: "vision",
                                       state: "unsupported", source: "metadata")
-      connection.update_columns(base_url: "https://elsewhere.example/v1",
-                                connection_fingerprint: "the-previous-deployment")
+      connection.inference_provider.update_columns(base_url: "https://elsewhere.example/v1")
+      connection.update_columns(connection_fingerprint: "the-previous-deployment")
     end
 
     it "invalidates the old models and verdicts even when the new server offers no list" do
@@ -132,7 +132,7 @@ RSpec.describe LlmConnections::SyncModelsService, :llm_server_helpers, :webmock 
       connection.update!(connection_fingerprint: connection.settings_fingerprint,
                          default_chat_model: chat_model,
                          default_embedding_model: embedding_model)
-      connection.update!(api_key: "sk-rotated")
+      connection.inference_provider.update!(api_key: "sk-rotated")
     end
 
     it "keeps the discovered models" do

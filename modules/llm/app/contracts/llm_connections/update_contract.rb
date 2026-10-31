@@ -28,17 +28,8 @@
 #++
 
 module LlmConnections
-  # The contract used when an administrator saves the form.
-  #
-  # This is the only contract that talks to the remote server, so that a failed
-  # probe persists nothing. It must NOT move to BaseContract: provisioning from
-  # the environment reuses that base, and a validates line cannot be un-declared
-  # by a subclass -- an outbound request during seeding would fail the boot of a
-  # container whose LLM server has not started yet.
-  #
-  # The probe itself is guarded on changed attributes, so toggling +enabled+ or
-  # picking a default model contacts nothing.
+  # The contract used when an administrator saves the features switch or picks a
+  # default model.
   class UpdateContract < BaseContract
-    validates :base_url, llm_server: true, unless: -> { errors.include?(:base_url) }
   end
 end

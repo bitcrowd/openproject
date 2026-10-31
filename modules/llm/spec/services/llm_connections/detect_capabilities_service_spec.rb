@@ -324,7 +324,7 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
       probe = instance_double(Llm::Probes::EmbeddingsProbe)
       allow(Llm::Probes::EmbeddingsProbe).to receive(:new).and_return(probe)
       allow(probe).to receive(:call) do
-        LlmConnection.where(id: connection.id).update_all(base_url: "https://elsewhere.example/v1")
+        InferenceProvider.where(id: connection.inference_provider_id).update_all(base_url: "https://elsewhere.example/v1")
         Llm::Probes::EmbeddingsProbe::Result.new(state: :supported, detail: { "dimensions" => 4 })
       end
 

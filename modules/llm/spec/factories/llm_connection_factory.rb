@@ -29,9 +29,15 @@
 
 FactoryBot.define do
   factory :llm_connection do
+    transient do
+      base_url { "https://example.com/v1" }
+      api_key { "sk-test-key" }
+      api_format { "openai" }
+      custom_headers { {} }
+    end
+
     sequence(:identifier) { |n| n == 1 ? LlmConnection::DEFAULT_IDENTIFIER : "connection-#{n}" }
-    base_url { "https://example.com/v1" }
-    api_key { "sk-test-key" }
+    inference_provider { association(:inference_provider, base_url:, api_key:, api_format:, custom_headers:) }
 
     trait :provisioned_from_env do
       env_provisioned_at { Time.current }

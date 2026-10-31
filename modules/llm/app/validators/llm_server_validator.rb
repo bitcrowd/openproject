@@ -36,8 +36,7 @@
 # model through SetAttributesService -- would fire an outbound HTTP request.
 class LlmServerValidator < ActiveModel::EachValidator
   # Changing any of these means talking to a different server, or to the same
-  # server in a different dialect, so the connection must be proven again and
-  # its models resynchronised.
+  # server in a different dialect, so the provider must be proven again.
   CONNECTION_ATTRIBUTES = %w[base_url api_key api_format].freeze
 
   # Statuses that mean "this server has no model list here", as opposed to "this
@@ -163,8 +162,8 @@ class LlmServerValidator < ActiveModel::EachValidator
 
   # The upstream message is logged but never surfaced: an OpenAI-compatible
   # gateway routinely echoes credentials and internal hostnames in error bodies.
-  def log(connection, error)
-    subject = connection.persisted? ? "connection #{connection.id}" : "a new connection"
+  def log(provider, error)
+    subject = provider.persisted? ? "provider #{provider.id}" : "a new provider"
 
     Rails.logger.info { "LLM probe of #{subject} failed: #{error.class} #{error.message}" }
   end
