@@ -36,6 +36,7 @@ RSpec.describe "Admin LLM connection", :llm_server_helpers, :skip_csrf, :webmock
   let(:non_admin) { create(:user) }
   let(:base_url) { "https://example.com/v1" }
   let(:features_switch) { "Enable LLMs for this instance" }
+  let(:new_provider_button) { "[data-test-selector='llm-inference-provider--new-button']" }
 
   describe "with the feature flag off", with_flag: { llm_connection: false } do
     before { login_as admin }
@@ -105,13 +106,15 @@ RSpec.describe "Admin LLM connection", :llm_server_helpers, :skip_csrf, :webmock
           expect(response).to have_http_status(:ok)
           expect(page).to have_field(features_switch, disabled: false)
           expect(page).to have_button("Save")
+          expect(page).to have_no_css(new_provider_button)
         end
 
         context "with LLMs switched on", with_settings: { llm_features_enabled: true } do
-          it "has no tabs to lead nowhere yet" do
+          it "offers to add a provider, with no tabs to lead nowhere yet" do
             get llm_connection_path
 
             expect(page).to have_field(features_switch, checked: true)
+            expect(page).to have_css(new_provider_button)
             expect(page).to have_no_link("Models")
           end
         end
@@ -125,6 +128,12 @@ RSpec.describe "Admin LLM connection", :llm_server_helpers, :skip_csrf, :webmock
 
           expect(page).to have_field(features_switch, disabled: false)
           expect(page).to have_button("Save")
+        end
+
+        it "hides the providers until it is" do
+          get llm_connection_path
+
+          expect(page).to have_no_css(new_provider_button)
         end
       end
 

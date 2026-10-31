@@ -35,6 +35,21 @@ Rails.application.routes.draw do
       end
     end
 
+    resources :inference_providers, only: %i[create update destroy], controller: "admin/inference_providers" do
+      collection do
+        get :new_dialog, defaults: { format: :turbo_stream }
+      end
+
+      member do
+        get :edit_dialog, defaults: { format: :turbo_stream }
+        get :deletion_dialog, defaults: { format: :turbo_stream }
+        get :activation_dialog, defaults: { format: :turbo_stream }
+        post :activate
+        get :delete_api_key_dialog, defaults: { format: :turbo_stream }
+        delete :api_key, action: :delete_api_key
+      end
+    end
+
     resources :llm_models, only: %i[index new create edit update destroy], controller: "admin/llm_models" do
       collection do
         get :search, defaults: { format: :turbo_stream }

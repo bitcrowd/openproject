@@ -30,6 +30,8 @@
 module LlmConnections
   # An administrator can always switch the active provider
   class ActivateProviderContract < BaseContract
+    include RequiresAdminGuard
+
     attribute :inference_provider_id
 
     def not_configured_from_env = nil

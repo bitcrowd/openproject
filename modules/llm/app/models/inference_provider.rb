@@ -59,6 +59,19 @@ class InferenceProvider < ApplicationRecord
   # A key assigned but not saved, as after a failed update, is not stored.
   def api_key_stored? = persisted? && api_key_in_database.present?
 
+  # Bypasses the contract: removing a credential must always be possible, even
+  # against a server that would reject the resulting unauthenticated probe.
+  def remove_api_key!
+    transaction do
+      update_columns(api_key: nil, updated_at: Time.current)
+      release_from_environment!
+    end
+  end
+
+  def release_from_environment!
+    llm_connections.active.find_each(&:release_from_environment!)
+  end
+
   # Never the whole URL: its userinfo or query string can carry a credential.
   def host_and_port
     uri = URI.parse(base_url.to_s)

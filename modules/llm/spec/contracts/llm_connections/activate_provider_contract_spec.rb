@@ -43,7 +43,7 @@ RSpec.describe LlmConnections::ActivateProviderContract, :check_errors_i18n, :ll
 
   before { connection.inference_provider_id = provider.id }
 
-  include_examples "contract is valid"
+  it_behaves_like "contract is valid for active admins and invalid for regular users"
 
   it "does not contact the server" do
     contract.validate

@@ -33,9 +33,7 @@ module InferenceProviders
 
     def after_perform(service_call)
       super.tap do
-        next unless service_call.success? && model.saved_change_to_api_key?
-
-        model.llm_connections.active.find_each(&:release_from_environment!)
+        model.release_from_environment! if service_call.success? && model.saved_change_to_api_key?
       end
     end
   end

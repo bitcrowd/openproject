@@ -36,6 +36,20 @@ RSpec.describe InferenceProviders::ActivateService, :llm_server_helpers, :webmoc
   let(:elsewhere) { "https://elsewhere.example/v1" }
   let(:provider) { create(:inference_provider, base_url: elsewhere, api_key: "sk-elsewhere") }
 
+  context "with a user who is no administrator" do
+    subject(:result) { described_class.new(user: create(:user), model: provider).call }
+
+    let!(:connection) { create(:llm_connection, base_url: "https://example.com/v1") }
+    let!(:models_request) { mock_llm_models_response(elsewhere) }
+
+    it "changes nothing" do
+      expect(result).to be_failure
+
+      expect(connection.reload.base_url).to eq("https://example.com/v1")
+      expect(models_request).not_to have_been_made
+    end
+  end
+
   context "with no connection stored yet" do
     let!(:models_request) { mock_llm_models_response(elsewhere) }
 
