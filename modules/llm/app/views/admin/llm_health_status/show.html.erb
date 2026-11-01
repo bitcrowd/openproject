@@ -31,12 +31,14 @@ See COPYRIGHT and LICENSE files for more details.
 <%=
   render(Primer::OpenProject::PageHeader.new) do |header|
     header.with_title { t(".title") }
-    if @report.present?
-      header.with_description do
-        [t(".last_check", datetime: format_time(@report.created_at)),
-         t(".summary", **tally_counts(@report)),
-         t(Llm::Validators::ConnectionValidator.report_kind(@report), scope: "llm.health_report_kinds")].join(" ")
+    header.with_description do
+      description = [t(".provider", title: @connection.inference_provider.title)]
+      if @report.present?
+        description += [t(".last_check", datetime: format_time(@report.created_at)),
+                        t(".summary", **tally_counts(@report)),
+                        t(Llm::Validators::ConnectionValidator.report_kind(@report), scope: "llm.health_report_kinds")]
       end
+      description.join(" ")
     end
     header.with_breadcrumbs(
       [{ href: admin_index_path, text: t(:label_administration) },

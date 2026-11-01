@@ -82,6 +82,7 @@ module Admin
     def text_report(timestamp)
       {
         connection: @connection.identifier,
+        inference_provider: @connection.inference_provider.title,
         configuration: @connection.non_confidential_configuration,
         ran_at: timestamp,
         results: @report ? @report.results.map(&:to_h) : []
@@ -101,8 +102,7 @@ module Admin
       report
     end
 
-    # HealthReports::Validator builds the report through the association, which
-    # would insert an unpersisted singleton along with it.
+    # An unsaved connection has no provider to file a report under.
     def find_connection
       @connection = LlmConnection.active_connection
 

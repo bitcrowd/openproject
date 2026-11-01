@@ -43,7 +43,27 @@ RSpec.describe LlmConnections::SidePanel::HealthStatusComponent, type: :componen
   it "offers to run the checks when none have run" do
     render_inline(described_class.new(connection))
 
-    expect(page).to have_text("This connection has not been checked yet.")
+    expect(page).to have_text("This provider has not been checked yet.")
+  end
+
+  describe "the provider's name" do
+    before { connection.inference_provider.update!(title: "Local <b>Ollama</b>") }
+
+    it "is shown when none have run, without being taken for markup" do
+      render_inline(described_class.new(connection))
+
+      expect(page).to have_text("Local <b>Ollama</b>")
+      expect(page).to have_no_css("b", text: "Ollama")
+    end
+
+    it "is shown with a report" do
+      store_report(:configuration, :server)
+
+      render_inline(described_class.new(connection))
+
+      expect(page).to have_text("Local <b>Ollama</b>")
+      expect(page).to have_test_selector("llm-connection--health-summary")
+    end
   end
 
   it "reads the latest report once per render" do

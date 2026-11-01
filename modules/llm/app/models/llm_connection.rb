@@ -40,10 +40,8 @@ class LlmConnection < ApplicationRecord
 
   belongs_to :inference_provider, optional: false
 
-  delegate :base_url, :api_key, :custom_headers, :base_url_without_credentials,
+  delegate :base_url, :api_key, :custom_headers, :base_url_without_credentials, :health_reports,
            to: :inference_provider, allow_nil: true
-
-  has_many :health_reports, as: :subject, dependent: :delete_all
 
   # The instance-wide switch, for the form to show and for the seed to write
   # through to Setting.llm_features_enabled by LlmConnections::UpdateService.

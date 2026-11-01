@@ -42,6 +42,11 @@ RSpec.describe "Admin inference providers", :llm_server_helpers, :skip_csrf, :we
     page.find("[data-test-selector='llm-inference-provider--row-#{provider.id}']")
   end
 
+  def store_health_report(owner, **)
+    group = HealthReport::ResultGroup.new(key: :configuration, results: [HealthReport::Result.success(:enabled)])
+    owner.health_reports.create!(results: [group], **)
+  end
+
   before do
     login_as admin
     Setting.llm_features_enabled = true
@@ -597,6 +602,41 @@ RSpec.describe "Admin inference providers", :llm_server_helpers, :skip_csrf, :we
         expect(connection.reload).to have_attributes(base_url:, api_key: "sk-original")
         expect(connection.available_model_ids).to contain_exactly("qwen3.6-27b", "bge-m3")
       end
+
+      describe "the health report on the page" do
+        let!(:report) { store_health_report(connection) }
+        let(:health_summary) { "[data-test-selector='llm-connection--health-summary']" }
+
+        it "belongs to the previous provider once another one is active" do
+          post activate_inference_provider_path(provider)
+
+          get llm_connection_path
+
+          expect(page).to have_no_css(health_summary)
+          expect(page).to have_text("This provider has not been checked yet.")
+        end
+
+        it "is shown again when switching back" do
+          mock_llm_models_response(base_url)
+          previous = connection.inference_provider
+
+          post activate_inference_provider_path(provider)
+          post activate_inference_provider_path(previous)
+
+          get llm_connection_path
+
+          expect(page).to have_css(health_summary)
+          expect(connection.reload.latest_health_report).to eq(report)
+        end
+
+        it "takes the provider's own report over another provider's newer one" do
+          own = store_health_report(provider, created_at: 1.year.ago)
+
+          post activate_inference_provider_path(provider)
+
+          expect(connection.reload.latest_health_report).to eq(own)
+        end
+      end
     end
 
     context "with an unreachable server" do
@@ -701,6 +741,16 @@ RSpec.describe "Admin inference providers", :llm_server_helpers, :skip_csrf, :we
       expect(response).to redirect_to(llm_connection_path)
       expect(flash[:notice]).to eq(I18n.t(:notice_successful_delete))
       expect(InferenceProvider.exists?(stored.id)).to be(false)
+    end
+
+    it "deletes the provider's health reports and no others" do
+      deleted = store_health_report(stored)
+      kept = store_health_report(connection)
+
+      delete inference_provider_path(stored)
+
+      expect(HealthReport.exists?(deleted.id)).to be(false)
+      expect(HealthReport.exists?(kept.id)).to be(true)
     end
 
     it "refuses the active provider" do

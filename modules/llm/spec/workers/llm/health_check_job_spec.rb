@@ -44,6 +44,12 @@ RSpec.describe Llm::HealthCheckJob, :llm_server_helpers, :webmock, with_flag: { 
         expect { described_class.perform_now }.to change(connection.health_reports, :count).by(1)
       end
 
+      it "files the report under the active provider" do
+        described_class.perform_now
+
+        expect(connection.latest_health_report.subject).to eq(connection.inference_provider)
+      end
+
       # The whole reason the inference group is gated: an unattended job must not
       # run up a bill on a hosted provider four times a day.
       # Group keys come back from jsonb as strings, so a stored report is

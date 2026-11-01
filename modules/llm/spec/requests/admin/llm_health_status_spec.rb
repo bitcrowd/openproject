@@ -56,6 +56,29 @@ RSpec.describe "LLM connection health status", :llm_server_helpers, :skip_csrf, 
         expect(response.body).to include("has not been checked yet")
       end
 
+      it "names the provider, without being taken for markup" do
+        connection.inference_provider.update!(title: "Local <b>Ollama</b>")
+
+        get llm_connection_health_status_report_path
+
+        expect(response.body).to include("Inference provider: Local &lt;b&gt;Ollama&lt;/b&gt;.")
+        expect(response.body).not_to include("<b>Ollama</b>")
+      end
+
+      context "with a report on another provider" do
+        before do
+          group = HealthReport::ResultGroup.new(key: :configuration, results: [HealthReport::Result.success(:enabled)])
+          create(:inference_provider).health_reports.create!(results: [group])
+        end
+
+        it "offers to run the checks, since the active provider has none" do
+          get llm_connection_health_status_report_path
+
+          expect(response.body).to include("has not been checked yet")
+          expect(response.body).not_to include("Last checked")
+        end
+      end
+
       it "renders the report once it exists" do
         mock_llm_models_response(base_url)
         mock_llm_chat_response(base_url)
@@ -177,6 +200,14 @@ RSpec.describe "LLM connection health status", :llm_server_helpers, :skip_csrf, 
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("base_url")
+    end
+
+    it "names the provider" do
+      connection.inference_provider.update!(title: "Local Ollama")
+
+      get llm_connection_health_status_report_path(format: :txt)
+
+      expect(YAML.safe_load(response.body, permitted_classes: [Symbol])).to include("inference_provider" => "Local Ollama")
     end
 
     it "is plain YAML, without serialized Ruby objects" do

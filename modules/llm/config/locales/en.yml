@@ -232,9 +232,10 @@ en:
         success: "The checks have run."
       show:
         blankslate_description: "Run the checks to find out whether OpenProject can reach the LLM server, whether it accepts the API key, and whether every AI feature has a usable model."
-        blankslate_heading: "This connection has not been checked yet"
+        blankslate_heading: "This provider has not been checked yet"
         download: "Download report"
         last_check: "Last checked %{datetime}."
+        provider: "Inference provider: %{title}."
         run_checks: "Run checks"
         running: "Running checks..."
         summary: "%{passed} passed, %{warnings} warnings, %{failures} failed."
@@ -406,7 +407,7 @@ en:
     side_panel:
       health_status_component:
         last_check: "Last checked %{datetime}."
-        never_checked: "This connection has not been checked yet."
+        never_checked: "This provider has not been checked yet."
         open_report: "Open full health report"
         run_checks: "Run checks now"
         running: "Running checks..."
