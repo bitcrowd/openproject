@@ -60,6 +60,20 @@ RSpec.describe Llm::WorkPackages::EmbedService, :llm_server_helpers, :webmock,
     end
   end
 
+  context "when the server answers with another size than was asked for" do
+    let(:embedding_double) { instance_double(RubyLLM::Embedding, vectors: [[1.0, 2.0, 3.0, 4.0]]) }
+
+    it "raises a message saying so" do
+      expect { service.call }.to raise_error(Llm::Errors::UnexpectedDimensionsError, /with 4 dimensions instead of the 3/)
+    end
+
+    it "stores nothing" do
+      expect { service.call }.to raise_error(Llm::Errors::UnexpectedDimensionsError)
+
+      expect(WorkPackageEmbedding.count).to eq(0)
+    end
+  end
+
   describe "the request" do
     let(:elsewhere) { "https://elsewhere.example/v1" }
     let(:semantic_index) do

@@ -219,6 +219,7 @@ en:
           features_disabled: "LLM features are switched off for this instance."
           pgvector_missing: "The pgvector extension is not installed. Install it and run the migrations again to start indexing."
         progress: "%{percentage}% done"
+        unexpected_dimensions: "The server returned vectors with %{returned} dimensions instead of the %{expected} this semantic index asks for."
       menu:
         delete: "Delete"
         locked_while_active: "Activate another semantic index first"
