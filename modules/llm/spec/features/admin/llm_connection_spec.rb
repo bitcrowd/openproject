@@ -310,6 +310,62 @@ RSpec.describe "LLM connection administration",
           .to have_css(".Label", exact_text: "Chat")
       end
 
+      it "creates a semantic index from a stored model with its numbers prefilled, and re-points it once indexed" do
+        create(:embedding_model, name: "First", inference_provider: create(:inference_provider, title: "One"),
+                                 context_token_length: 2048, embedding_vector_dimensions: 768)
+        create(:embedding_model, name: "Second", inference_provider: create(:inference_provider, title: "Two"),
+                                 context_token_length: 512, embedding_vector_dimensions: 384)
+
+        visit llm_feature_bindings_path
+
+        find_test_selector("llm-semantic-index--new-button").click
+
+        within_test_selector("llm-semantic-index-dialog") do
+          fill_in "Display name", with: "My index"
+          select "First @ One", from: "Model"
+
+          expect(page).to have_field("Context length", with: "2048")
+          expect(page).to have_field("Dimensions", with: "768")
+
+          select "Second @ Two", from: "Model"
+
+          expect(page).to have_field("Context length", with: "512")
+          expect(page).to have_field("Dimensions", with: "384")
+          expect(page).to be_axe_clean.skipping("color-contrast")
+
+          find_test_selector("llm-semantic-index--submit").click
+        end
+
+        expect(page).to have_text(I18n.t(:notice_successful_create))
+
+        semantic_index = SemanticIndex.sole
+        expect(page).to have_test_selector("llm-semantic-index--row-#{semantic_index.id}", text: "Second")
+
+        semantic_index.update!(state: "ready")
+        visit llm_feature_bindings_path
+
+        within_test_selector("llm-semantic-index--menu-#{semantic_index.id}") do
+          retry_block do
+            find("button[aria-haspopup='true']").click
+            click_link(I18n.t(:button_edit))
+          end
+        end
+
+        within_test_selector("llm-semantic-index-dialog") do
+          expect(page).to have_text("Only use a model compatible with Second @ Two")
+          expect(page).to have_field("Dimensions", disabled: true)
+
+          select "First @ One", from: "Model"
+
+          expect(page).to have_field("Dimensions", disabled: true, with: "384")
+
+          find_test_selector("llm-semantic-index--submit").click
+        end
+
+        expect(page).to have_test_selector("llm-semantic-index--row-#{semantic_index.id}", text: "First")
+        expect(semantic_index.reload).to have_attributes(state: "ready", embedding_vector_dimensions: 384)
+      end
+
       it "renames it and deletes it" do
         stored = create(:embedding_model, inference_provider: connection.inference_provider, name: "Original")
 

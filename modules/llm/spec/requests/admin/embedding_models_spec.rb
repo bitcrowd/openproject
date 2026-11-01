@@ -383,5 +383,23 @@ RSpec.describe "Admin embedding models", :llm_server_helpers, :skip_csrf, :webmo
       expect(flash[:notice]).to eq(I18n.t(:notice_successful_delete))
       expect(EmbeddingModel.exists?(stored.id)).to be(false)
     end
+
+    context "with a semantic index using it" do
+      before { create(:semantic_index, embedding_model: stored) }
+
+      it "refuses and says what to do" do
+        delete embedding_model_path(stored)
+
+        expect(response).to redirect_to(llm_models_path)
+        expect(flash[:error]).to include("A semantic index uses this model. Point it at another model first.")
+        expect(EmbeddingModel.exists?(stored.id)).to be(true)
+      end
+
+      it "locks the row's delete action and gives the reason" do
+        get llm_models_path
+
+        expect(response.body).to include("Point the semantic indexes using it at another model first")
+      end
+    end
   end
 end

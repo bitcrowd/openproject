@@ -46,10 +46,9 @@ module Llm
       private
 
       def validate
-        register_checks(:bindings_resolvable, :active_semantic_index_intact)
+        register_checks(:bindings_resolvable)
 
         bindings_resolvable
-        active_semantic_index_intact
       end
 
       def bindings_resolvable
@@ -70,19 +69,6 @@ module Llm
         end
 
         pass_check(:bindings_resolvable)
-      end
-
-      # If the model an index was built with has left the catalogue, queries can
-      # no longer be embedded consistently with the stored vectors.
-      def active_semantic_index_intact
-        semantic_index = subject.feature_bindings.find_by(feature_key: "semantic_search")&.semantic_index
-
-        if semantic_index.nil? || subject.available_model_ids.include?(semantic_index.model_id)
-          return pass_check(:active_semantic_index_intact)
-        end
-
-        fail_check(:active_semantic_index_intact, :semantic_index_model_missing,
-                   context: { title: semantic_index.title, model: semantic_index.model_id })
       end
 
       def resolutions

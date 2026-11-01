@@ -66,27 +66,30 @@ RSpec.describe Llm::IndexWorkPackagesJob,
         .to contain_exactly([semantic_index.id, match_array(work_packages.map(&:id))])
     end
 
-    it "fails the Semantic Index and enqueues nothing without a connection" do
+    it "fails the Semantic Index and enqueues nothing with the features switched off",
+       with_settings: { llm_features_enabled: false } do
+      job.perform(semantic_index.id)
+
+      expect(embed_jobs).to be_empty
+      expect(semantic_index.reload)
+        .to have_attributes(state: "failed",
+                            error_message: I18n.t("admin.semantic_indexes.indexing.not_ready.features_disabled"))
+    end
+
+    it "does not need an active provider" do
       connection.destroy!
 
       job.perform(semantic_index.id)
 
-      expect(embed_jobs).to be_empty
-      expect(semantic_index.reload)
-        .to have_attributes(state: "failed",
-                            error_message: I18n.t("admin.semantic_indexes.indexing.not_ready.no_connection"))
+      expect(embed_jobs).not_to be_empty
     end
 
-    it "fails the Semantic Index when the connection no longer offers its model" do
-      semantic_index.update!(model_id: "no-longer-offered")
+    it "does not need the active provider to offer its model" do
+      semantic_index.embedding_model.update!(external_id: "only-on-another-provider")
 
       job.perform(semantic_index.id)
 
-      expect(embed_jobs).to be_empty
-      expect(semantic_index.reload)
-        .to have_attributes(state: "failed",
-                            error_message: I18n.t("admin.semantic_indexes.indexing.not_ready.model_missing",
-                                                  model: "no-longer-offered"))
+      expect(embed_jobs).not_to be_empty
     end
 
     it "does nothing with the feature flag off", with_flag: { semantic_search: false } do

@@ -35,6 +35,7 @@
 # same model on another provider is another row.
 class EmbeddingModel < ApplicationRecord
   belongs_to :inference_provider, optional: false
+  has_many :semantic_indexes, dependent: :restrict_with_error
 
   attr_accessor :model_type
 
@@ -49,4 +50,10 @@ class EmbeddingModel < ApplicationRecord
   validates :embedding_vector_dimensions,
             numericality: { only_integer: true, greater_than: 0,
                             less_than_or_equal_to: WorkPackageEmbedding::DIMENSIONS }
+
+  def name_with_provider
+    provider_suffix = " @ #{inference_provider.title}"
+
+    name.end_with?(provider_suffix) ? name : "#{name}#{provider_suffix}"
+  end
 end

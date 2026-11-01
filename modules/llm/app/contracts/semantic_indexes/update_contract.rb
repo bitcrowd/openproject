@@ -30,8 +30,13 @@
 module SemanticIndexes
   class UpdateContract < BaseContract
     validate :parameters_unchanged_once_indexed
+    validate :embedding_model_unchanged_while_indexing
 
     private
+
+    def embedding_model_unchanged_while_indexing
+      errors.add(:embedding_model_id, :locked_while_indexing) if model.indexing? && model.embedding_model_id_changed?
+    end
 
     def parameters_unchanged_once_indexed
       return unless model.parameters_locked?

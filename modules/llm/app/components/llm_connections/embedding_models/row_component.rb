@@ -57,7 +57,7 @@ module LlmConnections
 
           edit_item(menu)
           menu.with_divider
-          delete_item(menu)
+          embedding_model.semantic_indexes.exists? ? locked_delete_item(menu) : delete_item(menu)
         end
       end
 
@@ -69,6 +69,13 @@ module LlmConnections
           content_arguments: { data: { controller: "async-dialog" } }
         ) do |item|
           item.with_leading_visual_icon(icon: :pencil)
+        end
+      end
+
+      def locked_delete_item(menu)
+        menu.with_item(label: I18n.t("admin.embedding_models.menu.delete"), disabled: true) do |item|
+          item.with_leading_visual_icon(icon: :trash)
+          item.with_description { I18n.t("admin.embedding_models.menu.locked_while_in_use") }
         end
       end
 

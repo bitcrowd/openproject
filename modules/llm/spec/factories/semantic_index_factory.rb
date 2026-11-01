@@ -29,9 +29,13 @@
 
 FactoryBot.define do
   factory :semantic_index do
+    transient do
+      model_id { "bge-m3" }
+    end
+
     sequence(:title) { |n| "Semantic index #{n}" }
     description { nil }
-    model_id { "bge-m3" }
+    embedding_model { association(:embedding_model, external_id: model_id) }
     embedding_vector_dimensions { 1024 }
     context_token_length { 8192 }
   end

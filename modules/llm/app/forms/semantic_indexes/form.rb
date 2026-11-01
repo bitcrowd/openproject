@@ -29,9 +29,9 @@
 
 module SemanticIndexes
   class Form < ApplicationForm
-    def initialize(model_options:, locked: false)
+    def initialize(embedding_models:, locked: false)
       super()
-      @model_options = model_options
+      @embedding_models = embedding_models
       @locked = locked
     end
 
@@ -49,14 +49,18 @@ module SemanticIndexes
         rows: 3
       )
 
-      if locked
-        f.text_field(
-          name: :model_id,
-          label: SemanticIndex.human_attribute_name(:model_id),
-          disabled: true
-        )
-      else
-        model_autocompleter(f)
+      f.select_list(
+        name: :embedding_model_id,
+        label: SemanticIndex.human_attribute_name(:embedding_model_id),
+        caption: I18n.t("admin.semantic_indexes.form.model_caption"),
+        include_blank: I18n.t("admin.semantic_indexes.form.model_prompt"),
+        required: true,
+        disabled: model.indexing?,
+        data: { action: "change->llm--semantic-index-form#prefill", test_selector: "llm-semantic-index--model" }
+      ) do |select|
+        embedding_models.each do |embedding_model|
+          select.option(value: embedding_model.id, label: embedding_model.name_with_provider)
+        end
       end
 
       f.text_field(
@@ -67,7 +71,8 @@ module SemanticIndexes
         caption: I18n.t("admin.semantic_indexes.form.context_token_length_caption"),
         required: true,
         disabled: locked,
-        input_width: :small
+        input_width: :small,
+        data: { "llm--semantic-index-form-target": "contextLength" }
       )
 
       f.text_field(
@@ -78,41 +83,13 @@ module SemanticIndexes
         caption: I18n.t("admin.semantic_indexes.form.embedding_vector_dimensions_caption"),
         required: true,
         disabled: locked,
-        input_width: :small
+        input_width: :small,
+        data: { "llm--semantic-index-form-target": "dimensions" }
       )
     end
 
     private
 
-    attr_reader :model_options, :locked
-
-    def model_autocompleter(form)
-      form.autocompleter(
-        name: :model_id,
-        label: SemanticIndex.human_attribute_name(:model_id),
-        caption: I18n.t("admin.semantic_indexes.form.model_caption"),
-        required: true,
-        autocomplete_options: {
-          decorated: true,
-          inputValue: selected_model_id,
-          append_to: "##{LlmConnections::SemanticIndexes::DialogComponent::DIALOG_ID}",
-          data: { test_selector: "llm-semantic-index--model" }
-        }
-      ) do |list|
-        model_options.each do |option|
-          list.option(label: option_label(option),
-                      value: option.model_id,
-                      selected: selected_model_id == option.model_id)
-        end
-      end
-    end
-
-    def selected_model_id = model.model_id
-
-    def option_label(option)
-      return option.model_id if option.qualifies
-
-      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model_id)
-    end
+    attr_reader :embedding_models, :locked
   end
 end

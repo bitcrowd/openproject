@@ -33,16 +33,20 @@ require_module_spec_helper
 RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component do
   include Rails.application.routes.url_helpers
 
-  include_context "with an embedding model offered"
-
   subject(:rendered_component) do
     with_request_url "/admin/llm_feature_bindings" do
-      render_inline(described_class.new(semantic_index, connection:))
+      render_inline(described_class.new(semantic_index))
     end
   end
 
+  let(:model_field) { SemanticIndex.human_attribute_name(:embedding_model_id) }
+
   context "for a new semantic index" do
     let(:semantic_index) { SemanticIndex.new }
+    let!(:stored) do
+      create(:embedding_model, name: "Large", inference_provider: create(:inference_provider, title: "Ollama"),
+                               context_token_length: 2048, embedding_vector_dimensions: 768)
+    end
 
     it "posts to the semantic indexes collection route" do
       rendered_component
@@ -50,17 +54,22 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       expect(page).to have_css("form[action='#{semantic_indexes_path}'][method='post']")
     end
 
-    it "offers the connection's embedding models" do
+    it "offers the stored models with their provider" do
       rendered_component
 
-      autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
-      expect(autocompleter[:"data-input-name"]).to include("semantic_index[model_id]")
-      expect(autocompleter[:"data-items"]).to include("bge-m3")
+      expect(page).to have_select(model_field, with_options: ["Large @ Ollama"])
+    end
+
+    it "hands the numbers of each stored model to the prefill" do
+      rendered_component
+
+      defaults = page.find("[data-controller='llm--semantic-index-form']")["data-llm--semantic-index-form-defaults-value"]
+      expect(JSON.parse(defaults)).to eq(stored.id.to_s => { "contextLength" => 2048, "dimensions" => 768 })
     end
   end
 
   context "for a persisted semantic index" do
-    let(:semantic_index) { create(:semantic_index, title: "Qwen3 baseline", model_id: "bge-m3") }
+    let(:semantic_index) { create(:semantic_index, title: "Qwen3 baseline") }
 
     it "patches the semantic index's own route" do
       rendered_component
@@ -72,27 +81,62 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
     it "preselects the index's model" do
       rendered_component
 
-      autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
-      expect(autocompleter[:"data-input-value"]).to include("bge-m3")
+      expect(page).to have_select(model_field, selected: semantic_index.embedding_model.name_with_provider)
     end
   end
 
-  context "when the parameters are locked" do
-    let(:semantic_index) { create(:semantic_index, state: :ready) }
-
-    it "warns that the parameters cannot be changed" do
-      rendered_component
-
-      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_once_indexed"))
+  context "when the semantic index has been indexed" do
+    let(:semantic_index) do
+      create(:semantic_index, state: :ready, context_token_length: 2048, embedding_vector_dimensions: 768,
+                              embedding_model: create(:embedding_model, name: "Current <b>model</b>",
+                                                                        inference_provider: create(:inference_provider,
+                                                                                                   title: "Mistral")))
+    end
+    let(:warning) do
+      I18n.t("admin.semantic_indexes.form.locked_once_indexed",
+             model: "Current <b>model</b> @ Mistral", context_token_length: 2048, embedding_vector_dimensions: 768)
     end
 
-    it "renders the parameter fields disabled" do
+    before { create(:embedding_model, name: "Another", inference_provider: create(:inference_provider, title: "Ollama")) }
+
+    it "warns which model, context length and dimensions a new model has to be compatible with" do
       rendered_component
 
-      expect(page).to have_field(SemanticIndex.human_attribute_name(:model_id), disabled: true)
+      expect(page).to have_text(warning)
+      expect(page).to have_no_css("b", text: "model")
+    end
+
+    it "keeps naming the current model after a refused change" do
+      semantic_index.embedding_model = EmbeddingModel.find_by!(name: "Another")
+
+      rendered_component
+
+      expect(page).to have_text(warning)
+    end
+
+    it "locks the numbers, but not the model" do
+      rendered_component
+
       expect(page).to have_field(SemanticIndex.human_attribute_name(:context_token_length), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:embedding_vector_dimensions), disabled: true)
-      expect(page).to have_no_css("[data-test-selector='llm-semantic-index--model']")
+      expect(page).to have_select(model_field, disabled: false, with_options: ["Another @ Ollama"])
+    end
+
+    it "does not prefill" do
+      rendered_component
+
+      expect(page).to have_no_css("[data-controller='llm--semantic-index-form']")
+    end
+  end
+
+  context "when the semantic index is being indexed" do
+    let(:semantic_index) { create(:semantic_index, state: :indexing) }
+
+    it "locks the model too and says so" do
+      rendered_component
+
+      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_while_indexing"))
+      expect(page).to have_select(model_field, disabled: true)
     end
   end
 

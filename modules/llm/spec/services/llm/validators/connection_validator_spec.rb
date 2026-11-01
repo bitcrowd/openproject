@@ -249,30 +249,6 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
         expect(result.context[:features]).to eq("Description assistant")
       end
     end
-
-    describe "the active Semantic Index" do
-      let(:semantic_index) { create(:semantic_index, state: "ready") }
-
-      before do
-        connection.capability_verdicts.create!(model_id: "bge-m3", capability: "embeddings",
-                                               state: "supported", source: "probe", checked_at: Time.current)
-        connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:)
-      end
-
-      it "passes while its model is still offered" do
-        expect(result_for(:features, :active_semantic_index_intact).state).to eq(:success)
-      end
-
-      it "fails once its model has left the catalogue" do
-        connection.models.find_by!(external_id: "bge-m3").update!(active: false)
-
-        result = result_for(:features, :active_semantic_index_intact)
-
-        expect(result.state).to eq(:failure)
-        expect(result.code).to eq(:semantic_index_model_missing)
-        expect(result.context).to include(title: semantic_index.title, model: "bge-m3")
-      end
-    end
   end
 
   # HealthReports::ResultComponent resolves a check's label from its key and its

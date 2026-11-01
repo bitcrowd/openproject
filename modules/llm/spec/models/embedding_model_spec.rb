@@ -98,6 +98,20 @@ RSpec.describe EmbeddingModel do
     end
   end
 
+  describe "#name_with_provider" do
+    let(:provider) { build(:inference_provider, title: "Ollama") }
+
+    it "adds the provider to a name without it" do
+      expect(build(:embedding_model, inference_provider: provider, name: "Large").name_with_provider)
+        .to eq("Large @ Ollama")
+    end
+
+    it "does not repeat the provider of a default name" do
+      expect(build(:embedding_model, inference_provider: provider, name: "bge-m3 @ Ollama").name_with_provider)
+        .to eq("bge-m3 @ Ollama")
+    end
+  end
+
   describe "deleting its provider" do
     let(:embedding_model) { create(:embedding_model) }
 

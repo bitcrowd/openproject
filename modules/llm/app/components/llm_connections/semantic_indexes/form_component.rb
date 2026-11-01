@@ -35,8 +35,6 @@ module LlmConnections
 
       FORM_ID = "llm-semantic-index-form"
 
-      options :connection
-
       private
 
       def locked? = model.parameters_locked?
@@ -49,10 +47,32 @@ module LlmConnections
         model.persisted? ? semantic_index_path(model) : semantic_indexes_path
       end
 
-      def model_options
-        LlmConnections::SelectableModelsQuery
-          .new(connection, OpenProject::Llm::Features[:semantic_search], bound_model_id: model.model_id_in_database)
-          .call
+      def embedding_models
+        @embedding_models ||= EmbeddingModel.for_listing.to_a
+      end
+
+      # An indexed Semantic Index keeps its numbers, so picking another model must
+      # not touch them.
+      def wrapper_data
+        return {} if locked?
+
+        { controller: "llm--semantic-index-form", "llm--semantic-index-form-defaults-value": model_defaults.to_json }
+      end
+
+      def model_defaults
+        embedding_models.to_h do |embedding_model|
+          [embedding_model.id, { contextLength: embedding_model.context_token_length,
+                                 dimensions: embedding_model.embedding_vector_dimensions }]
+        end
+      end
+
+      def banner_text
+        return t("admin.semantic_indexes.form.locked_while_indexing") if model.indexing?
+
+        t("admin.semantic_indexes.form.locked_once_indexed",
+          model: EmbeddingModel.find(model.embedding_model_id_in_database).name_with_provider,
+          context_token_length: model.context_token_length_in_database,
+          embedding_vector_dimensions: model.embedding_vector_dimensions_in_database)
       end
     end
   end

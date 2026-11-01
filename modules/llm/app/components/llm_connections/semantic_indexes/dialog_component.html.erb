@@ -38,7 +38,7 @@ See COPYRIGHT and LICENSE files for more details.
     d.with_header(variant: :large)
 
     d.with_body do
-      render(LlmConnections::SemanticIndexes::FormComponent.new(semantic_index, connection:))
+      render(LlmConnections::SemanticIndexes::FormComponent.new(semantic_index))
     end
 
     d.with_footer do

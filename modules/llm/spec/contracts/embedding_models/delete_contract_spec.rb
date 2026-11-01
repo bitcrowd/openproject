@@ -38,4 +38,12 @@ RSpec.describe EmbeddingModels::DeleteContract, :check_errors_i18n do
   let(:contract) { described_class.new(embedding_model, current_user) }
 
   it_behaves_like "contract is valid for active admins and invalid for regular users"
+
+  context "when a semantic index uses it" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    before { create(:semantic_index, embedding_model:) }
+
+    include_examples "contract is invalid", base: :in_use
+  end
 end

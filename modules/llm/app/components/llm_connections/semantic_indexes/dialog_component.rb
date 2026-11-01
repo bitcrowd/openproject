@@ -37,8 +37,6 @@ module LlmConnections
 
       alias_method :semantic_index, :model
 
-      options :connection
-
       private
 
       def title

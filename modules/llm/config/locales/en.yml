@@ -10,6 +10,7 @@ en:
         inference_provider: "Inference provider"
         model_type: "Model type"
         name: "Display name"
+        semantic_indexes: "Semantic indexes"
       inference_provider:
         api_format: "API format"
         api_key: "API key"
@@ -45,16 +46,18 @@ en:
       semantic_index:
         context_token_length: "Context length"
         description: "Description"
+        # ActiveRecord::Base.human_attribute_name strips the _id suffix.
+        embedding_model: "Model"
         embedding_vector_dimensions: "Dimensions"
         llm_feature_bindings: "Feature configuration"
-        # ActiveRecord::Base.human_attribute_name strips the _id suffix.
-        model: "Model"
         state: "Status"
         title: "Display name"
     errors:
       models:
         embedding_model:
           attributes:
+            base:
+              in_use: "A semantic index uses this model. Point it at another model first."
             external_id:
               taken: "is already stored with this context length and these dimensions on this provider."
             model_type:
@@ -105,8 +108,8 @@ en:
             base:
               active: "The semantic index is active. Activate another semantic index first."
               locked_while_indexing: "cannot be changed while it is being indexed."
-            model_id:
-              not_offered: "is not an embedding model offered by the configured LLM server."
+            embedding_model_id:
+              locked_while_indexing: "cannot be changed while the semantic index is being indexed."
           locked_once_indexed: "cannot be changed once the semantic index has been indexed."
   admin:
     embedding_models:
@@ -130,6 +133,7 @@ en:
         off_label_warning: "The API did not label this model as an embedding model. Off-Label use might result in poor performance, or not work at all"
       menu:
         delete: "Delete"
+        locked_while_in_use: "Point the semantic indexes using it at another model first"
       store: "Use in collection"
     inference_providers:
       activate:
@@ -203,16 +207,16 @@ en:
       form:
         context_token_length_caption: "Maximum number of tokens embedded per work package."
         embedding_vector_dimensions_caption: "How many numbers each vector has."
-        locked_once_indexed: "This semantic index has been indexed. Model, context length and dimensions can't be changed. Create a new semantic index to use different parameters."
-        model_caption: "Only models known to create embeddings are offered."
-        option_unqualified: "%{model} (no longer eligible)"
+        locked_once_indexed: "This semantic index has been indexed, so its context length and dimensions can't be changed. Only use a model compatible with %{model}, context length %{context_token_length} and dimensions %{embedding_vector_dimensions}."
+        locked_while_indexing: "This semantic index is being indexed, so its model, context length and dimensions can't be changed."
+        model_caption: "Models are stored with the action on their row on the Models tab."
+        model_prompt: "Select a model"
       indexing:
         failed_requests:
           one: "1 request failed."
           other: "%{count} requests failed."
         not_ready:
-          model_missing: "The model %{model} is no longer offered by the connection."
-          no_connection: "No active LLM connection is configured."
+          features_disabled: "LLM features are switched off for this instance."
           pgvector_missing: "The pgvector extension is not installed. Install it and run the migrations again to start indexing."
         progress: "%{percentage}% done"
       menu:
@@ -409,12 +413,10 @@ en:
         not_configured: "No endpoint has been configured."
         not_openai_compatible: "The endpoint did not return a valid model list. Please ensure it points at an OpenAI-API-compatible endpoint, including the API version segment."
         request_timed_out: "The server did not respond in time."
-        semantic_index_model_missing: "The active semantic index \"%{title}\" was built with %{model}, which the server no longer offers. Activate another semantic index to keep search by meaning working."
         server_error: "The server responded with status %{status}."
         ssrf_filtered: "The endpoint resolves to a blocked address."
         unsupported_api_format: "%{api_format} needs credentials that OpenProject cannot store."
       features:
-        active_semantic_index_intact: "The active semantic index still has its model"
         bindings_resolvable: "Every feature has a usable model"
         header: "AI features"
       inference:

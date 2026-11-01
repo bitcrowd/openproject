@@ -38,10 +38,10 @@ module Llm
       def call
         return if work_packages.empty?
 
-        raise Llm::Errors::NotReady, :no_connection unless LlmConnection.available?
+        raise Llm::Errors::NotReady, :features_disabled unless LlmConnection.features_enabled?
 
         vectors = session.embed(texts,
-                                model: semantic_index.model_id,
+                                model: semantic_index.embedding_model.external_id,
                                 dimensions: semantic_index.embedding_vector_dimensions).vectors
 
         store(vectors)
@@ -51,11 +51,7 @@ module Llm
 
       attr_reader :semantic_index, :work_packages
 
-      def connection
-        @connection ||= LlmConnection.active_connection
-      end
-
-      def session = Llm::Session.for(connection)
+      def session = Llm::Session.for(semantic_index.inference_provider)
 
       def texts
         work_packages.map { |wp| EmbeddableText.for(wp, context_window: semantic_index.context_token_length) }

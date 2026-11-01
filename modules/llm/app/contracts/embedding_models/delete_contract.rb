@@ -30,5 +30,13 @@
 module EmbeddingModels
   class DeleteContract < ::DeleteContract
     delete_permission :admin
+
+    validate :not_in_use
+
+    private
+
+    def not_in_use
+      errors.add(:base, :in_use) if model.semantic_indexes.exists?
+    end
   end
 end

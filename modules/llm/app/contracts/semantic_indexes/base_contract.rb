@@ -33,18 +33,8 @@ module SemanticIndexes
 
     attribute :title
     attribute :description
-    attribute :model_id
+    attribute :embedding_model_id
     attribute :embedding_vector_dimensions
     attribute :context_token_length
-
-    validate :model_offered, if: -> { model.model_id.present? && model.model_id_changed? }
-
-    private
-
-    def model_offered
-      return if LlmConnection.active_connection&.embedding_model_ids&.include?(model.model_id)
-
-      errors.add(:model_id, :not_offered)
-    end
   end
 end

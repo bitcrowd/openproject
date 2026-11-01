@@ -43,11 +43,11 @@ module Admin
                            activation_dialog activate]
 
     def new_dialog
-      respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(SemanticIndex.new, connection: @connection)
+      respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(SemanticIndex.new)
     end
 
     def edit_dialog
-      respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(@semantic_index, connection: @connection)
+      respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(@semantic_index)
     end
 
     def create
@@ -134,7 +134,7 @@ module Admin
 
     def status
       replace_via_turbo_stream(
-        component: LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.order(:created_at))
+        component: LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.for_listing)
       )
       respond_with_turbo_streams
     end
@@ -149,7 +149,7 @@ module Admin
 
       result.on_failure do
         update_via_turbo_stream(
-          component: LlmConnections::SemanticIndexes::FormComponent.new(result.result, connection: @connection),
+          component: LlmConnections::SemanticIndexes::FormComponent.new(result.result),
           status: :unprocessable_entity
         )
         respond_with_turbo_streams
@@ -177,7 +177,7 @@ module Admin
     end
 
     def semantic_index_params
-      params.expect(semantic_index: %i[title description model_id embedding_vector_dimensions context_token_length])
+      params.expect(semantic_index: %i[title description embedding_model_id embedding_vector_dimensions context_token_length])
     end
   end
 end

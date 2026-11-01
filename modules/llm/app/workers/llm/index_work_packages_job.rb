@@ -45,26 +45,15 @@ module Llm
       semantic_index = SemanticIndex.find_by(id: semantic_index_id)
       return unless semantic_index&.indexing?
 
-      return fail_indexing(semantic_index, :no_connection) unless LlmConnection.available?
-
-      return fail_indexing(semantic_index, :model_missing) unless offers_embedding_model?(semantic_index.model_id)
+      unless LlmConnection.features_enabled?
+        return semantic_index.fail_indexing!(I18n.t("admin.semantic_indexes.indexing.not_ready.features_disabled"))
+      end
 
       batch.add do
         WorkPackage.find_in_batches(batch_size: 100) do |work_packages|
           Llm::EmbedWorkPackagesJob.perform_later(semantic_index_id, work_packages.map(&:id))
         end
       end
-    end
-
-    private
-
-    def offers_embedding_model?(model_id)
-      LlmConnection.active_connection.embedding_model_ids.include?(model_id)
-    end
-
-    def fail_indexing(semantic_index, status)
-      message = I18n.t(status, scope: "admin.semantic_indexes.indexing.not_ready", model: semantic_index.model_id)
-      semantic_index.fail_indexing!(message)
     end
   end
 end
