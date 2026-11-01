@@ -46,6 +46,14 @@ RSpec.describe InferenceProviders::DeleteContract, :check_errors_i18n do
     include_examples "contract is invalid", base: :active
   end
 
+  context "when embedding models are stored for it" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    before { create(:embedding_model, inference_provider: provider) }
+
+    include_examples "contract is invalid", base: :embedding_models_stored
+  end
+
   context "when another provider is active" do
     let(:current_user) { build_stubbed(:admin) }
 

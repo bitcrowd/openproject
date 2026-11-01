@@ -62,6 +62,17 @@ Rails.application.routes.draw do
       end
     end
 
+    resources :embedding_models, only: %i[create update destroy], controller: "admin/embedding_models" do
+      collection do
+        get :new_dialog, defaults: { format: :turbo_stream }
+      end
+
+      member do
+        get :edit_dialog, defaults: { format: :turbo_stream }
+        get :deletion_dialog, defaults: { format: :turbo_stream }
+      end
+    end
+
     # Keyed by feature key rather than by record id: the binding is an attribute
     # of a registered feature, and a feature may not have a row yet.
     resources :llm_feature_bindings, only: %i[index update], controller: "admin/llm_feature_bindings"

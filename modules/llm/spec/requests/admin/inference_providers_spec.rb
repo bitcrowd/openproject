@@ -763,6 +763,24 @@ RSpec.describe "Admin inference providers", :llm_server_helpers, :skip_csrf, :we
       expect(InferenceProvider.exists?(provider.id)).to be(true)
     end
 
+    context "with an embedding model stored for it" do
+      before { create(:embedding_model, inference_provider: stored) }
+
+      it "refuses and says what to do" do
+        delete inference_provider_path(stored)
+
+        expect(response).to redirect_to(llm_connection_path)
+        expect(flash[:error]).to include("Embedding models are stored for this provider. Delete them first.")
+        expect(InferenceProvider.exists?(stored.id)).to be(true)
+      end
+
+      it "locks the row's delete action and gives the reason" do
+        get llm_connection_path
+
+        expect(response.body).to include("Delete the embedding models stored for it first")
+      end
+    end
+
     it "works while the connection comes from the environment" do
       connection.update_columns(env_provisioned_at: Time.current)
       allow(Setting).to receive(:llm_connection).and_return({ "base_url" => "https://example.com/v1" })

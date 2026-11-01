@@ -37,6 +37,7 @@ class InferenceProvider < ApplicationRecord
   HEADER_NAME_TOKEN = /\A[!#$%&'*+\-.^_`|~0-9A-Za-z]+\z/
 
   has_many :llm_connections, dependent: :restrict_with_error
+  has_many :embedding_models, dependent: :restrict_with_error
   has_many :health_reports, as: :subject, dependent: :delete_all
 
   # Only trailing whitespace and slashes are removed. The /v1 segment is

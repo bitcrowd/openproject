@@ -61,6 +61,16 @@ RSpec.describe "LLM connection administration",
     end
   end
 
+  # The menu only opens once its element has been set up on the page.
+  def choose_embedding_model_action(embedding_model, label)
+    within_test_selector("llm-embedding-model--menu-#{embedding_model.id}") do
+      retry_block do
+        find("button[aria-haspopup='true']").click
+        click_link(label)
+      end
+    end
+  end
+
   context "when nothing is configured yet" do
     it "renders an accessible page with only the features switch" do
       visit llm_connection_path
@@ -232,6 +242,66 @@ RSpec.describe "LLM connection administration",
     before do
       Setting.llm_features_enabled = true
       mock_llm_models_response(base_url)
+    end
+
+    describe "storing an embedding model", with_flag: { llm_connection: true, semantic_search: true } do
+      let(:llm_model) { connection.models.find_by!(external_id: "bge-m3") }
+
+      before do
+        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3",
+                                        detail: { "dimensions" => 1024 })
+      end
+
+      it "stores it from its row, prefilled, and lists it accessibly" do
+        visit llm_models_path
+
+        expect(page).to have_text("No embedding model stored yet")
+
+        find_test_selector("llm-model--store-#{llm_model.id}").click
+
+        within_test_selector("llm-embedding-model-dialog") do
+          expect(page).to have_field("Context length", with: "8192")
+          expect(page).to have_field("Dimensions", with: "1024")
+          expect(page).to be_axe_clean.skipping("color-contrast")
+
+          find_test_selector("llm-embedding-model--submit").click
+        end
+
+        expect(page).to have_text(I18n.t(:notice_successful_create))
+
+        stored = EmbeddingModel.sole
+        expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}",
+                                           text: "bge-m3 @ #{connection.inference_provider.title}")
+
+        visit llm_models_path
+
+        expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}")
+        expect(page).to be_axe_clean
+      end
+
+      it "renames it and deletes it" do
+        stored = create(:embedding_model, inference_provider: connection.inference_provider, name: "Original")
+
+        visit llm_models_path
+
+        choose_embedding_model_action(stored, I18n.t(:button_edit))
+
+        within_test_selector("llm-embedding-model-dialog") do
+          expect(page).to have_field("Dimensions", disabled: true)
+
+          fill_in "Display name", with: "Renamed"
+          find_test_selector("llm-embedding-model--submit").click
+        end
+
+        expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}", text: "Renamed")
+
+        choose_embedding_model_action(stored, I18n.t("admin.embedding_models.menu.delete"))
+
+        within_test_selector("llm-embedding-model--delete-dialog") { click_on I18n.t(:button_delete) }
+
+        expect(page).to have_no_test_selector("llm-embedding-model--row-#{stored.id}")
+        expect(EmbeddingModel.exists?(stored.id)).to be(false)
+      end
     end
 
     it "renders the model list accessibly" do

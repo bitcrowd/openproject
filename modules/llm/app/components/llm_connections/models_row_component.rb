@@ -59,7 +59,7 @@ module LlmConnections
     # that produces vectors is an embedding model, and everything else is a chat
     # model.
     def kind
-      if table.embeddings_states[llm_model.external_id] == "supported"
+      if embedding_capable?
         render(Primer::Beta::Label.new(scheme: :success)) { I18n.t("llm.model_kinds.embedding") }
       else
         render(Primer::Beta::Label.new(scheme: :secondary)) { I18n.t("llm.model_kinds.chat") }
@@ -82,11 +82,30 @@ module LlmConnections
     end
 
     def button_links
-      deletable? ? [edit_link, delete_link] : [edit_link]
+      [(store_button if storable?), edit_link, (delete_link if deletable?)].compact
+    end
+
+    def embedding_capable? = table.embeddings_states[llm_model.external_id] == "supported"
+
+    # Stays offered once stored: other parameters make another embedding model.
+    def storable?
+      OpenProject::FeatureDecisions.semantic_search_active? && llm_model.active? && embedding_capable?
     end
 
     def deletable?
       llm_model.manual? && !table.connection.env_named_default?(llm_model)
+    end
+
+    def store_button
+      render(
+        Primer::Beta::Button.new(
+          size: :small,
+          tag: :a,
+          href: url_helpers.new_dialog_embedding_models_path(llm_model_id: llm_model.id),
+          data: { controller: "async-dialog" },
+          test_selector: "llm-model--store-#{llm_model.id}"
+        )
+      ) { I18n.t("admin.embedding_models.store") }
     end
 
     # The classes belong on the anchor, not on an inner <i>: ".icon:before"
