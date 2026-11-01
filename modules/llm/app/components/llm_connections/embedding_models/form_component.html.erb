@@ -27,6 +27,10 @@ See COPYRIGHT and LICENSE files for more details.
 ++#%>
 
 <%= component_wrapper do %>
+  <% if off_label? %>
+    <%= render(Primer::Alpha::Banner.new(scheme: :warning, icon: :alert, mb: 3)) { t("admin.embedding_models.form.off_label_warning") } %>
+  <% end %>
+
   <%=
     primer_form_with(
       id: FORM_ID,

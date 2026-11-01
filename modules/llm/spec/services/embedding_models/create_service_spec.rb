@@ -35,7 +35,7 @@ RSpec.describe EmbeddingModels::CreateService do
 
   let(:provider) { create(:inference_provider, title: "Ollama") }
   let(:params) do
-    { inference_provider_id: provider.id, external_id: "bge-m3", name:,
+    { inference_provider_id: provider.id, external_id: "bge-m3", name:, model_type: "embedding",
       context_token_length: 8192, embedding_vector_dimensions: 1024 }
   end
   let(:name) { "Our embeddings" }

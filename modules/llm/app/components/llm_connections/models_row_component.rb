@@ -89,7 +89,7 @@ module LlmConnections
 
     # Stays offered once stored: other parameters make another embedding model.
     def storable?
-      OpenProject::FeatureDecisions.semantic_search_active? && llm_model.active? && embedding_capable?
+      OpenProject::FeatureDecisions.semantic_search_active? && llm_model.active?
     end
 
     def deletable?

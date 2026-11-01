@@ -39,6 +39,8 @@ module LlmConnections
 
       private
 
+      def off_label? = llm_model && !llm_model.embedding?
+
       def http_method
         model.persisted? ? :patch : :post
       end

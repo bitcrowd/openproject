@@ -8,6 +8,7 @@ en:
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
         external: "Model name"
         inference_provider: "Inference provider"
+        model_type: "Model type"
         name: "Display name"
       inference_provider:
         api_format: "API format"
@@ -56,6 +57,9 @@ en:
           attributes:
             external_id:
               taken: "is already stored with this context length and these dimensions on this provider."
+            model_type:
+              format: "%{message}"
+              not_embedding: "Storing chat models in the collection is currently not supported."
         inference_provider:
           attributes:
             api_format:
@@ -123,6 +127,7 @@ en:
         context_token_length_caption: "The context length a new semantic index starts with when it uses this model."
         embedding_vector_dimensions_caption: "The dimensions a new semantic index starts with when it uses this model."
         name_caption: "Leave blank to use the model name and the provider."
+        off_label_warning: "The API did not label this model as an embedding model. Off-Label use might result in poor performance, or not work at all"
       menu:
         delete: "Delete"
       store: "Use in collection"

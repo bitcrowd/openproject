@@ -53,7 +53,7 @@ module Admin
     def create
       result = ::EmbeddingModels::CreateService
                  .new(user: current_user)
-                 .call(**embedding_model_params(%i[name context_token_length embedding_vector_dimensions]),
+                 .call(**embedding_model_params(%i[name model_type context_token_length embedding_vector_dimensions]),
                        external_id: @llm_model.external_id,
                        inference_provider_id: @connection.inference_provider_id)
 
@@ -120,7 +120,7 @@ module Admin
     end
 
     def find_llm_model
-      @llm_model = @connection.embedding_models.find(params.expect(:llm_model_id))
+      @llm_model = @connection.available_models.find(params.expect(:llm_model_id))
     end
 
     def find_embedding_model
@@ -130,6 +130,7 @@ module Admin
     def prefilled_embedding_model
       EmbeddingModel.new(inference_provider: @connection.inference_provider,
                          external_id: @llm_model.external_id,
+                         model_type: @llm_model.model_type,
                          context_token_length: @llm_model.context_window,
                          embedding_vector_dimensions: @llm_model.verdict_for(:embeddings)&.dimensions)
     end

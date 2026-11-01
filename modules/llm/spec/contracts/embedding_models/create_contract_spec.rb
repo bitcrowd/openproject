@@ -34,10 +34,20 @@ require "contracts/shared/model_contract_shared_context"
 RSpec.describe EmbeddingModels::CreateContract, :check_errors_i18n do
   include_context "ModelContract shared context"
 
-  let(:embedding_model) { build(:embedding_model, inference_provider: create(:inference_provider)) }
+  let(:embedding_model) do
+    build(:embedding_model, inference_provider: create(:inference_provider), model_type: "embedding")
+  end
   let(:contract) { described_class.new(embedding_model, current_user) }
 
   it_behaves_like "contract is valid for active admins and invalid for regular users"
+
+  context "with the chat type" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    before { embedding_model.model_type = "chat" }
+
+    include_examples "contract is invalid", model_type: :not_embedding
+  end
 
   context "with an exact duplicate on the same provider" do
     let(:current_user) { build_stubbed(:admin) }

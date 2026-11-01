@@ -50,6 +50,19 @@ module EmbeddingModels
         disabled: true
       )
 
+      if model.new_record?
+        f.select_list(
+          name: :model_type,
+          label: EmbeddingModel.human_attribute_name(:model_type),
+          include_blank: false,
+          input_width: :medium,
+          data: { test_selector: "llm-embedding-model--type" }
+        ) do |select|
+          select.option(value: "chat", label: I18n.t("admin.llm_models.form.model_type_chat"))
+          select.option(value: "embedding", label: I18n.t("admin.llm_models.form.model_type_embedding"))
+        end
+      end
+
       f.text_field(
         name: :context_token_length,
         type: :number,

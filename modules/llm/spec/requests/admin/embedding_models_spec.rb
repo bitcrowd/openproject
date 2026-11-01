@@ -42,10 +42,14 @@ RSpec.describe "Admin embedding models", :llm_server_helpers, :skip_csrf, :webmo
   let(:llm_model) { connection.models.find_by!(external_id: "bge-m3") }
   let(:chat_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
   let(:valid_params) do
-    { embedding_model: { name: "", context_token_length: 8192, embedding_vector_dimensions: 1024 } }
+    { embedding_model: { name: "", model_type: "embedding", context_token_length: 8192, embedding_vector_dimensions: 1024 } }
   end
+  let(:chat_type_params) { { embedding_model: valid_params[:embedding_model].merge(model_type: "chat") } }
+  let(:off_label_warning) { I18n.t("admin.embedding_models.form.off_label_warning") }
 
   def store_button_for(model) = "[data-test-selector='llm-model--store-#{model.id}']"
+
+  def selected_type(value) = %(<option selected="selected" value="#{value}">)
 
   before { login_as admin }
 
@@ -119,10 +123,10 @@ RSpec.describe "Admin embedding models", :llm_server_helpers, :skip_csrf, :webmo
       expect(page).to have_css(store_button_for(llm_model), text: "Use in collection")
     end
 
-    it "does not offer to store a chat model" do
+    it "offers to store a model labeled as a chat model" do
       get llm_models_path
 
-      expect(page).to have_no_css(store_button_for(chat_model))
+      expect(page).to have_css(store_button_for(chat_model), text: "Use in collection")
     end
 
     it "does not offer to store a model the server stopped offering" do
@@ -162,8 +166,24 @@ RSpec.describe "Admin embedding models", :llm_server_helpers, :skip_csrf, :webmo
       expect(response.body).not_to include('value="8192"')
     end
 
-    it "does not offer a chat model" do
+    it "starts a model labeled as an embedding model on that type, without the warning" do
+      get new_dialog_embedding_models_path(llm_model_id: llm_model.id), headers: turbo_headers
+
+      expect(response.body).to include(selected_type("embedding"))
+      expect(response.body).not_to include(off_label_warning)
+    end
+
+    it "starts a model labeled as a chat model on that type, with the warning" do
       get new_dialog_embedding_models_path(llm_model_id: chat_model.id), headers: turbo_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include(selected_type("chat"), off_label_warning)
+    end
+
+    it "does not offer a model the server stopped offering" do
+      llm_model.update!(active: false)
+
+      get new_dialog_embedding_models_path(llm_model_id: llm_model.id), headers: turbo_headers
 
       expect(response).to have_http_status(:not_found)
     end
@@ -206,8 +226,39 @@ RSpec.describe "Admin embedding models", :llm_server_helpers, :skip_csrf, :webmo
       expect(EmbeddingModel.sole).to have_attributes(external_id: "bge-m3", inference_provider: provider)
     end
 
-    it "refuses a model the active provider does not offer as an embedding model" do
-      post embedding_models_path(llm_model_id: chat_model.id), params: valid_params
+    it "stores a model labeled as a chat model and leaves the list as it is" do
+      expect { post embedding_models_path(llm_model_id: chat_model.id), params: valid_params }
+        .not_to(change { [chat_model.reload.attributes, LlmCapabilityVerdict.all.map(&:attributes)] })
+
+      expect(EmbeddingModel.sole).to have_attributes(external_id: "qwen3.6-27b", inference_provider: provider)
+
+      get llm_models_path
+
+      expect(page.find(store_button_for(chat_model)).ancestor("[role='row']"))
+        .to have_css(".Label", exact_text: "Chat")
+    end
+
+    it "refuses a model left on the chat type, says why and keeps the warning" do
+      post embedding_models_path(llm_model_id: chat_model.id), params: chat_type_params, headers: turbo_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("Storing chat models in the collection is currently not supported.",
+                                       selected_type("chat"), off_label_warning)
+      expect(response.body).not_to include("Model type Storing")
+      expect(EmbeddingModel.count).to eq(0)
+    end
+
+    it "refuses the chat type for a model labeled as an embedding model too" do
+      post embedding_models_path(llm_model_id: llm_model.id), params: chat_type_params, headers: turbo_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(EmbeddingModel.count).to eq(0)
+    end
+
+    it "refuses a model the server stopped offering" do
+      llm_model.update!(active: false)
+
+      post embedding_models_path(llm_model_id: llm_model.id), params: valid_params
 
       expect(response).to have_http_status(:not_found)
       expect(EmbeddingModel.count).to eq(0)
@@ -215,7 +266,7 @@ RSpec.describe "Admin embedding models", :llm_server_helpers, :skip_csrf, :webmo
 
     it "keeps the dialog open when a parameter is missing" do
       post embedding_models_path(llm_model_id: llm_model.id),
-           params: { embedding_model: { name: "", context_token_length: "", embedding_vector_dimensions: 1024 } },
+           params: { embedding_model: valid_params[:embedding_model].merge(context_token_length: "") },
            headers: turbo_headers
 
       expect(response).to have_http_status(:unprocessable_entity)
@@ -282,6 +333,12 @@ RSpec.describe "Admin embedding models", :llm_server_helpers, :skip_csrf, :webmo
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("Edit &quot;Original&quot;")
       expect(response.body.scan(/<input[^>]*disabled[^>]*>/).size).to eq(4)
+    end
+
+    it "offers no model type and shows no warning" do
+      get edit_dialog_embedding_model_path(stored), headers: turbo_headers
+
+      expect(response.body).not_to include("embedding_model[model_type]", off_label_warning)
     end
 
     it "changes the name" do

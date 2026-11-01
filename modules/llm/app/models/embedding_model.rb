@@ -36,6 +36,8 @@
 class EmbeddingModel < ApplicationRecord
   belongs_to :inference_provider, optional: false
 
+  attr_accessor :model_type
+
   scope :for_listing, -> { includes(:inference_provider).order(:name, :id) }
 
   validates :name, presence: true

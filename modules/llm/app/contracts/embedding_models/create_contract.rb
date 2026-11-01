@@ -33,5 +33,13 @@ module EmbeddingModels
     attribute :external_id
     attribute :context_token_length
     attribute :embedding_vector_dimensions
+
+    validate :stored_as_embedding_model
+
+    private
+
+    def stored_as_embedding_model
+      errors.add(:model_type, :not_embedding) unless model.model_type.to_s == "embedding"
+    end
   end
 end

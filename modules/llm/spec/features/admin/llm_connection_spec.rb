@@ -262,6 +262,7 @@ RSpec.describe "LLM connection administration",
         within_test_selector("llm-embedding-model-dialog") do
           expect(page).to have_field("Context length", with: "8192")
           expect(page).to have_field("Dimensions", with: "1024")
+          expect(page).to have_select("Model type", selected: "Embedding model")
           expect(page).to be_axe_clean.skipping("color-contrast")
 
           find_test_selector("llm-embedding-model--submit").click
@@ -277,6 +278,36 @@ RSpec.describe "LLM connection administration",
 
         expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}")
         expect(page).to be_axe_clean
+      end
+
+      it "stores a model labeled as a chat model once the type is changed, and leaves its row as it is" do
+        chat_model = connection.models.find_by!(external_id: "qwen3.6-27b")
+
+        visit llm_models_path
+
+        find_test_selector("llm-model--store-#{chat_model.id}").click
+
+        within_test_selector("llm-embedding-model-dialog") do
+          expect(page).to have_select("Model type", selected: "Chat model")
+          expect(page).to have_text(I18n.t("admin.embedding_models.form.off_label_warning"))
+          expect(page).to be_axe_clean.skipping("color-contrast")
+
+          fill_in "Dimensions", with: "1024"
+          find_test_selector("llm-embedding-model--submit").click
+
+          expect(page).to have_text("Storing chat models in the collection is currently not supported.")
+
+          select "Embedding model", from: "Model type"
+          find_test_selector("llm-embedding-model--submit").click
+        end
+
+        expect(page).to have_text(I18n.t(:notice_successful_create))
+
+        stored = EmbeddingModel.sole
+        expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}",
+                                           text: "qwen3.6-27b @ #{connection.inference_provider.title}")
+        expect(find_test_selector("llm-model--store-#{chat_model.id}").ancestor("[role='row']"))
+          .to have_css(".Label", exact_text: "Chat")
       end
 
       it "renames it and deletes it" do
