@@ -40,9 +40,8 @@ module Llm
 
         raise Llm::Errors::NotReady, :no_connection unless LlmConnection.available?
 
-        vectors = session.embed(texts,
-                                model: semantic_index.model_id,
-                                dimensions: semantic_index.embedding_vector_dimensions).vectors
+        vectors = session.embed(texts, model: semantic_index.model_id, dimensions:).vectors
+        ensure_requested_dimensions(vectors)
 
         store(vectors)
       end
@@ -56,6 +55,19 @@ module Llm
       end
 
       def session = Llm::Session.for(connection)
+
+      def dimensions = semantic_index.embedding_vector_dimensions
+
+      # Some servers silently ignore the requested size and answer with the model's
+      # native one. WorkPackageEmbedding pads every vector, which would hide that.
+      def ensure_requested_dimensions(vectors)
+        returned = vectors.map(&:length).uniq - [dimensions]
+        return if returned.empty?
+
+        raise Llm::Errors::UnexpectedDimensionsError,
+              I18n.t("admin.semantic_indexes.indexing.unexpected_dimensions",
+                     expected: dimensions, returned: returned.join(", "))
+      end
 
       def texts
         work_packages.map { |wp| EmbeddableText.for(wp, context_window: semantic_index.context_token_length) }
