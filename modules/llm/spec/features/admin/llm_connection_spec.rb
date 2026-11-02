@@ -61,6 +61,16 @@ RSpec.describe "LLM connection administration",
     end
   end
 
+  # The menu only opens once its element has been set up on the page.
+  def choose_embedding_model_action(embedding_model, label)
+    within_test_selector("llm-embedding-model--menu-#{embedding_model.id}") do
+      retry_block do
+        find("button[aria-haspopup='true']").click
+        click_link(label)
+      end
+    end
+  end
+
   context "when nothing is configured yet" do
     it "renders an accessible page with only the features switch" do
       visit llm_connection_path
@@ -232,6 +242,153 @@ RSpec.describe "LLM connection administration",
     before do
       Setting.llm_features_enabled = true
       mock_llm_models_response(base_url)
+    end
+
+    describe "storing an embedding model", with_flag: { llm_connection: true, semantic_search: true } do
+      let(:llm_model) { connection.models.find_by!(external_id: "bge-m3") }
+
+      before do
+        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3",
+                                        detail: { "dimensions" => 1024 })
+      end
+
+      it "stores it from its row, prefilled, and lists it accessibly" do
+        visit llm_models_path
+
+        expect(page).to have_text("No embedding model stored yet")
+
+        find_test_selector("llm-model--store-#{llm_model.id}").click
+
+        within_test_selector("llm-embedding-model-dialog") do
+          expect(page).to have_field("Context length", with: "8192")
+          expect(page).to have_field("Dimensions", with: "1024")
+          expect(page).to have_select("Model type", selected: "Embedding model")
+          expect(page).to be_axe_clean.skipping("color-contrast")
+
+          find_test_selector("llm-embedding-model--submit").click
+        end
+
+        expect(page).to have_text(I18n.t(:notice_successful_create))
+
+        stored = EmbeddingModel.sole
+        expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}",
+                                           text: "bge-m3 @ #{connection.inference_provider.title}")
+
+        visit llm_models_path
+
+        expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}")
+        expect(page).to be_axe_clean
+      end
+
+      it "stores a model labeled as a chat model once the type is changed, and leaves its row as it is" do
+        chat_model = connection.models.find_by!(external_id: "qwen3.6-27b")
+
+        visit llm_models_path
+
+        find_test_selector("llm-model--store-#{chat_model.id}").click
+
+        within_test_selector("llm-embedding-model-dialog") do
+          expect(page).to have_select("Model type", selected: "Chat model")
+          expect(page).to have_text(I18n.t("admin.embedding_models.form.off_label_warning"))
+          expect(page).to be_axe_clean.skipping("color-contrast")
+
+          fill_in "Dimensions", with: "1024"
+          find_test_selector("llm-embedding-model--submit").click
+
+          expect(page).to have_text("Storing chat models in the collection is currently not supported.")
+
+          select "Embedding model", from: "Model type"
+          find_test_selector("llm-embedding-model--submit").click
+        end
+
+        expect(page).to have_text(I18n.t(:notice_successful_create))
+
+        stored = EmbeddingModel.sole
+        expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}",
+                                           text: "qwen3.6-27b @ #{connection.inference_provider.title}")
+        expect(find_test_selector("llm-model--store-#{chat_model.id}").ancestor("[role='row']"))
+          .to have_css(".Label", exact_text: "Chat")
+      end
+
+      it "creates a semantic index from a stored model with its numbers prefilled, and re-points it once indexed" do
+        create(:embedding_model, name: "First", inference_provider: create(:inference_provider, title: "One"),
+                                 context_token_length: 2048, embedding_vector_dimensions: 768)
+        create(:embedding_model, name: "Second", inference_provider: create(:inference_provider, title: "Two"),
+                                 context_token_length: 512, embedding_vector_dimensions: 384)
+
+        visit llm_feature_bindings_path
+
+        find_test_selector("llm-semantic-index--new-button").click
+
+        within_test_selector("llm-semantic-index-dialog") do
+          fill_in "Display name", with: "My index"
+          select "First @ One", from: "Model"
+
+          expect(page).to have_field("Context length", with: "2048")
+          expect(page).to have_field("Dimensions", with: "768")
+
+          select "Second @ Two", from: "Model"
+
+          expect(page).to have_field("Context length", with: "512")
+          expect(page).to have_field("Dimensions", with: "384")
+          expect(page).to be_axe_clean.skipping("color-contrast")
+
+          find_test_selector("llm-semantic-index--submit").click
+        end
+
+        expect(page).to have_text(I18n.t(:notice_successful_create))
+
+        semantic_index = SemanticIndex.sole
+        expect(page).to have_test_selector("llm-semantic-index--row-#{semantic_index.id}", text: "Second")
+
+        semantic_index.update!(state: "ready")
+        visit llm_feature_bindings_path
+
+        within_test_selector("llm-semantic-index--menu-#{semantic_index.id}") do
+          retry_block do
+            find("button[aria-haspopup='true']").click
+            click_link(I18n.t(:button_edit))
+          end
+        end
+
+        within_test_selector("llm-semantic-index-dialog") do
+          expect(page).to have_text("Only use a model compatible with Second @ Two")
+          expect(page).to have_field("Dimensions", disabled: true)
+
+          select "First @ One", from: "Model"
+
+          expect(page).to have_field("Dimensions", disabled: true, with: "384")
+
+          find_test_selector("llm-semantic-index--submit").click
+        end
+
+        expect(page).to have_test_selector("llm-semantic-index--row-#{semantic_index.id}", text: "First")
+        expect(semantic_index.reload).to have_attributes(state: "ready", embedding_vector_dimensions: 384)
+      end
+
+      it "renames it and deletes it" do
+        stored = create(:embedding_model, inference_provider: connection.inference_provider, name: "Original")
+
+        visit llm_models_path
+
+        choose_embedding_model_action(stored, I18n.t(:button_edit))
+
+        within_test_selector("llm-embedding-model-dialog") do
+          expect(page).to have_field("Dimensions", disabled: true)
+
+          fill_in "Display name", with: "Renamed"
+          find_test_selector("llm-embedding-model--submit").click
+        end
+
+        expect(page).to have_test_selector("llm-embedding-model--row-#{stored.id}", text: "Renamed")
+
+        choose_embedding_model_action(stored, I18n.t("admin.embedding_models.menu.delete"))
+
+        within_test_selector("llm-embedding-model--delete-dialog") { click_on I18n.t(:button_delete) }
+
+        expect(page).to have_no_test_selector("llm-embedding-model--row-#{stored.id}")
+        expect(EmbeddingModel.exists?(stored.id)).to be(false)
+      end
     end
 
     it "renders the model list accessibly" do

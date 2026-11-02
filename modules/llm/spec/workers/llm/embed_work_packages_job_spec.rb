@@ -49,6 +49,39 @@ RSpec.describe Llm::EmbedWorkPackagesJob, with_flag: { semantic_search: true } d
     expect(service_double).to have_received(:call)
   end
 
+  context "when a server answers with another size than was asked for" do
+    let(:service_double) { instance_double(Llm::WorkPackages::EmbedService) }
+
+    before do
+      allow(Llm::WorkPackages::EmbedService).to receive(:new).and_return(service_double)
+      allow(service_double).to receive(:call).and_raise(Llm::Errors::UnexpectedDimensionsError, "Wrong size")
+    end
+
+    it "fails the Semantic Index with the reason" do
+      described_class.perform_now(semantic_index.id, [work_package.id])
+
+      expect(semantic_index.reload).to have_attributes(state: "failed", error_message: "Wrong size")
+    end
+
+    it "makes no further request for the following slices" do
+      described_class.perform_now(semantic_index.id, [work_package.id])
+      described_class.perform_now(semantic_index.id, [work_package.id])
+
+      expect(service_double).to have_received(:call).once
+    end
+
+    it "keeps the reason of a concurrent slice that failed first" do
+      allow(service_double).to receive(:call) do
+        semantic_index.fail_indexing!("First")
+        raise Llm::Errors::UnexpectedDimensionsError, "Second"
+      end
+
+      described_class.perform_now(semantic_index.id, [work_package.id])
+
+      expect(semantic_index.reload).to have_attributes(state: "failed", error_message: "First")
+    end
+  end
+
   it "does nothing once the Semantic Index is no longer indexing" do
     semantic_index.update!(state: "failed")
 

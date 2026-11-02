@@ -62,5 +62,9 @@ See COPYRIGHT and LICENSE files for more details.
 
 <%= render(LlmConnections::DefaultModelsComponent.new(@connection)) %>
 
+<% if OpenProject::FeatureDecisions.semantic_search_active? %>
+  <%= render(LlmConnections::EmbeddingModels::BoxComponent.new(embedding_models: EmbeddingModel.for_listing)) %>
+<% end %>
+
 <%= render(LlmConnections::Models::SubHeaderComponent.new(@query)) %>
 <%= render(LlmConnections::ModelsTableComponent.new(rows: @models, connection: @connection)) %>

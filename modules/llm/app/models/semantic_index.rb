@@ -31,9 +31,14 @@ class SemanticIndex < ApplicationRecord
   class InvalidTransitionError < StandardError; end
 
   INDEXABLE_STATES = %w[not_indexed failed ready].freeze
-  PARAMETERS = %w[model_id embedding_vector_dimensions context_token_length].freeze
+  PARAMETERS = %w[embedding_vector_dimensions context_token_length].freeze
 
+  belongs_to :embedding_model
   has_many :llm_feature_bindings, dependent: :restrict_with_error
+
+  delegate :inference_provider, to: :embedding_model
+
+  scope :for_listing, -> { includes(:embedding_model).order(:created_at) }
 
   enum :state, {
     not_indexed: "not_indexed",
@@ -43,7 +48,7 @@ class SemanticIndex < ApplicationRecord
   }
 
   validates :title, presence: true
-  validates :model_id, presence: true, length: { maximum: LlmModel::MAX_EXTERNAL_ID_LENGTH }
+  validate :embedding_model_stored
   validates :embedding_vector_dimensions,
             numericality: { only_integer: true, greater_than: 0,
                             less_than_or_equal_to: WorkPackageEmbedding::DIMENSIONS }
@@ -98,6 +103,11 @@ class SemanticIndex < ApplicationRecord
   end
 
   private
+
+  # On the id, which is the field the form renders its errors against.
+  def embedding_model_stored
+    errors.add(:embedding_model_id, :blank) if embedding_model.nil?
+  end
 
   def transition_from_indexing!(**attributes)
     with_lock do

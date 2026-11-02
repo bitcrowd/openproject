@@ -74,6 +74,9 @@ module Llm
     # The server answered successfully with something we cannot read.
     class ParseError < Error; end
 
+    # The server returned vectors of another size than was asked for.
+    class UnexpectedDimensionsError < Error; end
+
     # The connection cannot be expressed at all -- an api_format we cannot supply
     # credentials for, or a model the provider refuses to accept.
     class ConfigurationError < Error; end

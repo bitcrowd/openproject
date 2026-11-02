@@ -44,18 +44,6 @@ RSpec.describe SemanticIndexes::UpdateContract do
     let(:current_user) { build_stubbed(:admin) }
   end
 
-  context "when the stored model is no longer offered" do
-    let(:current_user) { build_stubbed(:admin) }
-
-    before { connection.capability_verdicts.destroy_all }
-
-    it "still allows renaming" do
-      semantic_index.title = "Renamed"
-
-      expect(contract.validate).to be(true)
-    end
-  end
-
   context "when the Semantic Index has not been indexed" do
     let(:current_user) { build_stubbed(:admin) }
 
@@ -84,6 +72,33 @@ RSpec.describe SemanticIndexes::UpdateContract do
         expect(contract.validate).to be(false)
         expect(contract.errors.details[:context_token_length]).to include(error: :locked_once_indexed)
       end
+    end
+  end
+
+  %w[not_indexed ready failed].each do |state|
+    context "when the Semantic Index is #{state}" do
+      let(:current_user) { build_stubbed(:admin) }
+
+      before { semantic_index.update!(state:) }
+
+      it "allows pointing it at another stored model" do
+        semantic_index.embedding_model = create(:embedding_model)
+
+        expect(contract.validate).to be(true)
+      end
+    end
+  end
+
+  context "when the Semantic Index is indexing" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    before { semantic_index.update!(state: "indexing") }
+
+    it "does not allow pointing it at another stored model" do
+      semantic_index.embedding_model = create(:embedding_model)
+
+      expect(contract.validate).to be(false)
+      expect(contract.errors.details[:embedding_model_id]).to include(error: :locked_while_indexing)
     end
   end
 end

@@ -44,14 +44,14 @@ RSpec.describe SemanticIndexes::CreateContract do
     let(:current_user) { build_stubbed(:admin) }
   end
 
-  context "with a chat model" do
+  context "without a stored model" do
     let(:current_user) { build_stubbed(:admin) }
 
-    before { semantic_index.model_id = "qwen3.6-27b" }
+    before { semantic_index.embedding_model = nil }
 
     it "is invalid" do
       expect(contract.validate).to be(false)
-      expect(contract.errors.details[:model_id]).to include(error: :not_offered)
+      expect(contract.errors.details[:embedding_model_id]).to include(error: :blank)
     end
   end
 end

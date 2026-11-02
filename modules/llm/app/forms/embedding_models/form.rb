@@ -1,0 +1,89 @@
+# frozen_string_literal: true
+
+#-- copyright
+# OpenProject is an open source project management software.
+# Copyright (C) the OpenProject GmbH
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License version 3.
+#
+# OpenProject is a fork of ChiliProject, which is a fork of Redmine. The copyright follows:
+# Copyright (C) 2006-2013 Jean-Philippe Lang
+# Copyright (C) 2010-2013 the ChiliProject Team
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# See COPYRIGHT and LICENSE files for more details.
+#++
+
+module EmbeddingModels
+  class Form < ApplicationForm
+    form do |f|
+      f.text_field(
+        name: :name,
+        label: EmbeddingModel.human_attribute_name(:name),
+        caption: I18n.t("admin.embedding_models.form.name_caption"),
+        autofocus: true
+      )
+
+      f.text_field(
+        name: :external_id,
+        label: EmbeddingModel.human_attribute_name(:external_id),
+        disabled: true
+      )
+
+      f.text_field(
+        name: :inference_provider,
+        label: EmbeddingModel.human_attribute_name(:inference_provider),
+        value: model.inference_provider.title,
+        disabled: true
+      )
+
+      if model.new_record?
+        f.select_list(
+          name: :model_type,
+          label: EmbeddingModel.human_attribute_name(:model_type),
+          include_blank: false,
+          input_width: :medium,
+          data: { test_selector: "llm-embedding-model--type" }
+        ) do |select|
+          select.option(value: "chat", label: I18n.t("admin.llm_models.form.model_type_chat"))
+          select.option(value: "embedding", label: I18n.t("admin.llm_models.form.model_type_embedding"))
+        end
+      end
+
+      f.text_field(
+        name: :context_token_length,
+        type: :number,
+        min: 1,
+        label: EmbeddingModel.human_attribute_name(:context_token_length),
+        caption: I18n.t("admin.embedding_models.form.context_token_length_caption"),
+        required: true,
+        disabled: model.persisted?,
+        input_width: :small
+      )
+
+      f.text_field(
+        name: :embedding_vector_dimensions,
+        type: :number,
+        min: 1,
+        label: EmbeddingModel.human_attribute_name(:embedding_vector_dimensions),
+        caption: I18n.t("admin.embedding_models.form.embedding_vector_dimensions_caption"),
+        required: true,
+        disabled: model.persisted?,
+        input_width: :small
+      )
+    end
+  end
+end

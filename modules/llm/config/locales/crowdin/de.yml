@@ -65,6 +65,9 @@ de:
             external_id:
               conflicting_capabilities: has capability assertions stored under it that conflict with those of this model.
   admin:
+    embedding_models:
+      form:
+        off_label_warning: Die API hat dieses Modell nicht als Embedding-Modell identifiziert. Ein Modell, das nicht als Embedding-Modell vorgesehen ist, wird schlecht oder gar nicht funktionieren.
     llm_connections:
       delete_api_key:
         configured_from_env: This connection is configured through the environment and cannot be changed here.

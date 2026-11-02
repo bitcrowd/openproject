@@ -40,6 +40,18 @@ module Llm
 
       work_packages = WorkPackage.where(id: work_package_ids)
       Llm::WorkPackages::EmbedService.new(semantic_index, work_packages).call
+    rescue Llm::Errors::UnexpectedDimensionsError => e
+      fail_indexing(semantic_index, e.message)
+    end
+
+    private
+
+    # Later slices stop at the indexing? check above. A concurrent one may already
+    # have failed the Semantic Index.
+    def fail_indexing(semantic_index, message)
+      semantic_index.fail_indexing!(message)
+    rescue SemanticIndex::InvalidTransitionError
+      nil
     end
   end
 end

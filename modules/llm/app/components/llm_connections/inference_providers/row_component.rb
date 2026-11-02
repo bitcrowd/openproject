@@ -96,8 +96,14 @@ module LlmConnections
           edit_item(menu)
           delete_api_key_item(menu) if inference_provider.api_key_stored?
           menu.with_divider
-          active? ? locked_delete_item(menu) : delete_item(menu)
+          delete_lock_reason ? locked_delete_item(menu) : delete_item(menu)
         end
+      end
+
+      def delete_lock_reason
+        return I18n.t("admin.inference_providers.menu.locked_while_active") if active?
+
+        I18n.t("admin.inference_providers.menu.locked_by_embedding_models") if inference_provider.embedding_models.exists?
       end
 
       def edit_item(menu)
@@ -128,7 +134,7 @@ module LlmConnections
       def locked_delete_item(menu)
         menu.with_item(label: I18n.t("admin.inference_providers.menu.delete"), disabled: true) do |item|
           item.with_leading_visual_icon(icon: :trash)
-          item.with_description { I18n.t("admin.inference_providers.menu.locked_while_active") }
+          item.with_description { delete_lock_reason }
         end
       end
 

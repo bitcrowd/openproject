@@ -38,8 +38,12 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
   shared_let(:admin) { create(:admin) }
 
   let(:turbo_headers) { { "Accept" => "text/vnd.turbo-stream.html" } }
+  let(:embedding_model) do
+    create(:embedding_model, name: "bge-m3 @ Ollama", external_id: "bge-m3",
+                             inference_provider: create(:inference_provider, title: "Ollama"))
+  end
   let(:valid_params) do
-    { semantic_index: { title: "Nomic small", description: "Trial", model_id: "bge-m3",
+    { semantic_index: { title: "Nomic small", description: "Trial", embedding_model_id: embedding_model.id,
                         embedding_vector_dimensions: 768, context_token_length: 2048 } }
   end
 
@@ -146,14 +150,26 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
   end
 
   describe "GET new_dialog" do
-    it "offers only embedding models" do
+    it "offers the stored models with their provider, including other providers, and not the active provider's list" do
+      embedding_model
+      create(:embedding_model, name: "Elsewhere", inference_provider: create(:inference_provider, title: "Mistral"))
+
       get new_dialog_semantic_indexes_path, headers: turbo_headers
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include(I18n.t("admin.semantic_indexes.dialog.new_title"))
 
-      items = Nokogiri::HTML(response.parsed_body).at_css("opce-autocompleter")["data-items"]
-      expect(JSON.parse(items).pluck("id")).to contain_exactly("bge-m3")
+      options = Nokogiri::HTML(response.parsed_body).css("select[name='semantic_index[embedding_model_id]'] option")
+      expect(options.map(&:text).compact_blank - [I18n.t("admin.semantic_indexes.form.model_prompt")])
+        .to contain_exactly("bge-m3 @ Ollama", "Elsewhere @ Mistral")
+    end
+
+    it "escapes the names of the stored models" do
+      create(:embedding_model, name: "<script>stored</script>")
+
+      get new_dialog_semantic_indexes_path, headers: turbo_headers
+
+      expect(response.body).not_to include("<script>stored")
     end
   end
 
@@ -162,17 +178,25 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       post semantic_indexes_path, params: valid_params
 
       expect(response).to redirect_to(llm_feature_bindings_path)
-      expect(SemanticIndex.sole).to have_attributes(title: "Nomic small", model_id: "bge-m3",
+      expect(SemanticIndex.sole).to have_attributes(title: "Nomic small", embedding_model:,
                                                     embedding_vector_dimensions: 768,
                                                     context_token_length: 2048, state: "not_indexed")
     end
 
-    it "re-renders the form with errors" do
-      post semantic_indexes_path, params: { semantic_index: valid_params[:semantic_index].merge(model_id: "qwen3.6-27b") },
+    it "re-renders the form with errors when no stored model was picked" do
+      post semantic_indexes_path, params: { semantic_index: valid_params[:semantic_index].merge(embedding_model_id: "") },
                                   headers: turbo_headers
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.body).to include(I18n.t("activerecord.errors.models.semantic_index.attributes.model_id.not_offered"))
+      expect(response.body).to include("Model can&#39;t be blank").or include("Model can't be blank")
+      expect(SemanticIndex.count).to eq(0)
+    end
+
+    it "refuses a stored model that does not exist" do
+      post semantic_indexes_path, params: { semantic_index: valid_params[:semantic_index].merge(embedding_model_id: 0) },
+                                  headers: turbo_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
       expect(SemanticIndex.count).to eq(0)
     end
   end
@@ -188,12 +212,65 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
         .to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.dialog.edit_title", title: semantic_index.title)))
     end
 
-    it "locks the parameters in the edit dialog once indexed" do
+    it "warns about compatibility in the edit dialog once indexed" do
       semantic_index.update!(state: "failed")
 
       get edit_dialog_semantic_index_path(semantic_index), headers: turbo_headers
 
-      expect(response.body).to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.locked_once_indexed")))
+      warning = I18n.t("admin.semantic_indexes.form.locked_once_indexed",
+                       model: semantic_index.embedding_model.name_with_provider,
+                       context_token_length: semantic_index.context_token_length,
+                       embedding_vector_dimensions: semantic_index.embedding_vector_dimensions)
+      expect(response.body).to include(CGI.escapeHTML(warning))
+    end
+
+    it "lists the name of its stored model" do
+      get llm_feature_bindings_path
+
+      expect(page).to have_test_selector("llm-semantic-index--row-#{semantic_index.id}",
+                                         text: semantic_index.embedding_model.name)
+    end
+
+    describe "pointing it at another stored model" do
+      let(:another) do
+        create(:embedding_model, external_id: "a-different-name", context_token_length: 1, embedding_vector_dimensions: 1)
+      end
+
+      %w[not_indexed ready failed].each do |state|
+        it "works when #{state}, keeping its numbers and its state" do
+          semantic_index.update!(state:)
+
+          patch semantic_index_path(semantic_index), params: { semantic_index: { embedding_model_id: another.id } }
+
+          expect(response).to redirect_to(llm_feature_bindings_path)
+          expect(semantic_index.reload)
+            .to have_attributes(embedding_model: another, state:, context_token_length: 8192,
+                                embedding_vector_dimensions: 1024)
+        end
+      end
+
+      it "is refused while indexing" do
+        semantic_index.update!(state: "indexing")
+        current = semantic_index.embedding_model
+
+        patch semantic_index_path(semantic_index),
+              params: { semantic_index: { embedding_model_id: another.id } },
+              headers: turbo_headers
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(semantic_index.reload.embedding_model).to eq(current)
+      end
+    end
+
+    it "keeps its numbers once indexed" do
+      semantic_index.update!(state: "ready")
+
+      patch semantic_index_path(semantic_index),
+            params: { semantic_index: { context_token_length: 1, embedding_vector_dimensions: 1 } },
+            headers: turbo_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(semantic_index.reload).to have_attributes(context_token_length: 8192, embedding_vector_dimensions: 1024)
     end
 
     it "updates the semantic index" do

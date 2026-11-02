@@ -95,9 +95,13 @@ class LlmConnection < ApplicationRecord
     # Whether LLM-backed features may run right now. This is the predicate
     # sibling features gate on; see #77783.
     def available?
-      OpenProject::FeatureDecisions.llm_connection_active? &&
-        Setting.llm_features_enabled? &&
-        active_connection.configured?
+      features_enabled? && active_connection.configured?
+    end
+
+    # A Semantic Index embeds through the provider of its own model, so it needs
+    # the switch but not the active provider.
+    def features_enabled?
+      OpenProject::FeatureDecisions.llm_connection_active? && Setting.llm_features_enabled?
     end
   end
 

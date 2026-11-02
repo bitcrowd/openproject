@@ -32,11 +32,16 @@ module InferenceProviders
     delete_permission :admin
 
     validate :not_active
+    validate :no_embedding_models_stored
 
     private
 
     def not_active
       errors.add(:base, :active) if model.active?
+    end
+
+    def no_embedding_models_stored
+      errors.add(:base, :embedding_models_stored) if model.embedding_models.exists?
     end
   end
 end

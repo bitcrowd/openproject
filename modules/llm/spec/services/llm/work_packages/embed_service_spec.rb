@@ -30,7 +30,7 @@
 require "spec_helper"
 require_module_spec_helper
 
-RSpec.describe Llm::WorkPackages::EmbedService,
+RSpec.describe Llm::WorkPackages::EmbedService, :llm_server_helpers, :webmock,
                with_flag: { llm_connection: true, semantic_search: true },
                with_settings: { llm_features_enabled: true } do
   include_context "with an embedding model offered"
@@ -50,17 +50,62 @@ RSpec.describe Llm::WorkPackages::EmbedService,
   end
 
   before do
-    allow(Llm::Session).to receive(:for).with(connection).and_return(session_double)
+    allow(Llm::Session).to receive(:for).with(semantic_index.inference_provider).and_return(session_double)
     allow(session_double).to receive(:embed).and_return(embedding_double)
   end
 
-  context "when no connection is configured" do
-    before do
-      connection.destroy!
+  context "with the features switched off", with_settings: { llm_features_enabled: false } do
+    it "raises NotReady" do
+      expect { service.call }.to raise_error(Llm::Errors::NotReady, /features_disabled/)
+    end
+  end
+
+  context "when the server answers with another size than was asked for" do
+    let(:embedding_double) { instance_double(RubyLLM::Embedding, vectors: [[1.0, 2.0, 3.0, 4.0]]) }
+
+    it "raises a message saying so" do
+      expect { service.call }.to raise_error(Llm::Errors::UnexpectedDimensionsError, /with 4 dimensions instead of the 3/)
     end
 
-    it "raises NotReady" do
-      expect { service.call }.to raise_error(Llm::Errors::NotReady, /no_connection/)
+    it "stores nothing" do
+      expect { service.call }.to raise_error(Llm::Errors::UnexpectedDimensionsError)
+
+      expect(WorkPackageEmbedding.count).to eq(0)
+    end
+  end
+
+  describe "the request" do
+    let(:elsewhere) { "https://elsewhere.example/v1" }
+    let(:semantic_index) do
+      create(:semantic_index, embedding_vector_dimensions: 3,
+                              embedding_model: create(:embedding_model,
+                                                      external_id: "their-name",
+                                                      inference_provider: create(:inference_provider, base_url: elsewhere)))
+    end
+    let!(:embeddings_request) { mock_llm_embeddings_response(elsewhere, dimensions: 3) }
+
+    before { allow(Llm::Session).to receive(:for).and_call_original }
+
+    it "goes to the provider of the index's model, not the active one" do
+      service.call
+
+      expect(embeddings_request).to have_been_made.once
+      expect(a_request(:post, %r{\A#{connection.base_url}})).not_to have_been_made
+    end
+
+    it "names the model the way that provider does" do
+      service.call
+
+      expect(a_request(:post, "#{elsewhere}/embeddings").with { JSON.parse(it.body)["model"] == "their-name" })
+        .to have_been_made.once
+    end
+
+    it "does not need an active provider" do
+      connection.destroy!
+
+      service.call
+
+      expect(embeddings_request).to have_been_made.once
     end
   end
 

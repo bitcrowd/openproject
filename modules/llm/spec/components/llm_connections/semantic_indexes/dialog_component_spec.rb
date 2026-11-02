@@ -33,11 +33,9 @@ require_module_spec_helper
 RSpec.describe LlmConnections::SemanticIndexes::DialogComponent, type: :component do
   include Rails.application.routes.url_helpers
 
-  include_context "with an embedding model offered"
-
   subject(:rendered_component) do
     with_request_url "/admin/llm_feature_bindings" do
-      render_inline(described_class.new(semantic_index, connection:))
+      render_inline(described_class.new(semantic_index))
     end
   end
 
