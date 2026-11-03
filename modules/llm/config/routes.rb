@@ -62,11 +62,13 @@ Rails.application.routes.draw do
       collection do
         get :new_dialog, defaults: { format: :turbo_stream }
         get :status, defaults: { format: :turbo_stream }
+        post :refresh_form, defaults: { format: :turbo_stream }
       end
 
       member do
         get :edit_dialog, defaults: { format: :turbo_stream }
         get :deletion_dialog, defaults: { format: :turbo_stream }
+        post :refresh_form, defaults: { format: :turbo_stream }
         post :start_indexing
         post :stop_indexing
         get :activation_dialog, defaults: { format: :turbo_stream }

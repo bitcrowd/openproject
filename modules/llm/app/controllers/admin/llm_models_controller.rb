@@ -234,7 +234,8 @@ module Admin
     # external_id is accepted on create, and on update for manually added models.
     def llm_model_params
       params.expect(
-        llm_model: [:external_id, :display_name, :admin_context_window, :model_type, *capability_param_names]
+        llm_model: [:external_id, :display_name, :admin_context_window, :embedding_vector_dimensions, :model_type,
+                    *capability_param_names]
       )
     end
 

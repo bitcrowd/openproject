@@ -35,11 +35,21 @@ module LlmConnections
 
       FORM_ID = "llm-semantic-index-form"
 
-      options :connection
+      options connection: nil, refreshed: false
 
       private
 
       def locked? = model.parameters_locked?
+
+      def wrapper_data
+        return {} if locked?
+
+        { controller: "refresh-on-form-changes", "refresh-on-form-changes-turbo-stream-url-value": refresh_url }
+      end
+
+      def refresh_url
+        model.persisted? ? refresh_form_semantic_index_path(model) : refresh_form_semantic_indexes_path
+      end
 
       def http_method
         model.persisted? ? :patch : :post

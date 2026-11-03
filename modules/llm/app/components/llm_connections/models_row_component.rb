@@ -49,17 +49,18 @@ module LlmConnections
     # more trustworthy than any published figure for the model. Servers that do
     # not report it simply show nothing rather than a guess.
     def context_window
-      window = llm_model.context_window
-      return render(Primer::Beta::Text.new(color: :muted)) { "—" } if window.blank?
+      number_or_dash(llm_model.context_window)
+    end
 
-      number_with_delimiter(window)
+    def dimensions
+      number_or_dash(llm_model.dimensions(embeddings_verdict))
     end
 
     # Derived from the embeddings verdict rather than stored separately: a model
     # that produces vectors is an embedding model, and everything else is a chat
     # model.
     def kind
-      if table.embeddings_states[llm_model.external_id] == "supported"
+      if embeddings_verdict&.state == "supported"
         render(Primer::Beta::Label.new(scheme: :success)) { I18n.t("llm.model_kinds.embedding") }
       else
         render(Primer::Beta::Label.new(scheme: :secondary)) { I18n.t("llm.model_kinds.chat") }
@@ -83,6 +84,14 @@ module LlmConnections
 
     def button_links
       deletable? ? [edit_link, delete_link] : [edit_link]
+    end
+
+    def embeddings_verdict = table.embeddings_verdicts[llm_model.external_id]
+
+    def number_or_dash(value)
+      return render(Primer::Beta::Text.new(color: :muted)) { "—" } if value.blank?
+
+      number_with_delimiter(value)
     end
 
     def deletable?

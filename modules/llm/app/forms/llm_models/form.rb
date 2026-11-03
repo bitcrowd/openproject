@@ -86,6 +86,26 @@ module LlmModels
         select.option(value: "embedding", label: I18n.t("admin.llm_models.form.model_type_embedding"))
       end
 
+      f.group(
+        hidden: model.model_type != :embedding,
+        data: {
+          show_when_value_selected_target: "effect",
+          target_name: "llm_model_type",
+          value: "embedding",
+          test_selector: "llm-model--embedding-fields"
+        }
+      ) do |embedding|
+        embedding.text_field(
+          name: :embedding_vector_dimensions,
+          label: LlmModel.human_attribute_name(:embedding_vector_dimensions),
+          caption: dimensions_caption,
+          inputmode: "numeric",
+          autocomplete: "off",
+          input_width: :medium,
+          data: { test_selector: "llm-model--dimensions" }
+        )
+      end
+
       # An embedding model answers no chat request, so the capabilities that only
       # a chat model can have are not offered for one.
       f.group(
@@ -139,6 +159,16 @@ module LlmModels
                source: I18n.t("llm.context_window_sources.#{source}"))
       else
         I18n.t("admin.llm_models.form.context_window_caption")
+      end
+    end
+
+    def dimensions_caption
+      measured = model.verdict_for(:embeddings)&.dimensions
+
+      if measured
+        I18n.t("admin.llm_models.form.dimensions_known", value: measured)
+      else
+        I18n.t("admin.llm_models.form.dimensions_caption")
       end
     end
 

@@ -29,18 +29,21 @@
 
 module SemanticIndexes
   class Form < ApplicationForm
-    def initialize(model_options:, locked: false)
+    def initialize(model_options:, locked: false, refreshed: false)
       super()
       @model_options = model_options
       @locked = locked
+      @refreshed = refreshed
     end
 
     form do |f|
+      # Turbo moves focus to an autofocus field after a stream replaced the
+      # focused one, which would pull the administrator away from the model select.
       f.text_field(
         name: :title,
         label: SemanticIndex.human_attribute_name(:title),
         required: true,
-        autofocus: true
+        autofocus: !refreshed
       )
 
       f.text_area(
@@ -57,6 +60,7 @@ module SemanticIndexes
           disabled: true
         )
       else
+        f.hidden(name: :prefilled_from_model_id, value: selected_model_id)
         model_autocompleter(f)
       end
 
@@ -85,7 +89,7 @@ module SemanticIndexes
 
     private
 
-    attr_reader :model_options, :locked
+    attr_reader :model_options, :locked, :refreshed
 
     def model_autocompleter(form)
       form.autocompleter(
@@ -97,6 +101,7 @@ module SemanticIndexes
           decorated: true,
           inputValue: selected_model_id,
           append_to: "##{LlmConnections::SemanticIndexes::DialogComponent::DIALOG_ID}",
+          hiddenFieldAction: "change->refresh-on-form-changes#triggerTurboStream",
           data: { test_selector: "llm-semantic-index--model" }
         }
       ) do |list|

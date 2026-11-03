@@ -57,6 +57,14 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       expect(autocompleter[:"data-input-name"]).to include("semantic_index[llm_model_id]")
       expect(autocompleter[:"data-items"]).to include("bge-m3")
     end
+
+    it "refreshes through the collection route" do
+      rendered_component
+
+      expect(page).to have_css("[data-controller='refresh-on-form-changes']" \
+                               "[data-refresh-on-form-changes-turbo-stream-url-value='#{refresh_form_semantic_indexes_path}']")
+      expect(page).to have_css("form[data-refresh-on-form-changes-target='form']")
+    end
   end
 
   context "for a persisted semantic index" do
@@ -74,6 +82,13 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
 
       autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
       expect(autocompleter[:"data-input-value"]).to include(semantic_index.llm_model_id.to_s)
+    end
+
+    it "remembers which model the values may have come from" do
+      rendered_component
+
+      expect(page).to have_field("semantic_index[prefilled_from_model_id]", type: :hidden,
+                                                                            with: semantic_index.llm_model_id.to_s)
     end
   end
 
@@ -93,6 +108,12 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       expect(page).to have_field(SemanticIndex.human_attribute_name(:context_token_length), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:embedding_vector_dimensions), disabled: true)
       expect(page).to have_no_css("[data-test-selector='llm-semantic-index--model']")
+    end
+
+    it "does not refresh" do
+      rendered_component
+
+      expect(page).to have_no_css("[data-controller='refresh-on-form-changes']")
     end
   end
 

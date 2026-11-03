@@ -74,6 +74,15 @@ class SemanticIndex < ApplicationRecord
     GoodJob::BatchRecord.find_by(id: indexing_batch_id)
   end
 
+  # An administrator's value stays: only a blank field, or what the previous
+  # model filled in, takes the value of the model chosen now.
+  def prefill_from_model(previous_model)
+    self.context_token_length = prefilled(context_token_length, llm_model&.context_window,
+                                          previous_model&.context_window)
+    self.embedding_vector_dimensions = prefilled(embedding_vector_dimensions, llm_model&.dimensions,
+                                                 previous_model&.dimensions)
+  end
+
   def indexable? = INDEXABLE_STATES.include?(state)
 
   def parameters_locked? = !not_indexed?
@@ -99,6 +108,10 @@ class SemanticIndex < ApplicationRecord
   end
 
   private
+
+  def prefilled(current, from_model, from_previous_model)
+    current.blank? || current == from_previous_model.to_i ? from_model : current
+  end
 
   def transition_from_indexing!(**attributes)
     with_lock do

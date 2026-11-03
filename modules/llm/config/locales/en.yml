@@ -25,6 +25,7 @@ en:
       llm_model:
         admin_context_window: "Context window"
         display_name: "Display name"
+        embedding_vector_dimensions: "Dimensions"
         # human_attribute_name strips the _id suffix, so the key omits it.
         external: "Model name"
       semantic_index:
@@ -238,6 +239,8 @@ en:
         context_window: "Context window"
         context_window_caption: "How many tokens this model accepts. Leave blank if you do not know."
         context_window_known: "Leave blank to use %{value}, %{source}."
+        dimensions_caption: "How many numbers each vector has. Leave blank if you do not know."
+        dimensions_known: "Leave blank to use %{value}, measured when the model's capabilities were checked."
         display_name_caption: "An optional friendly name shown instead of the model id."
         external_id_caption: "The model name exactly as the server expects it."
         model_type: "Model type"
@@ -255,6 +258,7 @@ en:
         context_window: "Context window"
         description: "Reported by the server on %{fetched_at}."
         description_unfetched: "The server has not returned a model list yet. Refresh the models once it is reachable."
+        dimensions: "Dimensions"
         filter_label: "Filter models"
         identifier: "Model"
         kind: "Type"

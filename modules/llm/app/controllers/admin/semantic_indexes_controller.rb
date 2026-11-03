@@ -66,6 +66,17 @@ module Admin
       respond_to_save(result, notice: t(:notice_successful_update))
     end
 
+    def refresh_form
+      semantic_index = params[:id] ? SemanticIndex.find(params.expect(:id)) : SemanticIndex.new
+      semantic_index.assign_attributes(semantic_index_params)
+      semantic_index.prefill_from_model(LlmModel.find_by(id: params.dig(:semantic_index, :prefilled_from_model_id)))
+
+      update_via_turbo_stream(
+        component: LlmConnections::SemanticIndexes::FormComponent.new(semantic_index, connection: @connection, refreshed: true)
+      )
+      respond_with_turbo_streams
+    end
+
     def deletion_dialog
       respond_with_dialog LlmConnections::SemanticIndexes::DeleteDialogComponent.new(@semantic_index)
     end

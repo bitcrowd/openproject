@@ -159,6 +159,58 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
     end
   end
 
+  describe "POST refresh_form" do
+    let(:refreshed) { Nokogiri::HTML(response.parsed_body) }
+
+    def field_value(attribute)
+      refreshed.at_css("input[name='semantic_index[#{attribute}]']")["value"]
+    end
+
+    before { embedding_model.update!(embedding_vector_dimensions: 1024) }
+
+    it "fills in what the chosen model knows, without saving" do
+      post refresh_form_semantic_indexes_path,
+           params: { semantic_index: { title: "Docs", llm_model_id: embedding_model.id, prefilled_from_model_id: "",
+                                       context_token_length: "", embedding_vector_dimensions: "" } },
+           headers: turbo_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(field_value(:title)).to eq("Docs")
+      expect(field_value(:context_token_length)).to eq("8192")
+      expect(field_value(:embedding_vector_dimensions)).to eq("1024")
+      expect(field_value(:prefilled_from_model_id)).to eq(embedding_model.id.to_s)
+      expect(SemanticIndex.count).to eq(0)
+    end
+
+    it "keeps a typed value" do
+      post refresh_form_semantic_indexes_path,
+           params: { semantic_index: { llm_model_id: embedding_model.id, prefilled_from_model_id: "",
+                                       context_token_length: "", embedding_vector_dimensions: "512" } },
+           headers: turbo_headers
+
+      expect(field_value(:embedding_vector_dimensions)).to eq("512")
+    end
+
+    it "does not save an existing semantic index" do
+      semantic_index = create(:semantic_index, title: "Qwen3 baseline")
+
+      post refresh_form_semantic_index_path(semantic_index),
+           params: { semantic_index: { title: "Changed", llm_model_id: embedding_model.id } },
+           headers: turbo_headers
+
+      expect(field_value(:title)).to eq("Changed")
+      expect(semantic_index.reload.title).to eq("Qwen3 baseline")
+    end
+
+    it "is refused for a non-admin" do
+      login_as create(:user)
+
+      post refresh_form_semantic_indexes_path, params: valid_params, headers: turbo_headers
+
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
   describe "POST /admin/semantic_indexes" do
     it "creates the semantic index and returns to the feature configuration" do
       post semantic_indexes_path, params: valid_params

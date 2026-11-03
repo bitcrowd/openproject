@@ -160,6 +160,36 @@ RSpec.describe LlmModel do
     end
   end
 
+  describe "#dimensions" do
+    def record_measured(dimensions)
+      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+                                      state: "supported", source: "probe", detail: { "dimensions" => dimensions })
+    end
+
+    it "is unknown until a probe measures it or an administrator enters it" do
+      expect(llm_model.dimensions).to be_nil
+    end
+
+    it "takes what a probe measured" do
+      record_measured(768)
+
+      expect(llm_model.dimensions).to eq(768)
+    end
+
+    it "prefers what an administrator entered" do
+      record_measured(768)
+      llm_model.update!(embedding_vector_dimensions: 512)
+
+      expect(llm_model.dimensions).to eq(512)
+    end
+
+    it "refuses a size no semantic index could store" do
+      llm_model.embedding_vector_dimensions = WorkPackageEmbedding::DIMENSIONS + 1
+
+      expect(llm_model).not_to be_valid
+    end
+  end
+
   describe "#uses" do
     it "is empty while nothing uses the model" do
       expect(llm_model.uses).to be_empty

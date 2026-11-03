@@ -50,6 +50,10 @@ class LlmModel < ApplicationRecord
             length: { maximum: MAX_EXTERNAL_ID_LENGTH },
             uniqueness: { scope: :llm_connection_id }
 
+  validates :embedding_vector_dimensions,
+            numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: WorkPackageEmbedding::DIMENSIONS },
+            allow_nil: true
+
   scope :active, -> { where(active: true) }
   scope :discovered, -> { where(manual: false) }
   scope :manual, -> { where(manual: true) }
@@ -126,6 +130,12 @@ class LlmModel < ApplicationRecord
                         else
                           raw_metadata.merge("admin_context_window" => Integer(value, exception: false) || value)
                         end
+  end
+
+  # What an administrator entered, then what a capability probe measured. The
+  # verdict can be passed in by a list that loaded them in bulk.
+  def dimensions(verdict = verdict_for(:embeddings))
+    embedding_vector_dimensions || verdict&.dimensions
   end
 
   # Capability assertions are stored as verdicts, not columns. These virtual

@@ -33,7 +33,7 @@ module LlmConnections
   # Rendering never issues an HTTP request: the catalogue is refreshed explicitly
   # through the "Refresh models" action.
   class ModelsTableComponent < OpPrimer::BorderBoxTableComponent
-    columns :identifier, :kind, :context_window, :source
+    columns :identifier, :kind, :context_window, :dimensions, :source
 
     main_column :identifier
 
@@ -63,18 +63,15 @@ module LlmConnections
         [:identifier, { caption: I18n.t("admin.llm_models.index.identifier") }],
         [:kind, { caption: I18n.t("admin.llm_models.index.kind") }],
         [:context_window, { caption: I18n.t("admin.llm_models.index.context_window") }],
+        [:dimensions, { caption: I18n.t("admin.llm_models.index.dimensions") }],
         [:source, { caption: I18n.t("admin.llm_models.index.source") }]
       ]
     end
 
     # Built once for the whole table so each row does not query for its own
     # verdict. Rows reach this through their +table+ accessor.
-    def embeddings_states
-      @embeddings_states ||= load_embeddings_states
-    end
-
-    def load_embeddings_states
-      connection.capability_verdicts.for_capability(:embeddings).pluck(:model_id, :state).to_h
+    def embeddings_verdicts
+      @embeddings_verdicts ||= connection.capability_verdicts.for_capability(:embeddings).index_by(&:model_id)
     end
 
     def blank_title = I18n.t("admin.llm_models.index.blank_title")

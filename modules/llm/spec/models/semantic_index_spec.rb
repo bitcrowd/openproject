@@ -40,6 +40,50 @@ RSpec.describe SemanticIndex do
     expect(semantic_index.reload).to be_not_indexed
   end
 
+  describe "#prefill_from_model" do
+    subject(:semantic_index) { described_class.new(llm_model: first_model) }
+
+    let(:first_model) do
+      connection.models.find_by!(external_id: "bge-m3").tap { it.update!(embedding_vector_dimensions: 1024) }
+    end
+    let(:second_model) do
+      connection.models.find_by!(external_id: "qwen3.6-27b").tap { it.update!(embedding_vector_dimensions: 768) }
+    end
+
+    it "fills blank values from the chosen model" do
+      semantic_index.prefill_from_model(nil)
+
+      expect(semantic_index).to have_attributes(context_token_length: 8_192, embedding_vector_dimensions: 1024)
+    end
+
+    it "replaces what the previous model filled in" do
+      semantic_index.prefill_from_model(nil)
+      semantic_index.llm_model = second_model
+
+      semantic_index.prefill_from_model(first_model)
+
+      expect(semantic_index).to have_attributes(context_token_length: 262_144, embedding_vector_dimensions: 768)
+    end
+
+    it "keeps a value an administrator typed" do
+      semantic_index.assign_attributes(llm_model: second_model, context_token_length: 4096,
+                                       embedding_vector_dimensions: 1024)
+
+      semantic_index.prefill_from_model(first_model)
+
+      expect(semantic_index).to have_attributes(context_token_length: 4096, embedding_vector_dimensions: 768)
+    end
+
+    it "leaves a value empty when the chosen model does not know it" do
+      semantic_index.prefill_from_model(nil)
+      semantic_index.llm_model = create(:llm_model, llm_connection: connection)
+
+      semantic_index.prefill_from_model(first_model)
+
+      expect(semantic_index).to have_attributes(context_token_length: nil, embedding_vector_dimensions: nil)
+    end
+  end
+
   it "requires a title" do
     semantic_index.title = ""
 

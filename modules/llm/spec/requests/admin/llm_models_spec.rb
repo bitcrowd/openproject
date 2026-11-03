@@ -758,6 +758,46 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
     end
 
+    describe "an administrator's dimensions" do
+      let!(:llm_model) { create(:llm_model, llm_connection: connection, external_id: "from-server") }
+
+      it "are stored on a discovered model and shown in the list" do
+        patch llm_model_path(llm_model), params: { llm_model: { embedding_vector_dimensions: "1024" } }
+
+        expect(llm_model.reload.embedding_vector_dimensions).to eq(1024)
+
+        get llm_models_path
+
+        expect(page).to have_text("1,024")
+      end
+
+      it "fall back to what a probe measured once cleared" do
+        create(:llm_capability_verdict, llm_connection: connection, model_id: "from-server", capability: "embeddings",
+                                        state: "supported", source: "probe", detail: { "dimensions" => 768 })
+        llm_model.update!(embedding_vector_dimensions: 1024)
+
+        patch llm_model_path(llm_model), params: { llm_model: { embedding_vector_dimensions: "" } }
+
+        expect(llm_model.reload.dimensions).to eq(768)
+      end
+
+      it "refuse what is not a positive number" do
+        patch llm_model_path(llm_model), params: { llm_model: { embedding_vector_dimensions: "abc" } }
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(llm_model.reload.embedding_vector_dimensions).to be_nil
+      end
+
+      it "say on the form what a probe measured" do
+        create(:llm_capability_verdict, llm_connection: connection, model_id: "from-server", capability: "embeddings",
+                                        state: "supported", source: "probe", detail: { "dimensions" => 768 })
+
+        get edit_llm_model_path(llm_model)
+
+        expect(page).to have_text(I18n.t("admin.llm_models.form.dimensions_known", value: 768))
+      end
+    end
+
     describe "GET /admin/llm_models/:id/delete_dialog" do
       let!(:llm_model) do
         create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
