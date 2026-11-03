@@ -72,4 +72,45 @@ RSpec.describe "Semantic index administration",
     expect(SemanticIndex.sole).to have_attributes(llm_model: embedding_model, context_token_length: 8192,
                                                   embedding_vector_dimensions: 512)
   end
+
+  it "changes provider, with the models following, and moves an indexed semantic index" do
+    other_provider = create(:inference_provider, title: "Z elsewhere", base_url: "https://elsewhere.example/v1")
+    other_model = create(:llm_model, inference_provider: other_provider, external_id: "nomic-embed",
+                                     admin_context_window: 2048)
+    create(:llm_capability_verdict, inference_provider: other_provider, model_id: "nomic-embed",
+                                    capability: "embeddings", state: "supported", source: "probe")
+
+    visit llm_feature_bindings_path
+    find_test_selector("llm-semantic-index--new-button").click
+
+    within_test_selector("llm-semantic-index-dialog") do
+      fill_in "Display name", with: "Docs"
+      fill_in "Dimensions", with: "512"
+      select_autocomplete(find_test_selector("llm-semantic-index--model"), query: "bge", select_text: "bge-m3",
+                                                                           results_selector: "#llm-semantic-index-dialog")
+
+      expect(page).to have_field("Context length", with: "8192")
+
+      select_autocomplete(find_test_selector("llm-semantic-index--provider"), query: "Z elsewhere", select_text: "Z elsewhere",
+                                                                              results_selector: "#llm-semantic-index-dialog")
+
+      expect(page).to have_field("Context length", with: "")
+      expect(page).to have_field("Dimensions", with: "512")
+      expect(page).to have_field("Display name", with: "Docs")
+      expect(find_test_selector("llm-semantic-index--model")).to have_css("input:focus")
+
+      select_autocomplete(find_test_selector("llm-semantic-index--model"), query: "nomic", select_text: "nomic-embed",
+                                                                           results_selector: "#llm-semantic-index-dialog")
+
+      expect(page).to have_field("Context length", with: "2048")
+      expect(find_test_selector("llm-semantic-index--model")).to have_css("input:focus")
+      expect(page).to be_axe_clean.within("#llm-semantic-index-dialog")
+
+      find_test_selector("llm-semantic-index--submit").click
+    end
+
+    expect(page).to have_test_selector("llm-semantic-index--box", text: "Docs")
+    expect(SemanticIndex.sole).to have_attributes(llm_model: other_model, context_token_length: 2048,
+                                                  embedding_vector_dimensions: 512)
+  end
 end

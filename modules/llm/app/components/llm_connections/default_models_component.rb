@@ -36,19 +36,27 @@ module LlmConnections
 
     alias_method :connection, :model
 
-    options :listed_provider
+    options listed_provider: nil, chat_provider_id: nil, embedding_provider_id: nil
 
     # Nothing to choose from, and the empty table right below says so.
     def render? = LlmModel.active.exists?
 
     private
 
+    def wrapper_data
+      {
+        controller: "refresh-on-form-changes",
+        "refresh-on-form-changes-turbo-stream-url-value":
+          url_helpers.refresh_defaults_llm_models_path(inference_provider_id: listed_provider.id)
+      }
+    end
+
     def form_options
       {
         model: connection,
         url: url_helpers.defaults_llm_models_path(inference_provider_id: listed_provider.id),
         method: :patch,
-        data: { test_selector: "llm-connection--defaults-form" }
+        data: { test_selector: "llm-connection--defaults-form", refresh_on_form_changes_target: "form" }
       }
     end
   end

@@ -44,6 +44,10 @@ RSpec.describe "LLM connection administration",
 
   current_user { admin }
 
+  def default_chat_provider_picker
+    find_test_selector("llm-connection--default-chat-provider")
+  end
+
   def default_chat_model_picker
     find("[data-test-selector='llm-connection--defaults-form'] " \
          "opce-autocompleter[data-input-name*='default_chat_model_id']")
@@ -377,11 +381,20 @@ RSpec.describe "LLM connection administration",
     it "picks and saves the default chat model" do
       visit llm_models_path
 
+      expect(page).to have_test_selector("llm-connection--default-chat-provider")
+      expect(page).to have_no_css("opce-autocompleter[data-input-name*='default_chat_model_id']")
+
+      select_autocomplete(default_chat_provider_picker, query: provider.title, select_text: provider.title)
+
+      expect(default_chat_model_picker).to have_css("input:focus")
+      expect(page).to be_axe_clean
+
       select_autocomplete(default_chat_model_picker, query: "qwen", select_text: "qwen3.6-27b")
       within_test_selector("llm-connection--defaults-form") { click_on "Save" }
 
       expect(page).to have_text(I18n.t("admin.llm_models.defaults.success"))
       expect(connection.reload.default_chat_model.external_id).to eq("qwen3.6-27b")
+      expect_current_autocompleter_value(default_chat_provider_picker, provider.title)
       expect_current_autocompleter_value(default_chat_model_picker, "qwen3.6-27b")
     end
 

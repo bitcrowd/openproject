@@ -26,7 +26,7 @@ See COPYRIGHT and LICENSE files for more details.
 
 ++#%>
 
-<%= component_wrapper(class: "mb-4") do %>
+<%= component_wrapper(class: "mb-4", data: wrapper_data) do %>
   <%=
     render(Primer::Beta::Subhead.new) do |component|
       component.with_heading(tag: :h3) { t("admin.llm_models.defaults.heading") }
@@ -39,6 +39,6 @@ See COPYRIGHT and LICENSE files for more details.
   <% end %>
 
   <%= settings_primer_form_with(**form_options) do |f| %>
-    <%= render(LlmConnections::DefaultModelsForm.new(f)) %>
+    <%= render(LlmConnections::DefaultModelsForm.new(f, chat_provider_id:, embedding_provider_id:)) %>
   <% end %>
 <% end %>

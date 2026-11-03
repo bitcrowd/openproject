@@ -154,8 +154,8 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(response).to have_http_status(:ok)
       expect(response.body).to include(I18n.t("admin.semantic_indexes.dialog.new_title"))
 
-      items = Nokogiri::HTML(response.parsed_body).at_css("opce-autocompleter")["data-items"]
-      expect(JSON.parse(items).pluck("name")).to contain_exactly("bge-m3 @ #{provider.title}")
+      items = Nokogiri::HTML(response.parsed_body).at_css("[data-test-selector='llm-semantic-index--model']")["data-items"]
+      expect(JSON.parse(items).pluck("name")).to contain_exactly("bge-m3")
     end
   end
 
@@ -200,6 +200,112 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
 
       expect(field_value(:title)).to eq("Changed")
       expect(semantic_index.reload.title).to eq("Qwen3 baseline")
+    end
+
+    context "with a second provider" do
+      let!(:other_provider) { create(:inference_provider, title: "Z elsewhere", base_url: "https://elsewhere.example/v1") }
+      let!(:other_model) do
+        create(:llm_model, inference_provider: other_provider, external_id: "nomic-embed",
+                           admin_context_window: 2048, embedding_vector_dimensions: 768)
+      end
+
+      def picker(field) = refreshed.at_css("[data-test-selector='llm-semantic-index--#{field}']")
+
+      def offered_names(field) = JSON.parse(picker(field)["data-items"]).pluck("name")
+
+      def selected(field) = JSON.parse(picker(field)["data-model"])&.fetch("id").presence
+
+      def refresh(semantic_index: nil, **fields)
+        path = semantic_index ? refresh_form_semantic_index_path(semantic_index) : refresh_form_semantic_indexes_path
+
+        post path, params: { semantic_index: { title: "Docs", llm_model_id: "", prefilled_from_model_id: "", **fields } },
+                   headers: turbo_headers
+      end
+
+      before do
+        create(:llm_capability_verdict, inference_provider: other_provider, model_id: "nomic-embed",
+                                        capability: "embeddings", state: "supported", source: "probe")
+      end
+
+      it "opens on the first provider by title, offering every one of them and no blank" do
+        get new_dialog_semantic_indexes_path, headers: turbo_headers
+
+        expect(offered_names(:provider)).to eq([provider.title, "Z elsewhere"])
+        expect(selected(:provider)).to eq(provider.id)
+        expect(offered_names(:model)).to eq(["bge-m3"])
+      end
+
+      it "offers the models of a picked provider" do
+        refresh(provider_id: other_provider.id, context_token_length: "", embedding_vector_dimensions: "")
+
+        expect(selected(:provider)).to eq(other_provider.id)
+        expect(offered_names(:model)).to eq(["nomic-embed"])
+        expect(selected(:model)).to be_nil
+      end
+
+      it "forgets a model of the provider left behind, with what it filled in, and keeps what was typed" do
+        refresh(provider_id: other_provider.id, llm_model_id: embedding_model.id, prefilled_from_model_id: embedding_model.id,
+                context_token_length: "8192", embedding_vector_dimensions: "512")
+
+        expect(selected(:model)).to be_nil
+        expect(field_value(:context_token_length)).to be_nil
+        expect(field_value(:embedding_vector_dimensions)).to eq("512")
+        expect(field_value(:prefilled_from_model_id)).to be_nil
+      end
+
+      it "fills in from the model chosen after that" do
+        refresh(provider_id: other_provider.id, llm_model_id: other_model.id, prefilled_from_model_id: "",
+                context_token_length: "", embedding_vector_dimensions: "512")
+
+        expect(selected(:model)).to eq(other_model.id)
+        expect(field_value(:context_token_length)).to eq("2048")
+        expect(field_value(:embedding_vector_dimensions)).to eq("512")
+        expect(field_value(:prefilled_from_model_id)).to eq(other_model.id.to_s)
+      end
+
+      it "stays on the picked provider when a save fails" do
+        post semantic_indexes_path,
+             params: { semantic_index: valid_params[:semantic_index].merge(llm_model_id: "", provider_id: other_provider.id) },
+             headers: turbo_headers
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(selected(:provider)).to eq(other_provider.id)
+        expect(offered_names(:model)).to eq(["nomic-embed"])
+      end
+
+      describe "an indexed semantic index" do
+        let!(:semantic_index) do
+          create(:semantic_index, title: "Docs", state: :ready, llm_model: embedding_model,
+                                  context_token_length: 4096, embedding_vector_dimensions: 1536)
+        end
+
+        it "shows the models of another provider, keeping its numbers" do
+          refresh(semantic_index:, provider_id: other_provider.id, llm_model_id: embedding_model.id)
+
+          expect(offered_names(:model)).to eq(["nomic-embed"])
+          expect(selected(:model)).to be_nil
+          expect(field_value(:context_token_length)).to eq("4096")
+          expect(field_value(:embedding_vector_dimensions)).to eq("1536")
+          expect(semantic_index.reload.llm_model).to eq(embedding_model)
+        end
+
+        it "fills in nothing when a model is picked" do
+          refresh(semantic_index:, provider_id: other_provider.id, llm_model_id: other_model.id)
+
+          expect(selected(:model)).to eq(other_model.id)
+          expect(field_value(:context_token_length)).to eq("4096")
+          expect(field_value(:embedding_vector_dimensions)).to eq("1536")
+        end
+
+        it "moves to a model of another provider, keeping its numbers" do
+          patch semantic_index_path(semantic_index),
+                params: { semantic_index: { title: "Docs", provider_id: other_provider.id, llm_model_id: other_model.id } }
+
+          expect(response).to redirect_to(llm_feature_bindings_path)
+          expect(semantic_index.reload)
+            .to have_attributes(llm_model: other_model, context_token_length: 4096, embedding_vector_dimensions: 1536)
+        end
+      end
     end
 
     it "is refused for a non-admin" do

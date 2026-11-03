@@ -35,15 +35,13 @@ module LlmConnections
 
       FORM_ID = "llm-semantic-index-form"
 
-      options refreshed: false
+      options refreshed: false, picked_provider_id: nil
 
       private
 
       def locked? = model.parameters_locked?
 
       def wrapper_data
-        return {} if locked?
-
         { controller: "refresh-on-form-changes", "refresh-on-form-changes-turbo-stream-url-value": refresh_url }
       end
 
@@ -68,14 +66,19 @@ module LlmConnections
         model.persisted? ? semantic_index_path(model) : semantic_indexes_path
       end
 
+      def choice
+        @choice ||= LlmConnections::ModelChoice.new(model.llm_model_id, picked_provider_id)
+      end
+
+      # An index requires a model, so there is always a provider to choose from.
+      def provider = choice.provider || InferenceProvider.by_title.first
+
       def model_options
         bound_model = LlmModel.find_by(id: model.llm_model_id_in_database)
 
-        InferenceProvider.by_title.flat_map do |provider|
-          LlmConnections::SelectableModelsQuery
-            .new(provider, OpenProject::Llm::Features[:semantic_search], bound_model:)
-            .call
-        end
+        LlmConnections::SelectableModelsQuery
+          .new(provider, OpenProject::Llm::Features[:semantic_search], bound_model:)
+          .call
       end
     end
   end

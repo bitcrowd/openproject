@@ -42,7 +42,7 @@ module Admin
     before_action :require_admin
     before_action :set_connection
     before_action :require_available
-    before_action :set_provider, only: %i[index search refresh new create update_defaults]
+    before_action :set_provider, only: %i[index search refresh new create update_defaults refresh_defaults]
 
     def index
       @query = ParamsToQueryService
@@ -135,6 +135,20 @@ module Admin
       result.on_failure { flash[:error] = result.errors.full_messages.join(", ") }
 
       redirect_to list_path, status: :see_other
+    end
+
+    def refresh_defaults
+      @connection.assign_attributes(default_model_params)
+
+      update_via_turbo_stream(
+        component: LlmConnections::DefaultModelsComponent.new(
+          @connection,
+          listed_provider: @provider,
+          chat_provider_id: params.dig(:llm_connection, :default_chat_provider_id),
+          embedding_provider_id: params.dig(:llm_connection, :default_embedding_provider_id)
+        )
+      )
+      respond_with_turbo_streams
     end
 
     private

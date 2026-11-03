@@ -28,39 +28,32 @@
 #++
 
 module LlmConnections
-  # The model select for one registered feature.
+  # The provider and model selects for one registered feature.
   class FeatureBindingForm < ApplicationForm
+    include ModelChoiceFields
+
     # Primer::Forms::Base.new assigns the builder itself and calls this with the
     # remaining keywords, so the builder must not appear in the signature.
-    def initialize(options:, inherit_label:, feature_key:, selected_model_id: nil, models_left_out: false)
+    def initialize(choice:, options:, inherit_label:, feature_key:, models_left_out: false, refreshed: false)
       super()
-      @selected_model_id = selected_model_id
+      @choice = choice
       @model_options = options
       @inherit_label = inherit_label
       @feature_key = feature_key
       @models_left_out = models_left_out
+      @refreshed = refreshed
     end
 
     form do |f|
-      f.autocompleter(
-        name: :llm_model_id,
-        label: LlmFeatureBinding.human_attribute_name(:llm_model_id),
-        caption: model_caption,
-        autocomplete_options: {
-          decorated: true,
-          inputValue: selected_model_id,
-          placeholder: inherit_label
-        },
-        data: { test_selector: "llm-feature-binding--model-#{feature_key}" }
-      ) do |list|
-        list.option(label: inherit_label, value: "", selected: selected_model_id.blank?)
+      provider_autocompleter(f,
+                             name: :provider_id,
+                             label: InferenceProvider.model_name.human,
+                             provider: choice.provider,
+                             blank_label: inherit_label,
+                             data: { test_selector: "llm-feature-binding--provider-#{feature_key}" })
 
-        model_options.each do |option|
-          list.option(label: option_label(option),
-                      value: option.model.id,
-                      selected: selected_model_id == option.model.id)
-        end
-      end
+      model_autocompleter(f) if choice.provider
+      f.hidden(name: :llm_model_id, value: "") unless choice.provider
 
       f.submit(
         name: :submit,
@@ -72,7 +65,19 @@ module LlmConnections
 
     private
 
-    attr_reader :model_options, :inherit_label, :feature_key, :selected_model_id, :models_left_out
+    attr_reader :choice, :model_options, :inherit_label, :feature_key, :models_left_out, :refreshed
+
+    def model_autocompleter(form)
+      choice_autocompleter(form,
+                           name: :llm_model_id,
+                           label: LlmFeatureBinding.human_attribute_name(:llm_model_id),
+                           caption: model_caption,
+                           options: model_options.map { |option| [option_label(option), option.model] },
+                           selected: choice.model,
+                           blank_label: inherit_label,
+                           focusDirectly: refreshed,
+                           data: { test_selector: "llm-feature-binding--model-#{feature_key}" })
+    end
 
     # Says why only a few of the stored models are on offer.
     def model_caption
@@ -82,9 +87,9 @@ module LlmConnections
     # The bound model stays choosable once it no longer qualifies, so that saving
     # the form again does not blank the binding. The label says what changed.
     def option_label(option)
-      return option.model.name_with_provider if option.qualifies
+      return option.model.name if option.qualifies
 
-      I18n.t("admin.llm_feature_bindings.option_unqualified", model: option.model.name_with_provider)
+      I18n.t("admin.llm_feature_bindings.option_unqualified", model: option.model.name)
     end
   end
 end

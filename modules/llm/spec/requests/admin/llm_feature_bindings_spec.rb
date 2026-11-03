@@ -36,13 +36,21 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
   let(:admin) { create(:admin) }
   let(:base_url) { "https://example.com/v1" }
 
-  # The picker is an autocompleter, so its options are serialized into the
-  # element rather than rendered as markup.
-  def offered_models(feature_key)
-    items = page.find("form[action='#{llm_feature_binding_path(feature_key)}'] opce-autocompleter")["data-items"]
-
-    JSON.parse(items).pluck("id").compact_blank
+  def refresh_form(feature_key = "description_assistant", **fields)
+    post refresh_form_llm_feature_binding_path(feature_key),
+         params: { llm_feature_binding: { llm_model_id: "", **fields } },
+         headers: { "Accept" => "text/vnd.turbo-stream.html" }
   end
+
+  # The pickers are autocompleters, so their options are serialized into the
+  # element rather than rendered as markup.
+  def picker(field, feature_key = "description_assistant")
+    Nokogiri::HTML(response.parsed_body.to_s).at_css("[data-test-selector='llm-feature-binding--#{field}-#{feature_key}']")
+  end
+
+  def offered_names(field) = JSON.parse(picker(field)["data-items"]).pluck("name")
+
+  def selected(field) = JSON.parse(picker(field)["data-model"])&.fetch("id").presence
 
   describe "with the feature flag off", with_flag: { llm_connection: false } do
     let!(:provider) { create(:inference_provider, :with_models, base_url:) }
@@ -173,6 +181,100 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
     end
   end
 
+  describe "choosing a model" do
+    let!(:provider) { create(:inference_provider, :with_models, title: "A first", base_url:) }
+    let!(:other_provider) { create(:inference_provider, title: "Elsewhere", base_url: "https://elsewhere.example/v1") }
+    let!(:other_model) { create(:llm_model, inference_provider: other_provider, external_id: "llama4-8b") }
+    let(:connection) { LlmConnection.current }
+    let(:inherit_label) { I18n.t("admin.llm_feature_bindings.inherit_without_default") }
+
+    def blank_model_field
+      Nokogiri::HTML(response.parsed_body.to_s).at_css("input[type='hidden'][name='llm_feature_binding[llm_model_id]']")
+    end
+
+    before { login_as admin }
+
+    it "asks for a provider first, offering every one of them and the default" do
+      get llm_feature_bindings_path
+
+      expect(offered_names(:provider)).to eq([inherit_label, "A first", "Elsewhere"])
+      expect(picker(:model)).to be_nil
+      expect(blank_model_field["value"]).to eq("")
+    end
+
+    it "shows the provider of a bound model, and only the models of that provider" do
+      create(:llm_feature_binding, feature_key: "description_assistant", llm_model: other_model)
+
+      get llm_feature_bindings_path
+
+      expect(selected(:provider)).to eq(other_provider.id)
+      expect(selected(:model)).to eq(other_model.id)
+      expect(offered_names(:model)).to eq([inherit_label, "llama4-8b"])
+    end
+
+    it "offers the models of a picked provider by their name alone, without saving" do
+      refresh_form(provider_id: other_provider.id)
+
+      expect(response).to have_http_status(:ok)
+      expect(offered_names(:model)).to eq([inherit_label, "llama4-8b"])
+      expect(connection.feature_bindings.reload).to be_empty
+    end
+
+    it "forgets a model of the provider left behind, without saving" do
+      binding = create(:llm_feature_binding, feature_key: "description_assistant", llm_model: other_model)
+
+      refresh_form(provider_id: provider.id, llm_model_id: other_model.id)
+
+      expect(selected(:model)).to be_nil
+      expect(offered_names(:model)).to include("qwen3.6-27b")
+      expect(binding.reload.llm_model).to eq(other_model)
+    end
+
+    it "offers no model once no provider is picked, and saving that goes back to the default" do
+      binding = create(:llm_feature_binding, feature_key: "description_assistant", llm_model: other_model)
+
+      refresh_form(provider_id: "", llm_model_id: other_model.id)
+
+      expect(picker(:model)).to be_nil
+      expect(blank_model_field["value"]).to eq("")
+
+      patch llm_feature_binding_path("description_assistant"), params: { llm_feature_binding: { llm_model_id: "" } }
+
+      expect(binding.reload.llm_model).to be_nil
+    end
+
+    it "keeps a bound model listed, flagged, once it no longer qualifies" do
+      binding = create(:llm_feature_binding, feature_key: "description_assistant", llm_model: other_model)
+      other_model.update_columns(active: false)
+
+      refresh_form(provider_id: other_provider.id, llm_model_id: other_model.id)
+
+      expect(selected(:model)).to eq(other_model.id)
+      expect(offered_names(:model)).to include(I18n.t("admin.llm_feature_bindings.option_unqualified", model: "llama4-8b"))
+      expect(binding.reload.llm_model).to eq(other_model)
+    end
+
+    it "lets features use models of different providers" do
+      patch llm_feature_binding_path("description_assistant"), params: { llm_feature_binding: { llm_model_id: other_model.id } }
+
+      expect(connection.feature_bindings.find_by!(feature_key: "description_assistant").llm_model).to eq(other_model)
+    end
+
+    it "404s for a feature that is not registered" do
+      refresh_form("nope", provider_id: provider.id)
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "is refused for a non-admin" do
+      login_as create(:user)
+
+      refresh_form(provider_id: provider.id)
+
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
   describe "PATCH /admin/llm_feature_bindings/:id" do
     let!(:provider) { create(:inference_provider, :with_models, base_url:) }
     let(:connection) { LlmConnection.current }
@@ -248,17 +350,19 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
       after { OpenProject::Llm::Features.all.delete(feature_key) }
 
       it "says that models were left out of the picker" do
-        get llm_feature_bindings_path
+        verdict
 
-        expect(response.body).to include(I18n.t("admin.llm_feature_bindings.form.model_caption_ruled_out"))
+        refresh_form(feature_key, provider_id: provider.id)
+
+        expect(CGI.unescapeHTML(response.body)).to include(I18n.t("admin.llm_feature_bindings.form.model_caption_ruled_out"))
       end
 
       it "says nothing of the kind once no model is ruled out" do
         verdict.destroy!
 
-        get llm_feature_bindings_path
+        refresh_form(feature_key, provider_id: provider.id)
 
-        expect(response.body).not_to include(I18n.t("admin.llm_feature_bindings.form.model_caption_ruled_out"))
+        expect(CGI.unescapeHTML(response.body)).not_to include(I18n.t("admin.llm_feature_bindings.form.model_caption_ruled_out"))
       end
 
       it "names the capability the verdict is about" do

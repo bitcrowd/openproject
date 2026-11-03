@@ -30,49 +30,41 @@
 module LlmConnections
   class DefaultModelsForm < ApplicationForm
     include Redmine::I18n
+    include ModelChoiceFields
+
+    # Primer::Forms::Base.new assigns the builder itself and calls this with the
+    # remaining keywords, so the builder must not appear in the signature.
+    def initialize(chat_provider_id: nil, embedding_provider_id: nil)
+      super()
+      @chat_provider_id = chat_provider_id
+      @embedding_provider_id = embedding_provider_id
+    end
 
     form do |f|
-      f.autocompleter(
-        name: :default_chat_model_id,
-        label: LlmConnection.human_attribute_name(:default_chat_model_id),
-        caption: I18n.t("admin.llm_models.defaults.chat_caption"),
-        autocomplete_options: {
-          decorated: true,
-          disabled: read_only?,
-          inputValue: model.default_chat_model_id,
-          placeholder: I18n.t("label_none_parentheses")
-        }
-      ) do |list|
-        list.option(label: I18n.t("label_none_parentheses"), value: "",
-                    selected: model.default_chat_model_id.blank?)
+      provider_autocompleter(f,
+                             name: :default_chat_provider_id,
+                             label: I18n.t("admin.llm_models.defaults.chat_provider"),
+                             provider: chat_choice.provider,
+                             blank_label: none_label,
+                             disabled: read_only?,
+                             data: { test_selector: "llm-connection--default-chat-provider" })
 
-        default_chat_model_options.each do |llm_model|
-          list.option(label: llm_model.name_with_provider, value: llm_model.id,
-                      selected: model.default_chat_model_id == llm_model.id)
-        end
-      end
+      chat_model_autocompleter(f) if chat_choice.provider
+      f.hidden(name: :default_chat_model_id, value: "") unless chat_choice.provider
 
       # Only worth asking for once something embeds.
       if embedding_features?
-        f.autocompleter(
-          name: :default_embedding_model_id,
-          label: LlmConnection.human_attribute_name(:default_embedding_model_id),
-          caption: embedding_caption,
-          autocomplete_options: {
-            decorated: true,
-            disabled: read_only?,
-            inputValue: model.default_embedding_model_id,
-            placeholder: I18n.t("label_none_parentheses")
-          }
-        ) do |list|
-          list.option(label: I18n.t("label_none_parentheses"), value: "",
-                      selected: model.default_embedding_model_id.blank?)
+        provider_autocompleter(f,
+                               name: :default_embedding_provider_id,
+                               label: I18n.t("admin.llm_models.defaults.embedding_provider"),
+                               caption: (embedding_caption unless embedding_choice.provider),
+                               provider: embedding_choice.provider,
+                               blank_label: none_label,
+                               disabled: read_only?,
+                               data: { test_selector: "llm-connection--default-embedding-provider" })
 
-          default_embedding_model_options.each do |llm_model|
-            list.option(label: embedding_option_label(llm_model), value: llm_model.id,
-                        selected: model.default_embedding_model_id == llm_model.id)
-          end
-        end
+        embedding_model_autocompleter(f) if embedding_choice.provider
+        f.hidden(name: :default_embedding_model_id, value: "") unless embedding_choice.provider
       end
 
       f.submit(name: :submit, label: I18n.t(:button_save), scheme: :primary) unless read_only?
@@ -80,14 +72,48 @@ module LlmConnections
 
     private
 
+    def chat_choice
+      @chat_choice ||= ModelChoice.new(model.default_chat_model_id, @chat_provider_id)
+    end
+
+    def embedding_choice
+      @embedding_choice ||= ModelChoice.new(model.default_embedding_model_id, @embedding_provider_id)
+    end
+
+    def none_label = I18n.t("label_none_parentheses")
+
+    def chat_model_autocompleter(form)
+      choice_autocompleter(form,
+                           name: :default_chat_model_id,
+                           label: LlmConnection.human_attribute_name(:default_chat_model_id),
+                           caption: I18n.t("admin.llm_models.defaults.chat_caption"),
+                           options: chat_model_options.map { |llm_model| [llm_model.name, llm_model] },
+                           selected: chat_choice.model,
+                           blank_label: none_label,
+                           disabled: read_only?,
+                           focusDirectly: chat_choice.awaiting_model?)
+    end
+
+    def embedding_model_autocompleter(form)
+      choice_autocompleter(form,
+                           name: :default_embedding_model_id,
+                           label: LlmConnection.human_attribute_name(:default_embedding_model_id),
+                           caption: embedding_caption,
+                           options: embedding_model_options.map { |llm_model| [embedding_option_label(llm_model), llm_model] },
+                           selected: embedding_choice.model,
+                           blank_label: none_label,
+                           disabled: read_only?,
+                           focusDirectly: embedding_choice.awaiting_model?)
+    end
+
     def read_only?
       model.configured_from_env?
     end
 
     # The one already chosen is kept regardless of what the server offers today:
     # dropping it would silently blank the field on the next save.
-    def default_chat_model_options
-      (InferenceProvider.by_title.flat_map(&:chat_models) + [model.default_chat_model]).compact.uniq
+    def chat_model_options
+      (chat_choice.provider.chat_models.to_a + [chat_choice.model]).compact.uniq
     end
 
     def embedding_features?
@@ -97,20 +123,22 @@ module LlmConnections
     # Only models actually known to embed. Offering one on the grounds that
     # nothing has ruled it out invites a choice whose failure surfaces much
     # later, at index time.
-    def default_embedding_model_options
-      (embedding_models + [model.default_embedding_model]).compact.uniq
+    def embedding_model_options
+      (embedding_models + [embedding_choice.model]).compact.uniq
     end
 
     def embedding_models
-      @embedding_models ||= InferenceProvider.by_title.flat_map(&:embedding_models)
+      providers = embedding_choice.provider ? [embedding_choice.provider] : InferenceProvider.by_title
+
+      @embedding_models ||= providers.flat_map(&:embedding_models)
     end
 
     # A stored default the server has never confirmed stays in the list, said
     # so, rather than vanishing from the picker that shows it.
     def embedding_option_label(llm_model)
-      return llm_model.name_with_provider if embedding_models.include?(llm_model)
+      return llm_model.name if embedding_models.include?(llm_model)
 
-      I18n.t("admin.llm_models.defaults.embedding_option_unqualified", model: llm_model.name_with_provider)
+      I18n.t("admin.llm_models.defaults.embedding_option_unqualified", model: llm_model.name)
     end
 
     # Says how to make a model eligible when none is, rather than leaving an
