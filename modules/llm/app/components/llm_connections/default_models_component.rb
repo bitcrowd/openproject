@@ -36,6 +36,8 @@ module LlmConnections
 
     alias_method :connection, :model
 
+    options :listed_provider
+
     # Nothing to choose from, and the empty table right below says so.
     def render? = LlmModel.active.exists?
 
@@ -44,7 +46,7 @@ module LlmConnections
     def form_options
       {
         model: connection,
-        url: url_helpers.defaults_llm_models_path,
+        url: url_helpers.defaults_llm_models_path(inference_provider_id: listed_provider.id),
         method: :patch,
         data: { test_selector: "llm-connection--defaults-form" }
       }

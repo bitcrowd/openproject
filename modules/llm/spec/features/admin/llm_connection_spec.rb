@@ -148,6 +148,65 @@ RSpec.describe "LLM connection administration",
     end
   end
 
+  describe "the model list of each provider" do
+    let!(:first) { create(:inference_provider, :with_models, title: "A first", base_url:) }
+    let!(:second) { create(:inference_provider, title: "Elsewhere", base_url: "https://elsewhere.example/v1") }
+
+    before do
+      Setting.llm_features_enabled = true
+      create(:llm_model, inference_provider: second, external_id: "llama4-8b")
+      create(:llm_model, inference_provider: second, external_id: "mistral-7b")
+    end
+
+    def choose_provider(title)
+      # The menu only opens once its element has been set up on the page.
+      within_test_selector("llm-models--provider-select") do
+        retry_block do
+          find("button[aria-haspopup='true']").click
+          click_link title
+        end
+      end
+    end
+
+    it "switches lists with the select, and stays there while working on the list" do
+      visit llm_models_path
+
+      expect(page).to have_text("qwen3.6-27b")
+      expect(page).to have_no_text("llama4-8b")
+
+      choose_provider "Elsewhere"
+
+      expect(page).to have_current_path(llm_models_path(inference_provider_id: second.id))
+      expect(page).to have_text("llama4-8b")
+      expect(page).to have_no_text("qwen3.6-27b")
+      expect(page).to be_axe_clean
+
+      expand_sub_header_search("Filter models")
+      fill_in "Filter models", with: "mistral"
+
+      expect(page).to have_no_text("llama4-8b")
+      expect(page).to have_text("mistral-7b")
+      expect(page).to have_current_path(/inference_provider_id=#{second.id}/)
+
+      find_test_selector("llm-model--add-button").click
+      fill_in "Model name", with: "hand-typed"
+      click_on "Create"
+
+      expect(page).to have_current_path(llm_models_path(inference_provider_id: second.id))
+      expect(second.models.manual.pluck(:external_id)).to eq(["hand-typed"])
+      expect(first.models.manual).to be_empty
+    end
+
+    it "says that a provider has no list yet" do
+      empty = create(:inference_provider, title: "Empty", base_url: "https://empty.example/v1")
+
+      visit llm_models_path(inference_provider_id: empty.id)
+
+      expect(page).to have_text("This provider has no model list yet.")
+      expect(page).to be_axe_clean
+    end
+  end
+
   describe "the provider list" do
     let(:elsewhere) { "https://elsewhere.example/v1" }
     let!(:stored) { create(:inference_provider, title: "Stored", base_url: elsewhere, api_key: "sk-elsewhere") }
@@ -345,7 +404,7 @@ RSpec.describe "LLM connection administration",
 
       click_on "Create"
 
-      expect(page).to have_current_path(llm_models_path)
+      expect(page).to have_current_path(llm_models_path(inference_provider_id: provider.id))
       expect(page).to have_text("nomic-embed-text")
       expect(provider.models.find_by(external_id: "nomic-embed-text")).to be_embedding
     end

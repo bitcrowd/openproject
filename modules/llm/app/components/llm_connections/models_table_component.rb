@@ -53,6 +53,9 @@ module LlmConnections
 
     def has_footer? = false
 
+    # Pagination links drop every parameter that is not allowed here.
+    def pagination_params = { allowed_params: %w[filters sortBy inference_provider_id] }
+
     # Without this the row's button_links are never rendered.
     def has_actions? = true
 
@@ -79,7 +82,10 @@ module LlmConnections
 
     def blank_title = I18n.t("admin.llm_models.index.blank_title")
 
-    def blank_description = I18n.t("admin.llm_models.index.blank_description")
+    # A fetch that failed and one still running look the same from here.
+    def blank_description
+      I18n.t("admin.llm_models.index.blank_description#{'_unfetched' if provider.last_synced_at.nil?}")
+    end
 
     def blank_icon = :sparkle
   end

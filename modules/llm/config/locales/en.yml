@@ -286,6 +286,7 @@ en:
       index:
         add_model: "Model"
         blank_description: "The server reported no models. Refresh the list once the server is reachable, or add one by hand."
+        blank_description_unfetched: "This provider has no model list yet. It's fetched in the background after a provider is added. If it doesn't appear, use \"Refresh models\"."
         blank_title: "No models available"
         context_window: "Context window"
         description: "Reported by the server on %{fetched_at}."
@@ -294,6 +295,7 @@ en:
         filter_label: "Filter models"
         identifier: "Model"
         kind: "Type"
+        provider_label: "Inference provider"
         refresh: "Refresh models"
         source: "Source"
         source_discovered: "Server"

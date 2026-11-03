@@ -42,7 +42,7 @@ module Admin
     before_action :require_admin
     before_action :set_connection
     before_action :require_available
-    before_action :set_provider, only: %i[index search refresh new create]
+    before_action :set_provider, only: %i[index search refresh new create update_defaults]
 
     def index
       @query = ParamsToQueryService
@@ -58,7 +58,8 @@ module Admin
       replace_via_turbo_stream(
         component: LlmConnections::ModelsTableComponent.new(rows: @models, provider: @provider)
       )
-      turbo_streams << turbo_stream.push_state(llm_models_path(params.permit(:filters, :page, :per_page)))
+      turbo_streams << turbo_stream.push_state(llm_models_path(params.permit(:filters, :page, :per_page,
+                                                                             :inference_provider_id)))
 
       respond_with_turbo_streams
     end
@@ -67,7 +68,7 @@ module Admin
       result = ::LlmConnections::SyncModelsService.new(@provider).call
 
       flash[result.success? ? :notice : :error] = t(result.success? ? ".success" : ".failure")
-      redirect_to llm_models_path, status: :see_other
+      redirect_to list_path, status: :see_other
     end
 
     # Models an administrator enters by hand are necessary because not every
@@ -88,7 +89,7 @@ module Admin
 
       if save_with_capabilities(llm_model, submitted)
         flash[:notice] = t(".success", model: llm_model.external_id)
-        redirect_to llm_models_path, status: :see_other
+        redirect_to list_path, status: :see_other
       else
         # Re-rendered rather than redirected so the Primer form shows the error
         # inline against the field that caused it.
@@ -106,7 +107,7 @@ module Admin
 
       if updated
         flash[:notice] = t(".success", model: @llm_model.external_id)
-        redirect_to llm_models_path, status: :see_other
+        redirect_to list_path(@llm_model.inference_provider_id), status: :see_other
       else
         render_edit_with_errors
       end
@@ -119,9 +120,10 @@ module Admin
     end
 
     def destroy
-      destroy_unless_in_use(LlmModel.manual.find(params.expect(:id)))
+      llm_model = LlmModel.manual.find(params.expect(:id))
+      destroy_unless_in_use(llm_model)
 
-      redirect_to llm_models_path, status: :see_other
+      redirect_to list_path(llm_model.inference_provider_id), status: :see_other
     end
 
     def update_defaults
@@ -132,7 +134,7 @@ module Admin
       result.on_success { flash[:notice] = t("admin.llm_models.defaults.success") }
       result.on_failure { flash[:error] = result.errors.full_messages.join(", ") }
 
-      redirect_to llm_models_path, status: :see_other
+      redirect_to list_path, status: :see_other
     end
 
     private
@@ -146,7 +148,15 @@ module Admin
     end
 
     def set_provider
-      @provider = InferenceProvider.by_title.first
+      @provider = if params[:inference_provider_id].present?
+                    InferenceProvider.find(params.expect(:inference_provider_id))
+                  else
+                    InferenceProvider.by_title.first
+                  end
+    end
+
+    def list_path(inference_provider_id = @provider.id)
+      llm_models_path(inference_provider_id:)
     end
 
     def render_edit_with_errors
@@ -171,7 +181,7 @@ module Admin
 
     def refuse_env_named_default
       flash[:error] = t("admin.llm_models.configured_from_env")
-      redirect_to llm_models_path, status: :see_other
+      redirect_to list_path(@llm_model.inference_provider_id), status: :see_other
     end
 
     def destroy_unless_in_use(llm_model)

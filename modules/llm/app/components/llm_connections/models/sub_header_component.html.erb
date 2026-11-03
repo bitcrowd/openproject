@@ -11,6 +11,10 @@
        data: filter_input_data_attributes
      ) %>
 
+  <% subheader.with_quick_filter do %>
+    <%= render(LlmConnections::Models::ProviderSelectComponent.new(provider:)) %>
+  <% end %>
+
   <% subheader.with_action_button(
        scheme: :primary,
        label: t("admin.llm_models.index.add_model"),
@@ -18,7 +22,7 @@
        mobile_icon: :plus,
        leading_icon: :plus,
        tag: :a,
-       href: helpers.new_llm_model_path,
+       href: helpers.new_llm_model_path(inference_provider_id: provider.id),
        test_selector: "llm-model--add-button"
      ) { t("admin.llm_models.index.add_model") } %>
 
@@ -29,7 +33,7 @@
        mobile_icon: :sync,
        leading_icon: :sync,
        tag: :a,
-       href: helpers.refresh_llm_models_path,
+       href: helpers.refresh_llm_models_path(inference_provider_id: provider.id),
        data: { turbo_method: :post, controller: "disable-when-clicked" },
        test_selector: "llm-model--refresh-button"
      ) { t("admin.llm_models.index.refresh") } %>

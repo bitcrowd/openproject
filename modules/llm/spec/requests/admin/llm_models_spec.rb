@@ -248,7 +248,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
       post refresh_llm_models_path
 
-      expect(response).to redirect_to(llm_models_path)
+      expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
       expect(provider.reload.available_model_ids).to contain_exactly("qwen3.6-27b", "bge-m3")
       expect(flash[:notice]).to eq(I18n.t("admin.llm_models.refresh.success"))
     end
@@ -258,8 +258,149 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
       post refresh_llm_models_path
 
-      expect(response).to redirect_to(llm_models_path)
+      expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
       expect(flash[:error]).to be_present
+    end
+  end
+
+  describe "the list of a provider" do
+    let(:elsewhere) { "https://elsewhere.example/v1" }
+    let(:list_of_other_provider) { llm_models_path(inference_provider_id: other_provider.id) }
+    let!(:provider) { create(:inference_provider, :with_models, title: "A first", base_url:) }
+    let!(:other_provider) { create(:inference_provider, title: "Elsewhere", base_url: elsewhere) }
+    let!(:other_model) { create(:llm_model, inference_provider: other_provider, external_id: "llama4-8b") }
+
+    before { login_as admin }
+
+    it "opens on the first provider by title" do
+      get llm_models_path
+
+      expect(page).to have_text("qwen3.6-27b")
+      expect(page).to have_no_text("llama4-8b")
+    end
+
+    it "is shown when selected" do
+      get list_of_other_provider
+
+      expect(page).to have_text("llama4-8b")
+      expect(page).to have_no_text("qwen3.6-27b")
+    end
+
+    it "is answered with a 404 for a provider that does not exist" do
+      get llm_models_path(inference_provider_id: 0)
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "offers every provider in the select, by title, and no others" do
+      get list_of_other_provider
+
+      select = page.find("[data-test-selector='llm-models--provider-select']")
+      expect(select.all("a").map { it.text.strip }).to eq(["A first", "Elsewhere"])
+      expect(select).to have_link("Elsewhere", href: list_of_other_provider)
+      expect(select).to have_link("A first", href: llm_models_path(inference_provider_id: provider.id))
+    end
+
+    it "takes the labels from the verdicts of its own provider" do
+      create(:llm_model, inference_provider: provider, external_id: "shared")
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "shared", state: "supported")
+      other_row = create(:llm_model, inference_provider: other_provider, external_id: "shared")
+
+      get list_of_other_provider
+
+      expect(page.find("[data-test-selector='llm-model--edit-#{other_row.id}']").ancestor("[role='row']"))
+        .to have_css(".Label", exact_text: "Chat")
+    end
+
+    it "says when a provider has no list yet" do
+      empty = create(:inference_provider, title: "Empty", base_url: "https://empty.example/v1")
+
+      get llm_models_path(inference_provider_id: empty.id)
+
+      expect(CGI.unescapeHTML(response.body)).to include(I18n.t("admin.llm_models.index.blank_description_unfetched"))
+    end
+
+    it "says something else when a server reported nothing" do
+      empty = create(:inference_provider, title: "Empty", base_url: "https://empty.example/v1",
+                                          last_synced_at: Time.current)
+
+      get llm_models_path(inference_provider_id: empty.id)
+
+      expect(CGI.unescapeHTML(response.body)).to include(I18n.t("admin.llm_models.index.blank_description"))
+    end
+
+    it "stays selected when filtering" do
+      filters = [{ name: { operator: "~", values: ["llama"] } }].to_json
+
+      get search_llm_models_path(inference_provider_id: other_provider.id, filters:),
+          headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      expect(response.body).to include("llama4-8b", "inference_provider_id=#{other_provider.id}")
+      expect(response.body).not_to include("qwen3.6-27b")
+    end
+
+    it "stays selected when paging", with_settings: { per_page_options: "1,20" } do
+      create(:llm_model, inference_provider: other_provider, external_id: "llama5-8b")
+
+      get llm_models_path(inference_provider_id: other_provider.id, per_page: 1)
+
+      links = page.all("nav a").pluck(:href).grep(/page=2/)
+      expect(links).to all(include("inference_provider_id=#{other_provider.id}"))
+      expect(links).not_to be_empty
+    end
+
+    it "is refreshed on its own" do
+      list_request = mock_llm_models_response(elsewhere, models: [{ id: "llama5-8b", object: "model", owned_by: "vllm" }])
+
+      post refresh_llm_models_path(inference_provider_id: other_provider.id)
+
+      expect(response).to redirect_to(list_of_other_provider)
+      expect(list_request).to have_been_made.once
+      expect(other_provider.models.active.pluck(:external_id)).to eq(["llama5-8b"])
+      expect(provider.models.pluck(:external_id)).to contain_exactly("qwen3.6-27b", "bge-m3")
+    end
+
+    it "offers adding a model to it" do
+      get new_llm_model_path(inference_provider_id: other_provider.id)
+
+      expect(page).to have_css("form[action='#{list_of_other_provider}']")
+    end
+
+    it "takes a model added by hand" do
+      post list_of_other_provider, params: { llm_model: { external_id: "hand-typed" } }
+
+      expect(response).to redirect_to(list_of_other_provider)
+      expect(other_provider.models.manual.pluck(:external_id)).to eq(["hand-typed"])
+      expect(provider.models.manual).to be_empty
+    end
+
+    it "keeps a type chosen on a row with the provider of that row" do
+      patch llm_model_path(other_model), params: { llm_model: { model_type: "embedding" } }
+
+      expect(response).to redirect_to(list_of_other_provider)
+      expect(other_provider.capability_verdicts.find_by!(model_id: "llama4-8b", capability: "embeddings"))
+        .to be_supported
+      expect(provider.capability_verdicts.for_model("llama4-8b")).to be_empty
+    end
+
+    it "returns to itself after a hand-added model is removed" do
+      manual = create(:llm_model, :manual, inference_provider: other_provider)
+
+      delete llm_model_path(manual)
+
+      expect(response).to redirect_to(list_of_other_provider)
+      expect(LlmModel.exists?(manual.id)).to be(false)
+    end
+
+    it "returns to itself after the default models are saved" do
+      get list_of_other_provider
+
+      expect(page).to have_css("form[action='#{defaults_llm_models_path(inference_provider_id: other_provider.id)}']")
+
+      patch defaults_llm_models_path(inference_provider_id: other_provider.id),
+            params: { llm_connection: { default_chat_model_id: other_model.id } }
+
+      expect(response).to redirect_to(list_of_other_provider)
     end
   end
 
@@ -358,7 +499,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       it "adds a model an administrator names" do
         post llm_models_path, params: { llm_model: { external_id: "qwen3.6-35b-a3b" } }
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         llm_model = provider.models.find_by(external_id: "qwen3.6-35b-a3b")
         expect(llm_model).to be_manual
         expect(provider.available_model_ids).to include("qwen3.6-35b-a3b")
@@ -374,7 +515,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         post llm_models_path, params: { llm_model: fields.merge("external_id" => "text-embedding-3-small") }
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         expect(fields).to include("model_type" => "")
         expect(provider.capability_verdicts.for_model("text-embedding-3-small")).to be_empty
       end
@@ -433,7 +574,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
                                      model_type: "chat",
                                      capability_vision: "unsupported" } }
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         expect(llm_model.reload.display_name).to eq("Hand typed")
 
         verdicts = provider.capability_verdicts.for_model("hand-typed").pluck(:capability, :state, :source)
@@ -628,7 +769,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         delete llm_model_path(llm_model)
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         expect(LlmModel.where(id: llm_model.id)).to be_empty
       end
 
@@ -638,7 +779,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         delete llm_model_path(llm_model)
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         expect(flash[:error]).to include(LlmConnection.human_attribute_name(:default_chat_model_id))
         expect(connection.reload.default_chat_model).to eq(llm_model)
       end
@@ -900,7 +1041,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       it "refuses to delete it and keeps the default" do
         delete llm_model_path(env_default)
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         expect(flash[:error]).to include(LlmConnection.human_attribute_name(:default_chat_model_id))
         expect(LlmModel.where(id: env_default.id)).to exist
         expect(connection.reload.default_chat_model_id).to eq(env_default.id)
@@ -916,7 +1057,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       it "refuses to rename it" do
         patch llm_model_path(env_default), params: { llm_model: { external_id: "renamed" } }
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         expect(flash[:error]).to eq(refusal)
         expect(env_default.reload.external_id).to eq("env-chat")
       end
@@ -969,7 +1110,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         patch llm_model_path(env_default),
               params: { llm_model: { admin_context_window: "32768", capability_vision: "unsupported" } }
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         expect(env_default.reload.context_window).to eq(32_768)
         expect(provider.capability_verdicts.for_model("env-chat").pluck(:capability, :state))
           .to include(%w[vision unsupported])
@@ -978,7 +1119,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       it "still deletes another model entered by hand" do
         delete llm_model_path(hand_typed)
 
-        expect(response).to redirect_to(llm_models_path)
+        expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
         expect(LlmModel.where(id: hand_typed.id)).to be_empty
       end
     end
@@ -1082,7 +1223,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
     it "stores the default chat model without contacting the server" do
       patch defaults_llm_models_path, params: { llm_connection: { default_chat_model_id: chat_model.id } }
 
-      expect(response).to redirect_to(llm_models_path)
+      expect(response).to redirect_to(llm_models_path(inference_provider_id: provider.id))
       expect(connection.reload.default_chat_model).to eq(chat_model)
       expect(flash[:notice]).to eq(I18n.t("admin.llm_models.defaults.success"))
       expect(a_request(:get, "#{base_url}/models")).not_to have_been_made
