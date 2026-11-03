@@ -35,19 +35,20 @@ module Admin
     layout "admin"
     menu_item :llm_connection
 
-    IDENTIFIER_INDEX = "index_llm_models_on_llm_connection_id_and_external_id"
+    IDENTIFIER_INDEX = "index_llm_models_on_inference_provider_id_and_external_id"
     private_constant :IDENTIFIER_INDEX
 
     before_action :require_feature
     before_action :require_admin
     before_action :set_connection
-    before_action :require_enabled_connection
+    before_action :require_available
+    before_action :set_provider, only: %i[index search refresh new create]
 
     def index
       @query = ParamsToQueryService
                  .new(LlmModel, current_user, query_class: Queries::LlmModels::LlmModelQuery)
                  .call(params)
-      @models = @query.results.paginate(page: page_param, per_page: per_page_param)
+      @models = @query.results.where(inference_provider: @provider).paginate(page: page_param, per_page: per_page_param)
     end
 
     # Answers the sub-header's filter input, replacing just the table.
@@ -55,7 +56,7 @@ module Admin
       index
 
       replace_via_turbo_stream(
-        component: LlmConnections::ModelsTableComponent.new(rows: @models, connection: @connection)
+        component: LlmConnections::ModelsTableComponent.new(rows: @models, provider: @provider)
       )
       turbo_streams << turbo_stream.push_state(llm_models_path(params.permit(:filters, :page, :per_page)))
 
@@ -63,7 +64,7 @@ module Admin
     end
 
     def refresh
-      result = ::LlmConnections::SyncModelsService.new(@connection).call
+      result = ::LlmConnections::SyncModelsService.new(@provider).call
 
       flash[result.success? ? :notice : :error] = t(result.success? ? ".success" : ".failure")
       redirect_to llm_models_path, status: :see_other
@@ -74,16 +75,16 @@ module Admin
     # /v1/chat/completions and nothing else, in which case the operator knows the
     # model name and OpenProject cannot discover it.
     def new
-      @llm_model = @connection.models.new
+      @llm_model = @provider.models.new
     end
 
     def edit
-      @llm_model = @connection.models.find(params.expect(:id))
+      @llm_model = LlmModel.find(params.expect(:id))
     end
 
     def create
       submitted = llm_model_params
-      llm_model = @connection.models.new(submitted.except(*capability_param_names).merge(manual: true))
+      llm_model = @provider.models.new(submitted.except(*capability_param_names).merge(manual: true))
 
       if save_with_capabilities(llm_model, submitted)
         flash[:notice] = t(".success", model: llm_model.external_id)
@@ -97,7 +98,7 @@ module Admin
     end
 
     def update
-      @llm_model = @connection.models.find(params.expect(:id))
+      @llm_model = LlmModel.find(params.expect(:id))
       updated = unless_env_named_default(@llm_model, applies: renames?(@llm_model)) do
         update_with_capabilities(@llm_model)
       end
@@ -112,13 +113,13 @@ module Admin
     end
 
     def delete_dialog
-      llm_model = @connection.models.manual.find(params.expect(:id))
+      llm_model = LlmModel.manual.find(params.expect(:id))
 
       respond_with_dialog LlmConnections::DeleteModelDialogComponent.new(llm_model)
     end
 
     def destroy
-      destroy_unless_in_use(@connection.models.manual.find(params.expect(:id)))
+      destroy_unless_in_use(LlmModel.manual.find(params.expect(:id)))
 
       redirect_to llm_models_path, status: :see_other
     end
@@ -141,7 +142,11 @@ module Admin
     end
 
     def set_connection
-      @connection = LlmConnection.active_connection
+      @connection = LlmConnection.current
+    end
+
+    def set_provider
+      @provider = InferenceProvider.by_title.first
     end
 
     def render_edit_with_errors
@@ -192,9 +197,9 @@ module Admin
     end
 
     # The models are a tab of the LLM settings, and that tab is offered only
-    # while the AI features are switched on and a server is configured.
-    def require_enabled_connection
-      return if Setting.llm_features_enabled? && @connection.configured?
+    # while the AI features are switched on and a provider is stored.
+    def require_available
+      return if LlmConnection.available?
 
       flash[:notice] = t("admin.llm_connections.disabled_notice")
       redirect_to llm_connection_path, status: :see_other
@@ -283,19 +288,19 @@ module Admin
     # is the one thing an admin-sourced verdict is supposed to survive.
     def apply_capabilities(llm_model, submitted, pin_type:)
       embedding = submitted[:model_type] == "embedding"
-      assert(llm_model.external_id, :embeddings, embedding ? "supported" : "unsupported") if pin_type
+      assert(llm_model, :embeddings, embedding ? "supported" : "unsupported") if pin_type
 
       Llm::Capabilities::CHAT.each do |capability|
         next unless embedding || submitted.key?(:"capability_#{capability}")
 
         state = embedding ? nil : submitted[:"capability_#{capability}"].presence
-        assert(llm_model.external_id, capability, state)
+        assert(llm_model, capability, state)
       end
     end
 
-    def assert(model_id, capability, state)
-      verdict = @connection.capability_verdicts
-                           .find_or_initialize_by(model_id:, capability: capability.to_s)
+    def assert(llm_model, capability, state)
+      verdict = llm_model.inference_provider.capability_verdicts
+                         .find_or_initialize_by(model_id: llm_model.external_id, capability: capability.to_s)
 
       if state.blank?
         # "Not specified" clears an assertion rather than recording ignorance as

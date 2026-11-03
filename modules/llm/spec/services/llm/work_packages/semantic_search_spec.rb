@@ -33,7 +33,8 @@ require_module_spec_helper
 RSpec.describe Llm::WorkPackages::SemanticSearch,
                with_flag: { llm_connection: true, semantic_search: true },
                with_settings: { llm_features_enabled: true } do
-  let!(:connection) { create(:llm_connection, :with_models) }
+  let!(:provider) { create(:inference_provider, :with_models) }
+  let(:connection) { LlmConnection.current }
   let(:session_double) { instance_double(Llm::Session) }
   let(:embedding_double) { instance_double(RubyLLM::Embedding, vectors: [0.1, 0.2, 0.3]) }
 
@@ -53,7 +54,7 @@ RSpec.describe Llm::WorkPackages::SemanticSearch,
     end
 
     context "when no index is bound although a default embedding model would resolve" do
-      let(:connection) { create(:llm_connection, :with_models, default_embedding_model_identifier: "bge-m3") }
+      let(:provider) { create(:inference_provider, :with_models, default_embedding_model_identifier: "bge-m3") }
 
       it "is false" do
         expect(described_class).not_to be_available
@@ -78,7 +79,7 @@ RSpec.describe Llm::WorkPackages::SemanticSearch,
 
     it "is false when the index model is no longer offered by the server" do
       activate_semantic_index
-      connection.models.find_by(external_id: "bge-m3").update!(active: false)
+      provider.models.find_by(external_id: "bge-m3").update!(active: false)
 
       expect(described_class).not_to be_available
     end
@@ -99,7 +100,7 @@ RSpec.describe Llm::WorkPackages::SemanticSearch,
 
   describe ".query_vector" do
     before do
-      allow(Llm::Session).to receive(:for).with(connection).and_return(session_double)
+      allow(Llm::Session).to receive(:for).with(provider).and_return(session_double)
       allow(session_double).to receive(:embed).and_return(embedding_double)
     end
 

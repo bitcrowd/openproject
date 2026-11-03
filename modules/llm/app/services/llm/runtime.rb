@@ -44,7 +44,7 @@ module Llm
     # :unbound          - nothing has chosen a model for this feature yet
     # :model_missing    - the chosen model is not in the server's catalogue
     # :incapable        - the chosen model is known not to support what is needed
-    Resolution = Data.define(:feature, :connection, :model, :status, :missing_capabilities) do
+    Resolution = Data.define(:feature, :model, :status, :missing_capabilities) do
       def ready? = status == :ready
 
       def model_id = model&.external_id
@@ -71,7 +71,7 @@ module Llm
 
       # @return [Llm::Session]
       def session(**)
-        Llm::Session.for(connection, **)
+        Llm::Session.for(model.inference_provider, **)
       end
 
       private
@@ -119,11 +119,11 @@ module Llm
     attr_reader :feature, :override
 
     def connection
-      @connection ||= LlmConnection.active_connection
+      @connection ||= LlmConnection.current
     end
 
     def resolved_model
-      return connection.models.find_by(id: effective_override) if effective_override
+      return LlmModel.find_by(id: effective_override) if effective_override
 
       active_index_model || binding&.llm_model || connection.default_model_for(feature)
     end
@@ -152,16 +152,11 @@ module Llm
     def unsupported_capabilities(model)
       return [] if feature.requires.empty?
 
-      connection.capability_verdicts
-                .for_model(model.external_id)
-                .blocking(feature.requires)
-                .pluck(:capability)
-                .map(&:to_sym)
+      model.capability_verdicts.blocking(feature.requires).pluck(:capability).map(&:to_sym)
     end
 
     def resolution(status, model: nil, missing_capabilities: [])
-      Resolution.new(feature:, connection: status == :feature_disabled ? nil : connection,
-                     model:, status:, missing_capabilities:)
+      Resolution.new(feature:, model:, status:, missing_capabilities:)
     end
   end
 end

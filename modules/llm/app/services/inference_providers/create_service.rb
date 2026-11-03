@@ -27,20 +27,19 @@
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-module LlmConnections
-  # Confirms removing the stored API key.
-  #
-  # No confirmation checkbox: the key itself can simply be pasted again.
-  class DeleteApiKeyDialogComponent < ApplicationComponent
-    include OpTurbo::Streamable
-    include OpPrimer::ComponentHelpers
+module InferenceProviders
+  class CreateService < ::BaseServices::Create
+    private
 
-    TEST_SELECTOR = "llm-connection--delete-api-key-dialog"
+    # In the background, because a large catalogue would keep the save waiting.
+    # Afterwards the list is only refreshed by hand.
+    def after_perform(service_call)
+      super.tap do
+        next unless service_call.success?
 
-    alias_method :connection, :model
-
-    def form_arguments
-      { action: url_helpers.api_key_llm_connection_path, method: :delete }
+        ::Llm::SyncModelsJob.perform_later(service_call.result.id)
+        ::Llm::HealthCheckJob.toggle_cron_job
+      end
     end
   end
 end

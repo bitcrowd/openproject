@@ -31,7 +31,7 @@ require "spec_helper"
 
 RSpec.describe Llm::Adapters do
   def adapter_for(api_format)
-    described_class.for(build(:llm_connection, api_format:))
+    described_class.for(build(:inference_provider, api_format:))
   end
 
   describe ".for" do

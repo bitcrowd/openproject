@@ -28,14 +28,10 @@
 #++
 
 module LlmConnections
-  # Used when the connection is provisioned from the environment.
-  #
-  # Inherits from BaseContract, not UpdateContract: seeding must never reach out
-  # to the LLM server, because the container it runs in may well start before the
-  # server does. It also lifts the "configured from environment is read-only"
-  # guard, since this is the code path that legitimately writes those values.
+  # Used when the connection is provisioned from the environment. Lifts the
+  # "configured from environment is read-only" guard, since this is the code path
+  # that legitimately writes those values.
   class EnvironmentUpdateContract < BaseContract
-    attribute :custom_headers
     attribute :env_provisioned_at
     attribute :env_fingerprint
 

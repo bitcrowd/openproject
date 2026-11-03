@@ -30,9 +30,10 @@
 require "spec_helper"
 
 RSpec.describe LlmConnections::SelectableModelsQuery do
-  subject(:options) { described_class.new(connection, feature, bound_model:).call }
+  subject(:options) { described_class.new(provider, feature, bound_model:).call }
 
-  let(:connection) { create(:llm_connection, :with_models) }
+  let(:provider) { create(:inference_provider, :with_models) }
+  let(:connection) { LlmConnection.current }
   let(:feature) { OpenProject::Llm::Features[feature_key] }
   let(:feature_key) { :spec_only_vision_feature }
   let(:bound_model) { nil }
@@ -42,7 +43,7 @@ RSpec.describe LlmConnections::SelectableModelsQuery do
   after { OpenProject::Llm::Features.all.delete(feature_key) }
 
   def record_verdict(model_id, state)
-    create(:llm_capability_verdict, llm_connection: connection, model_id:, capability: "vision", state:, source: "probe")
+    create(:llm_capability_verdict, inference_provider: provider, model_id:, capability: "vision", state:, source: "probe")
   end
 
   it "offers every chat model while nothing rules one out" do
@@ -64,7 +65,7 @@ RSpec.describe LlmConnections::SelectableModelsQuery do
   end
 
   describe "#models_left_out?" do
-    subject(:query) { described_class.new(connection, feature, bound_model:) }
+    subject(:query) { described_class.new(provider, feature, bound_model:) }
 
     it "is false while nothing rules a model out" do
       expect(query).not_to be_models_left_out
@@ -77,7 +78,7 @@ RSpec.describe LlmConnections::SelectableModelsQuery do
     end
 
     context "when the only ruled out model is the one the feature is bound to" do
-      let(:bound_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
+      let(:bound_model) { provider.models.find_by!(external_id: "qwen3.6-27b") }
 
       it "is false, because that model stays listed" do
         record_verdict("qwen3.6-27b", "unsupported")
@@ -94,13 +95,13 @@ RSpec.describe LlmConnections::SelectableModelsQuery do
   end
 
   context "when the feature is bound to the ruled out model" do
-    let(:bound_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
+    let(:bound_model) { provider.models.find_by!(external_id: "qwen3.6-27b") }
 
     it "keeps it listed, marked as no longer qualifying" do
       record_verdict("qwen3.6-27b", "unsupported")
 
       expect(options).to contain_exactly(
-        described_class::Option.new(model: connection.models.find_by!(external_id: "bge-m3"), qualifies: true),
+        described_class::Option.new(model: provider.models.find_by!(external_id: "bge-m3"), qualifies: true),
         described_class::Option.new(model: bound_model, qualifies: false)
       )
     end

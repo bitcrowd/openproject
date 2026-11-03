@@ -29,21 +29,19 @@
 
 module Admin
   class LlmHealthStatusController < ApplicationController
-    include OpTurbo::ComponentStream
-
     layout "admin"
 
     before_action :require_feature
     before_action :require_admin
-    before_action :find_connection
-    before_action :require_enabled_connection
+    before_action :require_features_enabled
+    before_action :find_inference_provider
 
     menu_item :llm_connection
 
     helper_method :tally_counts
 
     def show
-      @report = @connection.latest_health_report
+      @report = @inference_provider.latest_health_report
 
       respond_to do |format|
         format.html
@@ -60,18 +58,11 @@ module Admin
     end
 
     # A full run, including the billed completion: an administrator clicking
-    # "Run checks" is asking whether the connection actually works.
+    # "Run checks" is asking whether the provider actually works.
     def create
       report = run_checks
       flash[:notice] = t(".success", **tally_counts(report))
-      redirect_to llm_connection_health_status_report_path, status: :see_other
-    end
-
-    def create_health_status_report
-      run_checks
-      update_via_turbo_stream(component: LlmConnections::SidePanel::HealthStatusComponent.new(@connection))
-      render_success_flash_message_via_turbo_stream(message: t(".success"))
-      respond_with_turbo_streams
+      redirect_to inference_provider_health_status_report_path(@inference_provider), status: :see_other
     end
 
     private
@@ -81,8 +72,8 @@ module Admin
     # credential.
     def text_report(timestamp)
       {
-        connection: @connection.identifier,
-        configuration: @connection.non_confidential_configuration,
+        inference_provider: @inference_provider.title,
+        configuration: @inference_provider.non_confidential_configuration,
         ran_at: timestamp,
         results: @report ? @report.results.map(&:to_h) : []
       }.to_yaml(stringify_names: true)
@@ -95,22 +86,18 @@ module Admin
     end
 
     def run_checks
-      @connection.deep_health_check = true
-      report = Llm::Validators::ConnectionValidator.new(@connection).call
+      @inference_provider.deep_health_check = true
+      report = Llm::Validators::ConnectionValidator.new(@inference_provider).call
       report.save!
       report
     end
 
-    # HealthReports::Validator builds the report through the association, which
-    # would insert an unpersisted singleton along with it.
-    def find_connection
-      @connection = LlmConnection.active_connection
-
-      redirect_to llm_connection_path unless @connection.persisted?
+    def find_inference_provider
+      @inference_provider = InferenceProvider.find(params.expect(:inference_provider_id))
     end
 
-    def require_enabled_connection
-      return if Setting.llm_features_enabled? && @connection.configured?
+    def require_features_enabled
+      return if Setting.llm_features_enabled?
 
       flash[:notice] = t("admin.llm_connections.disabled_notice")
       redirect_to llm_connection_path, status: :see_other

@@ -28,7 +28,7 @@
 #++
 
 module LlmConnections
-  # The models offerable to a feature.
+  # The models one provider can offer to a feature.
   #
   # A feature is offered the models of its own kind: chat features never see an
   # embedding model, and an embedding feature sees only models known to embed.
@@ -43,10 +43,10 @@ module LlmConnections
   class SelectableModelsQuery
     Option = Data.define(:model, :qualifies)
 
-    def initialize(connection, feature, bound_model: nil)
-      @connection = connection
+    def initialize(provider, feature, bound_model: nil)
+      @provider = provider
       @feature = feature
-      @bound_model = bound_model
+      @bound_model = bound_model if bound_model&.inference_provider_id == provider.id
     end
 
     def call
@@ -59,7 +59,7 @@ module LlmConnections
 
     private
 
-    attr_reader :connection, :feature, :bound_model
+    attr_reader :provider, :feature, :bound_model
 
     def offerable_models
       (qualifying_models + [bound_model]).compact.uniq
@@ -71,11 +71,11 @@ module LlmConnections
 
     # Withdrawn models are not offered: both lists are built from the active ones.
     def models_of_kind
-      @models_of_kind ||= (feature.embedding? ? connection.embedding_models : connection.chat_models).to_a
+      @models_of_kind ||= (feature.embedding? ? provider.embedding_models : provider.chat_models).to_a
     end
 
     def ruled_out_model_ids
-      @ruled_out_model_ids ||= connection.capability_verdicts.blocking(feature.requires).distinct.pluck(:model_id)
+      @ruled_out_model_ids ||= provider.capability_verdicts.blocking(feature.requires).distinct.pluck(:model_id)
     end
   end
 end

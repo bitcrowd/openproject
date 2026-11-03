@@ -45,7 +45,8 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
   end
 
   describe "with the feature flag off", with_flag: { llm_connection: false } do
-    let!(:connection) { create(:llm_connection, :with_models, base_url:) }
+    let!(:provider) { create(:inference_provider, :with_models, base_url:) }
+    let(:connection) { LlmConnection.current }
 
     before { login_as admin }
 
@@ -54,14 +55,15 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
       expect(response).to have_http_status(:not_found)
 
       patch llm_feature_binding_path("description_assistant"),
-            params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "qwen3.6-27b")&.id } }
+            params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "qwen3.6-27b")&.id } }
       expect(response).to have_http_status(:not_found)
       expect(connection.feature_bindings).to be_empty
     end
   end
 
   describe "as a non-admin" do
-    let!(:connection) { create(:llm_connection, :with_models, base_url:) }
+    let!(:provider) { create(:inference_provider, :with_models, base_url:) }
+    let(:connection) { LlmConnection.current }
 
     before { login_as create(:user) }
 
@@ -73,7 +75,7 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
 
     it "refuses to store a model" do
       patch llm_feature_binding_path("description_assistant"),
-            params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "qwen3.6-27b")&.id } }
+            params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "qwen3.6-27b")&.id } }
 
       expect(response).to have_http_status(:forbidden)
       expect(connection.feature_bindings).to be_empty
@@ -91,7 +93,7 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
 
     it "sends the administrator to the settings while the features are off",
        with_settings: { llm_features_enabled: false } do
-      create(:llm_connection, :with_models, base_url:)
+      create(:inference_provider, :with_models, base_url:)
 
       get llm_feature_bindings_path
 
@@ -100,7 +102,8 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
     end
 
     context "with a configured connection" do
-      let!(:connection) { create(:llm_connection, :with_models, base_url:) }
+      let!(:provider) { create(:inference_provider, :with_models, base_url:) }
+      let(:connection) { LlmConnection.current }
 
       it "lists every registered feature" do
         get llm_feature_bindings_path
@@ -138,13 +141,13 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
       end
 
       it "names the default model a feature inherits" do
-        default = connection.models.find_by!(external_id: "qwen3.6-27b")
+        default = provider.models.find_by!(external_id: "qwen3.6-27b")
         default.update!(display_name: "Qwen 3.6")
         connection.update!(default_chat_model: default)
 
         get llm_feature_bindings_path
 
-        expect(response.body).to include("Use the default (Qwen 3.6)")
+        expect(response.body).to include("Use the default (Qwen 3.6 @ #{provider.title})")
       end
 
       context "without pgvector" do
@@ -171,13 +174,14 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
   end
 
   describe "PATCH /admin/llm_feature_bindings/:id" do
-    let!(:connection) { create(:llm_connection, :with_models, base_url:) }
+    let!(:provider) { create(:inference_provider, :with_models, base_url:) }
+    let(:connection) { LlmConnection.current }
 
     before { login_as admin }
 
     it "stores the chosen model" do
       patch llm_feature_binding_path("description_assistant"),
-            params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "qwen3.6-27b")&.id } }
+            params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "qwen3.6-27b")&.id } }
 
       expect(response).to have_http_status(:see_other)
       expect(connection.feature_bindings.find_by(feature_key: "description_assistant").llm_model&.external_id)
@@ -210,17 +214,17 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
                              body: { data: [{ embedding: [0.1, 0.2] }] }.to_json)
 
       patch llm_feature_binding_path("semantic_search"),
-            params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "bge-m3")&.id } }
+            params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "bge-m3")&.id } }
 
       expect(request).to have_been_made.once
-      verdict = connection.capability_verdicts.find_by(model_id: "bge-m3", capability: "embeddings")
+      verdict = provider.capability_verdicts.find_by(model_id: "bge-m3", capability: "embeddings")
       expect(verdict.state).to eq("supported")
       expect(verdict.dimensions).to eq(2)
     end
 
     it "does not probe for a feature that requires nothing" do
       patch llm_feature_binding_path("description_assistant"),
-            params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "qwen3.6-27b")&.id } }
+            params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "qwen3.6-27b")&.id } }
 
       expect(a_request(:post, "#{base_url}/embeddings")).not_to have_been_made
     end
@@ -228,7 +232,7 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
     context "when the probe rules out a capability the feature requires" do
       let(:feature_key) { :spec_only_vision_feature }
       let(:verdict) do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen3.6-27b", capability: "vision",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "qwen3.6-27b", capability: "vision",
                                         state: "unsupported", source: "probe")
       end
 
@@ -259,7 +263,7 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
 
       it "names the capability the verdict is about" do
         patch llm_feature_binding_path(feature_key),
-              params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "qwen3.6-27b")&.id } }
+              params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "qwen3.6-27b")&.id } }
 
         expect(flash[:error]).to include("does not support Vision")
       end
@@ -278,7 +282,7 @@ RSpec.describe "Admin AI feature configuration", :llm_server_helpers, :skip_csrf
 
     it "404s for a feature that is not registered" do
       patch llm_feature_binding_path("no_such_feature"),
-            params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "x")&.id } }
+            params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "x")&.id } }
 
       expect(response).to have_http_status(:not_found)
     end

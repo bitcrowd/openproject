@@ -49,16 +49,6 @@ RSpec.describe "LLM connection administration",
          "opce-autocompleter[data-input-name*='default_chat_model_id']")
   end
 
-  # The kebab is a Primer ActionMenu: clicking it before its behavior is
-  # attached silently does nothing, so wait for the page to settle first and
-  # for the item itself to become visible.
-  def choose_action(item)
-    expect(page).to have_test_selector("llm-connection--actions")
-    find_test_selector("llm-connection--actions").click
-    expect(page).to have_test_selector(item)
-    find_test_selector(item).click
-  end
-
   context "when nothing is configured yet" do
     it "renders an accessible, empty settings page" do
       visit llm_connection_path
@@ -101,6 +91,37 @@ RSpec.describe "LLM connection administration",
       expect(page).to have_current_path(llm_feature_bindings_path)
     end
 
+    it "creates the provider and switches the features on with one save" do
+      mock_llm_models_response(base_url)
+
+      visit llm_connection_path
+
+      check "Enable LLMs for this instance"
+      fill_in "Host URL", with: base_url
+      fill_in "API key", with: "sk-typed"
+      click_on "Save"
+
+      expect(page).to have_test_selector("llm-settings--tabs")
+      expect(page).to have_no_field("Host URL")
+      expect(InferenceProvider.sole).to have_attributes(title: "example.com", api_key: "sk-typed")
+    end
+
+    it "saves nothing when the server refuses, and keeps the form as it was" do
+      mock_llm_models_response(base_url, response_code: 401)
+
+      visit llm_connection_path
+
+      check "Enable LLMs for this instance"
+      fill_in "Host URL", with: base_url
+      fill_in "API key", with: "sk-typed"
+      click_on "Save"
+
+      expect(page).to have_text("was rejected by the LLM server")
+      expect(page).to have_checked_field("Enable LLMs for this instance")
+      expect(page).to have_field("Host URL", with: base_url)
+      expect(InferenceProvider.count).to eq(0)
+    end
+
     it "describes the server the selected API format expects" do
       visit llm_connection_path
 
@@ -115,33 +136,10 @@ RSpec.describe "LLM connection administration",
     end
   end
 
-  context "when a key is stored" do
-    let!(:connection) { create(:llm_connection, base_url:, api_key: "sk-original") }
-
-    before { Setting.llm_features_enabled = true }
-
-    it "removes the key from beside the field" do
-      visit llm_connection_path
-
-      expect(page).to have_field("API key", placeholder: "API key stored")
-
-      find_test_selector("llm-connection--remove-api-key").click
-
-      within_test_selector("llm-connection--delete-api-key-dialog") do
-        click_on "Remove API key"
-      end
-
-      expect(page).to have_no_test_selector("llm-connection--remove-api-key")
-      expect(page).to have_field("API key", placeholder: nil)
-      expect(connection.reload.api_key).to be_nil
-    end
-  end
-
   context "with a configured connection" do
-    let!(:connection) { create(:llm_connection, :with_models, base_url:) }
+    let!(:provider) { create(:inference_provider, :with_models, base_url:) }
+    let(:connection) { LlmConnection.current }
 
-    # Written for real rather than through with_settings:, which stubs
-    # Setting.[] and would hide the write the disconnect example asserts.
     before do
       Setting.llm_features_enabled = true
       mock_llm_models_response(base_url)
@@ -149,14 +147,14 @@ RSpec.describe "LLM connection administration",
 
     it "renders the model list accessibly" do
       create(:llm_model,
-             llm_connection: connection,
+             inference_provider: provider,
              external_id: "publisher/a-very-long-model-name-that-does-not-fit-the-column-32b-instruct-2026-05")
 
       visit llm_models_path
 
       expect(page).to have_test_selector("llm-model--refresh-button")
-      expect(page).to have_text(connection.models.first.external_id)
-      expect(page).to have_test_selector("llm-model--edit-#{connection.models.first.id}")
+      expect(page).to have_text(provider.models.first.external_id)
+      expect(page).to have_test_selector("llm-model--edit-#{provider.models.first.id}")
       expect(page).to be_axe_clean
     end
 
@@ -192,67 +190,29 @@ RSpec.describe "LLM connection administration",
 
       expect(page).to have_current_path(llm_models_path)
       expect(page).to have_text("nomic-embed-text")
-      expect(connection.models.find_by(external_id: "nomic-embed-text")).to be_embedding
-    end
-
-    it "removes the stored API key" do
-      visit llm_connection_path
-      expect(page).to have_field("Host URL")
-
-      choose_action("llm-connection--delete-api-key")
-
-      within_test_selector("llm-connection--delete-api-key-dialog") do
-        # The muted description and the danger button label Primer renders around
-        # our content miss the 4.5:1 contrast ratio, app-wide.
-        expect(page).to be_axe_clean.skipping("color-contrast")
-        click_on "Remove API key"
-      end
-
-      wait_for { connection.reload.api_key }.to be_blank
-      expect(connection.base_url).to eq(base_url)
-    end
-
-    it "disconnects without losing the configuration" do
-      visit llm_connection_path
-      expect(page).to have_field("Host URL")
-
-      choose_action("llm-connection--disconnect")
-
-      within_test_selector("llm-connection--disconnect-dialog") do
-        expect(page).to be_axe_clean.skipping("color-contrast")
-        click_on "Disconnect"
-      end
-
-      wait_for do
-        Setting.clear_cache
-        Setting.llm_features_enabled?
-      end.to be(false)
-      expect(connection.reload.api_key).to be_blank
-      # The point of disconnecting rather than deleting.
-      expect(connection.models.count).to eq(2)
+      expect(provider.models.find_by(external_id: "nomic-embed-text")).to be_embedding
     end
 
     describe "the health report" do
       before { mock_llm_chat_response(base_url) }
 
       it "runs the checks and renders the report accessibly" do
-        visit llm_connection_path
+        visit inference_provider_health_status_report_path(provider)
 
-        find_test_selector("llm-connection--run-health-checks").click
+        click_on "Run checks"
 
-        expect(page).to have_text("The checks have run.")
-        wait_for { connection.health_reports.count }.to eq(1)
+        expect(page).to have_text(/The checks have run: \d+ passed/)
+        wait_for { provider.health_reports.count }.to eq(1)
 
-        find_test_selector("llm-connection--open-health-report").click
+        visit inference_provider_health_status_report_path(provider)
 
-        expect(page).to have_current_path(llm_connection_health_status_report_path)
         expect(page).to have_text("Configuration")
         expect(page).to be_axe_clean
 
         find_test_selector("llm-connection--rerun-health-checks").click
 
         expect(page).to have_text(/The checks have run: \d+ passed/)
-        expect(connection.health_reports.count).to eq(2)
+        expect(provider.health_reports.count).to eq(2)
       end
     end
   end

@@ -34,7 +34,7 @@ module Llm
     # This is the only check that proves a connection works, and the only one
     # available at all for a deployment that publishes no model list. It is also
     # the only one that costs money, so it runs on demand rather than on the
-    # schedule -- see LlmConnection#deep_health_check.
+    # schedule -- see InferenceProvider#deep_health_check.
     class InferenceValidator < HealthReports::ValidatorGroup
       PROMPT = "ping"
 
@@ -77,11 +77,15 @@ module Llm
         end
       end
 
-      # The configured default first, so the check exercises what features will
-      # actually use rather than an arbitrary entry in the catalogue. Without one,
-      # a model that can chat and is switched on, never one that only embeds.
+      # The configured default first if it is on this provider, so the check
+      # exercises what features will actually use rather than an arbitrary entry
+      # in the catalogue. Without one, a model that can chat and is switched on,
+      # never one that only embeds.
       def chat_model_id
-        subject.default_chat_model&.external_id || subject.chat_model_ids.first
+        default = LlmConnection.current.default_chat_model
+        return default.external_id if default&.inference_provider_id == subject.id
+
+        subject.chat_model_ids.first
       end
 
       # Never retried: a failing check should report the failure, not pay for it

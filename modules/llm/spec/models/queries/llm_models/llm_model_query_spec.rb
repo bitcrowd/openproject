@@ -32,20 +32,12 @@ require "spec_helper"
 RSpec.describe Queries::LlmModels::LlmModelQuery do
   subject(:results) { described_class.new.results.pluck(:external_id) }
 
-  let(:active_connection) { create(:llm_connection) }
-  let(:inactive_connection) { create(:llm_connection, active: false) }
-
   before do
-    create(:llm_model, llm_connection: active_connection, external_id: "qwen3.6-27b")
-    create(:llm_model, llm_connection: active_connection, external_id: "bge-m3")
-    create(:llm_model, llm_connection: inactive_connection, external_id: "e5-large")
+    create(:llm_model, external_id: "qwen3.6-27b")
+    create(:llm_model, external_id: "bge-m3")
   end
 
-  it "lists the models of the active connection by identifier" do
+  it "lists the models by identifier" do
     expect(results).to eq(["bge-m3", "qwen3.6-27b"])
-  end
-
-  it "leaves out the models of an inactive connection" do
-    expect(results).not_to include("e5-large")
   end
 end

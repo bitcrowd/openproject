@@ -36,18 +36,17 @@ module Admin
 
     before_action :require_feature
     before_action :require_admin
-    before_action :set_connection
-    before_action :require_enabled_connection
+    before_action :require_available
     before_action :find_semantic_index,
                   only: %i[edit_dialog update deletion_dialog destroy start_indexing stop_indexing
                            activation_dialog activate]
 
     def new_dialog
-      respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(SemanticIndex.new, connection: @connection)
+      respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(SemanticIndex.new)
     end
 
     def edit_dialog
-      respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(@semantic_index, connection: @connection)
+      respond_with_dialog LlmConnections::SemanticIndexes::DialogComponent.new(@semantic_index)
     end
 
     def create
@@ -72,7 +71,7 @@ module Admin
       semantic_index.prefill_from_model(LlmModel.find_by(id: params.dig(:semantic_index, :prefilled_from_model_id)))
 
       update_via_turbo_stream(
-        component: LlmConnections::SemanticIndexes::FormComponent.new(semantic_index, connection: @connection, refreshed: true)
+        component: LlmConnections::SemanticIndexes::FormComponent.new(semantic_index, refreshed: true)
       )
       respond_with_turbo_streams
     end
@@ -162,7 +161,7 @@ module Admin
 
       result.on_failure do
         update_via_turbo_stream(
-          component: LlmConnections::SemanticIndexes::FormComponent.new(result.result, connection: @connection),
+          component: LlmConnections::SemanticIndexes::FormComponent.new(result.result),
           status: :unprocessable_entity
         )
         respond_with_turbo_streams
@@ -174,12 +173,8 @@ module Admin
                         OpenProject::FeatureDecisions.semantic_search_active?
     end
 
-    def set_connection
-      @connection = LlmConnection.active_connection
-    end
-
-    def require_enabled_connection
-      return if Setting.llm_features_enabled? && @connection.configured?
+    def require_available
+      return if LlmConnection.available?
 
       flash[:notice] = t("admin.llm_connections.disabled_notice")
       redirect_to llm_connection_path, status: :see_other

@@ -39,14 +39,17 @@ module LlmConnections
 
     mobile_columns :identifier
 
-    # The connection is passed in rather than derived from the first row: with a
+    # The provider is passed in rather than derived from the first row: with a
     # paginated, filtered list a page can legitimately be empty.
-    def initialize(connection:, **)
+    def initialize(provider:, **)
       super(**)
-      @connection = connection
+      @provider = provider
     end
 
-    attr_reader :connection
+    attr_reader :provider
+
+    # Rows ask this about themselves, so it is loaded once for the table.
+    def connection = @connection ||= LlmConnection.current
 
     def has_footer? = false
 
@@ -71,7 +74,7 @@ module LlmConnections
     # Built once for the whole table so each row does not query for its own
     # verdict. Rows reach this through their +table+ accessor.
     def embeddings_verdicts
-      @embeddings_verdicts ||= connection.capability_verdicts.for_capability(:embeddings).index_by(&:model_id)
+      @embeddings_verdicts ||= provider.capability_verdicts.for_capability(:embeddings).index_by(&:model_id)
     end
 
     def blank_title = I18n.t("admin.llm_models.index.blank_title")

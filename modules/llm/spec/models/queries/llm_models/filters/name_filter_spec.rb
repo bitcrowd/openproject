@@ -30,11 +30,12 @@
 require "spec_helper"
 
 RSpec.describe Queries::LlmModels::Filters::NameFilter do
-  let(:connection) { create(:llm_connection, base_url: "https://example.com/v1") }
-  let!(:qwen) { create(:llm_model, llm_connection: connection, external_id: "qwen3.6-27b") }
-  let!(:named) { create(:llm_model, llm_connection: connection, external_id: "bge-m3", display_name: "Embedder") }
+  let(:provider) { create(:inference_provider, base_url: "https://example.com/v1") }
+  let(:connection) { LlmConnection.current }
+  let!(:qwen) { create(:llm_model, inference_provider: provider, external_id: "qwen3.6-27b") }
+  let!(:named) { create(:llm_model, inference_provider: provider, external_id: "bge-m3", display_name: "Embedder") }
   let!(:reported) do
-    create(:llm_model, llm_connection: connection, external_id: "google/gemma-4", raw_metadata: { "name" => "Gemma Four" })
+    create(:llm_model, inference_provider: provider, external_id: "google/gemma-4", raw_metadata: { "name" => "Gemma Four" })
   end
 
   def matches(operator, value)

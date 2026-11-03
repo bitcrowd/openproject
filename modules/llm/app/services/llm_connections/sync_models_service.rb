@@ -37,20 +37,15 @@ module LlmConnections
     # on how many rows one unbounded response can write.
     MAX_CARDS = 2_000
 
-    def initialize(connection)
-      @connection = connection
+    def initialize(provider)
+      @provider = provider
     end
 
     def call
-      # Before the fetch, so that a deployment change invalidates the old state
-      # even when the new server refuses the model list: keeping the previous
-      # deployment's models and verdicts for another server would be wrong.
-      invalidate_a_different_deployment
-
       store(fetched_cards)
-      Llm::DetectCapabilitiesJob.perform_later
+      Llm::DetectCapabilitiesJob.perform_later(provider.id)
 
-      ServiceResult.success(result: connection)
+      ServiceResult.success(result: provider)
     rescue Llm::Client::Error => e
       failed(e, "failed: #{e.class} #{e.message}", e.message)
     rescue ActiveRecord::ActiveRecordError => e
@@ -60,16 +55,16 @@ module LlmConnections
 
     private
 
-    attr_reader :connection
+    attr_reader :provider
 
     def failed(error, reason, errors)
-      Rails.logger.info { "LLM model sync for connection #{connection.id} #{reason}" }
+      Rails.logger.info { "LLM model sync for provider #{provider.id} #{reason}" }
 
       ServiceResult.failure(errors:, result: error)
     end
 
     def adapter
-      @adapter ||= Llm::Adapters.for(connection)
+      @adapter ||= Llm::Adapters.for(provider)
     end
 
     def fetched_cards
@@ -81,7 +76,7 @@ module LlmConnections
       return cards if oversized.empty?
 
       Rails.logger.warn do
-        "The LLM server of connection #{connection.id} listed #{oversized.size} models with an id longer than " \
+        "The LLM server of provider #{provider.id} listed #{oversized.size} models with an id longer than " \
           "#{LlmModel::MAX_EXTERNAL_ID_LENGTH} characters; skipping them"
       end
       fitting
@@ -91,42 +86,37 @@ module LlmConnections
       return cards if cards.size <= MAX_CARDS
 
       Rails.logger.warn do
-        "The LLM server of connection #{connection.id} listed #{cards.size} models; storing the first #{MAX_CARDS}"
+        "The LLM server of provider #{provider.id} listed #{cards.size} models; storing the first #{MAX_CARDS}"
       end
       cards.first(MAX_CARDS)
     end
 
     def store(cards)
       ActiveRecord::Base.transaction do
-        connection.update!(connection_attributes)
+        provider.update!(sync_attributes)
         upsert(cards)
         withdraw_models_absent_from(cards)
         discard_verdicts_for_vanished_models
       end
 
-      EnrichCapabilitiesService.new(connection).call
+      EnrichCapabilitiesService.new(provider).call
     end
 
-    def connection_attributes
+    def sync_attributes
       now = Time.current
 
       {
         last_synced_at: now,
         last_connected_at: now,
-        connection_fingerprint: fingerprint,
-        options: connection.options.merge("server_flavour" => adapter.server_flavour)
+        options: provider.options.merge("server_flavor" => adapter.server_flavor)
       }
-    end
-
-    def fingerprint
-      @fingerprint ||= connection.settings_fingerprint
     end
 
     def upsert(cards)
       now = Time.current
 
       cards.each do |card|
-        model = connection.models.find_or_initialize_by(external_id: card.fetch(:id))
+        model = provider.models.find_or_initialize_by(external_id: card.fetch(:id))
         model.update!(raw_metadata: merged_metadata(model, card),
                       last_seen_at: now,
                       active: true)
@@ -140,58 +130,11 @@ module LlmConnections
     # needs its own branch to withdraw everything discovered.
     def withdraw_models_absent_from(cards)
       ids = cards.map { |card| card.fetch(:id) }
-      scope = connection.models.discovered
+      scope = provider.models.discovered
       scope = scope.where.not(external_id: ids) if ids.any?
 
       scope.update_all(active: false)
     end
-
-    # A changed base URL or API format means a different deployment, so what
-    # the registry and the probes established about the old one is void. What
-    # an administrator asserted is theirs and survives, as it does on a refresh.
-    def invalidate_a_different_deployment
-      return if connection.connection_fingerprint.blank?
-      return if connection.connection_fingerprint == fingerprint
-
-      forget_the_previous_deployment
-    end
-
-    # Only a successful fetch records the fingerprint (see
-    # +connection_attributes+), so a failed refresh leaves the list stale.
-    #
-    # Discovered rows are deleted rather than switched off. Withdrawal is for a
-    # model the same server stopped offering, where a verdict pointing at it
-    # still names something real; here the server itself is gone, and a list of
-    # another deployment's models is not a catalogue but a leftover. Manual
-    # entries stay: an administrator typed those, and a server change does not
-    # un-type them.
-    #
-    # The two default_*_model_id columns reference llm_models with
-    # on_delete: :nullify, so the database clears them as the rows go. A feature
-    # bound to one is released here. A model a semantic index was written with
-    # stays as a withdrawn row, so the index still names it. Administrator
-    # assertions survive, as they do on an ordinary refresh: they are statements
-    # about a model, not about a server.
-    def forget_the_previous_deployment
-      ActiveRecord::Base.transaction { discard_discovered_models }
-
-      connection.reload
-    end
-
-    def discard_discovered_models
-      release_discovered_models
-      discovered_models.where(id: indexed_model_ids).update_all(active: false)
-      discovered_models.where.not(id: indexed_model_ids).delete_all
-      connection.capability_verdicts.where.not(source: "admin").delete_all
-    end
-
-    def release_discovered_models
-      connection.feature_bindings.where(llm_model_id: discovered_models.select(:id), semantic_index_id: nil).delete_all
-    end
-
-    def discovered_models = connection.models.discovered
-
-    def indexed_model_ids = SemanticIndex.select(:llm_model_id)
 
     # The administrator's context-window override is theirs, and a routine
     # refresh must not silently discard it.
@@ -219,8 +162,8 @@ module LlmConnections
     # except an administrator's assertion: an operator restarting a server must
     # not silently lose one.
     def discard_verdicts_for_vanished_models
-      known = connection.available_model_ids
-      scope = connection.capability_verdicts.where.not(source: "admin")
+      known = provider.available_model_ids
+      scope = provider.capability_verdicts.where.not(source: "admin")
       scope = scope.where.not(model_id: known) if known.any?
 
       scope.delete_all

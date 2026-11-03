@@ -32,8 +32,8 @@ See COPYRIGHT and LICENSE files for more details.
   render(Primer::OpenProject::PageHeader.new) do |header|
     header.with_title { t("menus.admin.llm_connection") }
     header.with_description do
-      if @connection.last_synced_at
-        t(".description", fetched_at: format_time(@connection.last_synced_at))
+      if @provider.last_synced_at
+        t(".description", fetched_at: format_time(@provider.last_synced_at))
       else
         t(".description_unfetched")
       end
@@ -47,20 +47,7 @@ See COPYRIGHT and LICENSE files for more details.
   end
 %>
 
-<% if @connection.models_stale? %>
-  <%=
-    render(
-      Primer::Alpha::Banner.new(
-        scheme: :warning,
-        icon: :alert,
-        mb: 3,
-        test_selector: "llm-models--stale"
-      )
-    ) { t(".stale_warning") }
-  %>
-<% end %>
-
 <%= render(LlmConnections::DefaultModelsComponent.new(@connection)) %>
 
 <%= render(LlmConnections::Models::SubHeaderComponent.new(@query)) %>
-<%= render(LlmConnections::ModelsTableComponent.new(rows: @models, connection: @connection)) %>
+<%= render(LlmConnections::ModelsTableComponent.new(rows: @models, provider: @provider)) %>

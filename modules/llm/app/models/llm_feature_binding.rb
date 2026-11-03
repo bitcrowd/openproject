@@ -39,7 +39,7 @@ class LlmFeatureBinding < ApplicationRecord
 
   validates :feature_key, presence: true, uniqueness: { scope: :llm_connection_id }
   validate :feature_registered
-  validate :model_offered_by_connection, if: :llm_model_id_changed?
+  validate :model_offered, if: :llm_model_id_changed?
   validate :semantic_index_only_for_embedding, if: :semantic_index_id_changed?
 
   def feature
@@ -77,9 +77,9 @@ class LlmFeatureBinding < ApplicationRecord
 
   # Only checked when it changes, so a catalogue that shrinks underneath a stored
   # binding does not block unrelated saves; #dangling? reports that state.
-  def model_offered_by_connection
-    return if llm_model_id.blank? || llm_connection.nil?
-    return if llm_connection.models.active.exists?(id: llm_model_id)
+  def model_offered
+    return if llm_model_id.blank?
+    return if LlmModel.active.exists?(id: llm_model_id)
 
     errors.add(:llm_model_id, :not_available)
   end

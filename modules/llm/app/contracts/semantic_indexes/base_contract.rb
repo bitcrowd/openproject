@@ -42,7 +42,7 @@ module SemanticIndexes
     private
 
     def model_offered
-      return if LlmConnection.active_connection&.embedding_models&.exists?(id: model.llm_model_id)
+      return if model.llm_model&.offers_embeddings?
 
       errors.add(:llm_model_id, :not_offered)
     end

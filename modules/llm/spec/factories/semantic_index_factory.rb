@@ -36,10 +36,10 @@ FactoryBot.define do
     sequence(:title) { |n| "Semantic index #{n}" }
     description { nil }
     llm_model do
-      connection = LlmConnection.active.first || create(:llm_connection)
+      provider = InferenceProvider.first || create(:inference_provider)
 
-      connection.models.find_by(external_id: model_identifier) ||
-        create(:llm_model, llm_connection: connection, external_id: model_identifier)
+      provider.models.find_by(external_id: model_identifier) ||
+        create(:llm_model, inference_provider: provider, external_id: model_identifier)
     end
     embedding_vector_dimensions { 1024 }
     context_token_length { 8192 }

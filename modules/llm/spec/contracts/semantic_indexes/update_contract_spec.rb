@@ -47,7 +47,7 @@ RSpec.describe SemanticIndexes::UpdateContract do
   context "when the stored model is no longer offered" do
     let(:current_user) { build_stubbed(:admin) }
 
-    before { connection.capability_verdicts.destroy_all }
+    before { provider.capability_verdicts.destroy_all }
 
     it "still allows renaming" do
       semantic_index.title = "Renamed"
@@ -90,11 +90,11 @@ RSpec.describe SemanticIndexes::UpdateContract do
   # The admin moves the index on to a compatible model, so its vectors stay.
   context "when moving the Semantic Index to another embedding model" do
     let(:current_user) { build_stubbed(:admin) }
-    let(:other_model) { create(:llm_model, llm_connection: connection, external_id: "bge-m3-elsewhere") }
+    let(:other_model) { create(:llm_model, inference_provider: provider, external_id: "bge-m3-elsewhere") }
 
     before do
-      connection.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
-                                             state: "supported", source: "probe", checked_at: Time.current)
+      provider.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
+                                           state: "supported", source: "probe", checked_at: Time.current)
       semantic_index.update!(state:)
       semantic_index.llm_model = other_model
     end
@@ -124,7 +124,7 @@ RSpec.describe SemanticIndexes::UpdateContract do
 
     before do
       semantic_index.update!(state: "ready")
-      semantic_index.llm_model = connection.models.find_by!(external_id: "qwen3.6-27b")
+      semantic_index.llm_model = provider.models.find_by!(external_id: "qwen3.6-27b")
     end
 
     it "is refused" do

@@ -32,7 +32,7 @@ require_module_spec_helper
 
 RSpec.describe Llm::Session, :llm_server_helpers, :webmock do
   let(:base_url) { "https://example.com/v1" }
-  let(:connection) { create(:llm_connection, base_url:, api_key: "sk-test-key") }
+  let(:connection) { create(:inference_provider, base_url:, api_key: "sk-test-key") }
 
   describe ".supports?" do
     it "rejects the formats a connection cannot supply credentials for" do

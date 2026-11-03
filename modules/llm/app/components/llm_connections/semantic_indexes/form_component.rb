@@ -35,7 +35,7 @@ module LlmConnections
 
       FORM_ID = "llm-semantic-index-form"
 
-      options connection: nil, refreshed: false
+      options refreshed: false
 
       private
 
@@ -69,10 +69,13 @@ module LlmConnections
       end
 
       def model_options
-        LlmConnections::SelectableModelsQuery
-          .new(connection, OpenProject::Llm::Features[:semantic_search],
-               bound_model: LlmModel.find_by(id: model.llm_model_id_in_database))
-          .call
+        bound_model = LlmModel.find_by(id: model.llm_model_id_in_database)
+
+        InferenceProvider.by_title.flat_map do |provider|
+          LlmConnections::SelectableModelsQuery
+            .new(provider, OpenProject::Llm::Features[:semantic_search], bound_model:)
+            .call
+        end
       end
     end
   end

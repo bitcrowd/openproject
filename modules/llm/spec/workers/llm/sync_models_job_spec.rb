@@ -32,19 +32,28 @@ require_module_spec_helper
 
 RSpec.describe Llm::SyncModelsJob, :llm_server_helpers, :webmock do
   let(:base_url) { "https://example.com/v1" }
+  let!(:provider) { create(:inference_provider, base_url:) }
 
-  it "refreshes the model list of every stored connection" do
-    connection = create(:llm_connection, base_url:)
+  it "refreshes the model list of the provider" do
     request = mock_llm_models_response(base_url)
 
-    described_class.perform_now
+    described_class.perform_now(provider.id)
 
     expect(request).to have_been_made.once
-    expect(connection.reload.available_model_ids).to contain_exactly("qwen3.6-27b", "bge-m3")
+    expect(provider.reload.available_model_ids).to contain_exactly("qwen3.6-27b", "bge-m3")
   end
 
-  it "does nothing while no connection is stored" do
-    expect { described_class.perform_now }.not_to raise_error
+  it "does nothing once the provider is gone" do
+    expect { described_class.perform_now(0) }.not_to raise_error
+  end
+
+  it "leaves another provider alone" do
+    other = create(:inference_provider, base_url: "https://other.example/v1")
+    mock_llm_models_response(base_url)
+
+    described_class.perform_now(provider.id)
+
+    expect(other.models).to be_empty
   end
 
   # The job exists for the startup race with a provisioned LLM sidecar, which
@@ -56,10 +65,9 @@ RSpec.describe Llm::SyncModelsJob, :llm_server_helpers, :webmock do
     "throttles requests" => { response_code: 429 }
   }.each do |situation, response|
     it "tries again when the server #{situation}" do
-      create(:llm_connection, base_url:)
       mock_llm_models_response(base_url, **response)
 
-      expect { described_class.perform_now }.to have_enqueued_job(described_class)
+      expect { described_class.perform_now(provider.id) }.to have_enqueued_job(described_class)
     end
   end
 
@@ -68,29 +76,26 @@ RSpec.describe Llm::SyncModelsJob, :llm_server_helpers, :webmock do
       "an empty list" => { models: [] },
       "Ollama's list before its first pull" => { body: { object: "list", data: nil }.to_json }
     }.each do |answer, response|
-      it "tries again when a connection that has never synced gets #{answer}" do
-        create(:llm_connection, base_url:)
+      it "tries again when a provider that has never synced gets #{answer}" do
         mock_llm_models_response(base_url, **response)
 
-        expect { described_class.perform_now }.to have_enqueued_job(described_class)
+        expect { described_class.perform_now(provider.id) }.to have_enqueued_job(described_class)
       end
     end
 
     it "keeps trying on the retries, after the empty sync has recorded last_synced_at" do
-      connection = create(:llm_connection, base_url:)
       mock_llm_models_response(base_url, models: [])
-      described_class.perform_now
+      described_class.perform_now(provider.id)
 
       perform_enqueued_jobs(only: described_class)
 
-      expect(connection.reload.last_synced_at).to be_present
+      expect(provider.reload.last_synced_at).to be_present
       expect(described_class).to have_been_enqueued.exactly(:once)
     end
 
     it "stops once the server lists a model" do
-      create(:llm_connection, base_url:)
       mock_llm_models_response(base_url, models: [])
-      described_class.perform_now
+      described_class.perform_now(provider.id)
       mock_llm_models_response(base_url)
 
       perform_enqueued_jobs(only: described_class)
@@ -99,34 +104,31 @@ RSpec.describe Llm::SyncModelsJob, :llm_server_helpers, :webmock do
     end
 
     it "does not try again when the server lists only a model entered by hand" do
-      connection = create(:llm_connection, base_url:)
-      create(:llm_model, :manual, llm_connection: connection, external_id: "qwen3.6-27b")
+      create(:llm_model, :manual, inference_provider: provider, external_id: "qwen3.6-27b")
       mock_llm_models_response(base_url, models: [{ id: "qwen3.6-27b" }])
 
-      expect { described_class.perform_now }.not_to have_enqueued_job(described_class)
+      expect { described_class.perform_now(provider.id) }.not_to have_enqueued_job(described_class)
     end
 
     it "tries again while the server lists nothing, whatever was entered by hand" do
-      connection = create(:llm_connection, base_url:)
-      create(:llm_model, :manual, llm_connection: connection, external_id: "qwen3.6-27b")
+      create(:llm_model, :manual, inference_provider: provider, external_id: "qwen3.6-27b")
       mock_llm_models_response(base_url, models: [])
 
-      expect { described_class.perform_now }.to have_enqueued_job(described_class)
+      expect { described_class.perform_now(provider.id) }.to have_enqueued_job(described_class)
     end
 
     it "tries again when only an earlier sync saw a model" do
-      connection = create(:llm_connection, base_url:)
-      create(:llm_model, :manual, llm_connection: connection, external_id: "qwen3.6-27b", last_seen_at: 1.hour.ago)
+      create(:llm_model, :manual, inference_provider: provider, external_id: "qwen3.6-27b", last_seen_at: 1.hour.ago)
       mock_llm_models_response(base_url, models: [])
 
-      expect { described_class.perform_now }.to have_enqueued_job(described_class)
+      expect { described_class.perform_now(provider.id) }.to have_enqueued_job(described_class)
     end
 
-    it "does not try again for a connection that has synced before" do
-      create(:llm_connection, base_url:, last_synced_at: 1.day.ago)
+    it "does not try again for a provider that has synced before" do
+      provider.update!(last_synced_at: 1.day.ago)
       mock_llm_models_response(base_url, models: [])
 
-      expect { described_class.perform_now }.not_to have_enqueued_job(described_class)
+      expect { described_class.perform_now(provider.id) }.not_to have_enqueued_job(described_class)
     end
   end
 
@@ -137,54 +139,39 @@ RSpec.describe Llm::SyncModelsJob, :llm_server_helpers, :webmock do
     "answers with something other than a model list" => { body: "<html></html>" }
   }.each do |situation, response|
     it "does not try again when the server #{situation}" do
-      create(:llm_connection, base_url:)
       mock_llm_models_response(base_url, **response)
 
-      expect { described_class.perform_now }.not_to have_enqueued_job(described_class)
+      expect { described_class.perform_now(provider.id) }.not_to have_enqueued_job(described_class)
     end
   end
 
   it "warns once it gives up on a failure that will not pass on its own" do
-    create(:llm_connection, base_url:)
     mock_llm_models_response(base_url, response_code: 404)
     warnings = []
     allow(Rails.logger).to receive(:warn) { |*args, &message| warnings << (message ? message.call : args.first) }
 
-    described_class.perform_now
+    described_class.perform_now(provider.id)
 
     expect(warnings).to include(a_string_including("will not be retried", "Server responded with 404"))
   end
 
   it "tries again when two syncs raced to store the same model" do
-    create(:llm_connection, base_url:)
     mock_llm_models_response(base_url)
-    allow(LlmConnections::SyncModelsService).to receive(:new).and_wrap_original do |original, connection|
-      allow(connection.models).to receive(:find_or_initialize_by).and_raise(ActiveRecord::RecordNotUnique)
-      original.call(connection)
+    allow(LlmConnections::SyncModelsService).to receive(:new).and_wrap_original do |original, stored|
+      allow(stored.models).to receive(:find_or_initialize_by).and_raise(ActiveRecord::RecordNotUnique)
+      original.call(stored)
     end
 
-    expect { described_class.perform_now }.to have_enqueued_job(described_class)
+    expect { described_class.perform_now(provider.id) }.to have_enqueued_job(described_class)
   end
 
-  it "tries again for a server still starting while another connection is misconfigured" do
-    create(:llm_connection, base_url: "https://misconfigured.example/v1")
-    create(:llm_connection, base_url:, active: false)
-    mock_llm_models_response("https://misconfigured.example/v1", response_code: 404)
-    mock_llm_models_response(base_url, timeout: true)
+  it "logs what raised and does not try again" do
+    allow(LlmConnections::SyncModelsService).to receive(:new).and_raise("unexpected")
+    logged = []
+    allow(Rails.logger).to receive(:error) { |&message| logged << message.call }
 
-    expect { described_class.perform_now }.to have_enqueued_job(described_class)
-  end
+    expect { described_class.perform_now(provider.id) }.not_to raise_error
 
-  it "refreshes the connections after one whose sync raises" do
-    broken = create(:llm_connection, base_url: "https://broken.example/v1")
-    healthy = create(:llm_connection, base_url:, active: false)
-    request = mock_llm_models_response(base_url)
-    allow(LlmConnections::SyncModelsService).to receive(:new).and_call_original
-    allow(LlmConnections::SyncModelsService).to receive(:new).with(broken).and_raise("unexpected")
-
-    expect { described_class.perform_now }.not_to raise_error
-
-    expect(request).to have_been_made.once
-    expect(healthy.reload.available_model_ids).to contain_exactly("qwen3.6-27b", "bge-m3")
+    expect(logged).to include(a_string_including("provider #{provider.id}"))
   end
 end

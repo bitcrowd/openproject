@@ -47,7 +47,7 @@ module LlmConnections
                     selected: model.default_chat_model_id.blank?)
 
         default_chat_model_options.each do |llm_model|
-          list.option(label: llm_model.name, value: llm_model.id,
+          list.option(label: llm_model.name_with_provider, value: llm_model.id,
                       selected: model.default_chat_model_id == llm_model.id)
         end
       end
@@ -87,7 +87,7 @@ module LlmConnections
     # The one already chosen is kept regardless of what the server offers today:
     # dropping it would silently blank the field on the next save.
     def default_chat_model_options
-      (model.chat_models + [model.default_chat_model]).compact.uniq
+      (InferenceProvider.by_title.flat_map(&:chat_models) + [model.default_chat_model]).compact.uniq
     end
 
     def embedding_features?
@@ -102,15 +102,15 @@ module LlmConnections
     end
 
     def embedding_models
-      @embedding_models ||= model.embedding_models
+      @embedding_models ||= InferenceProvider.by_title.flat_map(&:embedding_models)
     end
 
     # A stored default the server has never confirmed stays in the list, said
     # so, rather than vanishing from the picker that shows it.
     def embedding_option_label(llm_model)
-      return llm_model.name if embedding_models.include?(llm_model)
+      return llm_model.name_with_provider if embedding_models.include?(llm_model)
 
-      I18n.t("admin.llm_models.defaults.embedding_option_unqualified", model: llm_model.name)
+      I18n.t("admin.llm_models.defaults.embedding_option_unqualified", model: llm_model.name_with_provider)
     end
 
     # Says how to make a model eligible when none is, rather than leaving an

@@ -52,7 +52,7 @@ module Llm
       # Which server we are talking to decides which non-standard metadata is
       # worth reading later. +owned_by+ is the documented hint; the structural
       # fallback catches an operator who overrode it.
-      def server_flavour
+      def server_flavor
         cards = models
         owner = cards.first&.dig(:raw, "owned_by").to_s.downcase
 

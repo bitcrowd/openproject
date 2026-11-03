@@ -55,7 +55,7 @@ class SemanticIndex < ApplicationRecord
   end
 
   def self.semantic_search_bindings
-    LlmConnection.active_connection.feature_bindings.where(feature_key: "semantic_search")
+    LlmConnection.current.feature_bindings.where(feature_key: "semantic_search")
   end
 
   def self.active

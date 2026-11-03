@@ -33,21 +33,28 @@ require_module_spec_helper
 RSpec.describe LlmConnections::EnvSyncService do
   subject(:result) { described_class.new(env_config).call }
 
-  let!(:connection) do
-    create(:llm_connection, :with_models, base_url: "https://example.com/v1", api_key: "sk-stored")
+  let!(:provider) do
+    create(:inference_provider, :with_models, base_url: "https://example.com/v1", api_key: "sk-stored")
   end
+  let(:connection) { LlmConnection.current }
 
   context "with a valid configuration" do
     let(:env_config) do
       { "base_url" => "https://other.example.com/v1", "api_key" => "sk-from-env", "default_chat_model" => "qwen3.6-27b" }
     end
 
-    it "writes the connection and its default model" do
+    it "stores a provider with the values and its default model" do
       expect(result).to be_success
 
-      connection.reload
-      expect(connection.base_url).to eq("https://other.example.com/v1")
-      expect(connection.default_chat_model.external_id).to eq("qwen3.6-27b")
+      expect(result.result).to have_attributes(base_url: "https://other.example.com/v1", api_key: "sk-from-env")
+      expect(connection.reload.default_chat_model)
+        .to have_attributes(external_id: "qwen3.6-27b", inference_provider: result.result)
+    end
+
+    it "leaves the stored provider as it was" do
+      expect(result).to be_success
+
+      expect(provider.reload).to have_attributes(base_url: "https://example.com/v1", api_key: "sk-stored")
     end
 
     it "marks the connection as written by the environment" do
@@ -56,36 +63,30 @@ RSpec.describe LlmConnections::EnvSyncService do
       expect(connection.reload.env_provisioned_at).to be_present
     end
 
-    # The second write would change the marker if it carried another time, and
-    # clear it if it carried none.
-    it "stamps both of its writes with the same time" do
-      expect(result).to be_success
-
-      expect(result.result.saved_changes).not_to have_key("env_provisioned_at")
-    end
-
     it "records which configuration it applied" do
       expect(result).to be_success
 
       expect(connection.reload.env_fingerprint).to eq(LlmConnection.env_fingerprint(env_config))
     end
+
+    it "fetches the list of the new provider in the background" do
+      expect { result }.to have_enqueued_job(Llm::SyncModelsJob).once
+    end
   end
 
-  # The previous server reported the model, so the row the default points at
-  # was discovered rather than entered by the seed.
-  context "when the environment moves to another server and names a model the previous one reported",
-          :llm_server_helpers, :webmock do
-    let(:env_config) { { "base_url" => "https://other.example.com/v1", "default_chat_model" => "qwen3.6-27b" } }
-
-    before do
-      connection.update!(connection_fingerprint: connection.settings_fingerprint)
-      mock_llm_models_response("https://other.example.com/v1")
+  # The server reported the model, so the row the default points at was discovered
+  # rather than entered by the seed.
+  context "when the environment names a model the server reported", :llm_server_helpers, :webmock do
+    let(:env_config) do
+      { "base_url" => "https://example.com/v1", "api_key" => "sk-stored", "default_chat_model" => "qwen3.6-27b" }
     end
 
-    it "keeps it as the default through a refresh against the new server" do
+    before { mock_llm_models_response("https://example.com/v1") }
+
+    it "keeps it as the default through a refresh" do
       expect(result).to be_success
 
-      expect(LlmConnections::SyncModelsService.new(connection.reload).call).to be_success
+      expect(LlmConnections::SyncModelsService.new(result.result).call).to be_success
 
       expect(connection.reload.default_chat_model&.external_id).to eq("qwen3.6-27b")
     end
@@ -115,32 +116,124 @@ RSpec.describe LlmConnections::EnvSyncService do
     end
   end
 
-  context "when the environment changes the server of an existing connection", :webmock do
+  context "when the environment names another server", :webmock do
     let(:env_config) { { "base_url" => "https://other.example.com/v1", "api_key" => "sk-from-env" } }
 
-    it "contacts neither the previous server nor the new one" do
+    it "contacts neither the stored server nor the new one" do
       expect(result).to be_success
 
       expect(a_request(:any, %r{\Ahttps://(other\.)?example\.com/})).not_to have_been_made
     end
   end
 
-  context "when an administrator's save commits while the seed waits for the connection's lock" do
+  describe "the provider it uses" do
     let(:env_config) { { "base_url" => "https://example.com/v1", "api_key" => "sk-stored" } }
 
-    before do
-      saved = false
-      allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction).and_wrap_original do |original, *args, &block|
-        LlmConnection.where(id: connection.id).update_all(base_url: "https://admin.example/v1") unless saved
-        saved = true
-        original.call(*args, &block)
+    it "reuses a stored one when the values match" do
+      expect { result }.not_to change(InferenceProvider, :count)
+
+      expect(result.result).to eq(provider)
+    end
+
+    it "does not fetch a list that is stored" do
+      expect { result }.not_to have_enqueued_job(Llm::SyncModelsJob)
+    end
+
+    it "fetches the list of a stored provider that has none yet" do
+      provider.update!(last_synced_at: nil)
+
+      expect { result }.to have_enqueued_job(Llm::SyncModelsJob).with(provider.id)
+    end
+
+    context "when a re-seed finds the values it applied before" do
+      it "reuses its provider" do
+        applied = described_class.new({ "base_url" => "https://other.example.com/v1", "api_key" => "sk-from-env" }).call.result
+
+        again = nil
+        expect { again = described_class.new({ "base_url" => "https://other.example.com/v1/", "api_key" => "sk-from-env" }).call }
+          .not_to change(InferenceProvider, :count)
+
+        expect(again.result).to eq(applied)
       end
     end
 
-    it "writes the environment's values over it" do
-      expect(result).to be_success
+    context "when only the API key differs" do
+      let(:env_config) { { "base_url" => "https://example.com/v1", "api_key" => "sk-rotated" } }
 
-      expect(connection.reload.base_url).to eq("https://example.com/v1")
+      it "adds a provider and keeps the previous one stored" do
+        expect { result }.to change(InferenceProvider, :count).by(1)
+
+        expect(result.result.api_key).to eq("sk-rotated")
+        expect(provider.reload.api_key).to eq("sk-stored")
+      end
+    end
+
+    context "when only the custom headers differ" do
+      let(:env_config) do
+        { "base_url" => "https://example.com/v1", "api_key" => "sk-stored",
+          "custom_headers" => '{"api-version":"2024-02-01"}' }
+      end
+
+      it "adds a provider" do
+        expect { result }.to change(InferenceProvider, :count).by(1)
+
+        expect(result.result.custom_headers).to eq("api-version" => "2024-02-01")
+      end
+    end
+
+    context "when the same custom headers are written in another order" do
+      let(:env_config) do
+        { "base_url" => "https://example.com/v1", "api_key" => "sk-stored",
+          "custom_headers" => '{"b":"2","a":"1"}' }
+      end
+
+      before { provider.update!(custom_headers: { "a" => "1", "b" => "2" }) }
+
+      it "reuses the provider" do
+        expect { result }.not_to change(InferenceProvider, :count)
+      end
+    end
+
+    context "when the environment names a new server" do
+      let(:env_config) { { "base_url" => "https://other.example.com:8443/v1/" } }
+
+      it "names the new provider after the host and port" do
+        expect(result).to be_success
+
+        expect(result.result.title).to eq("other.example.com:8443")
+      end
+
+      it "takes the default format, since no variable sets one" do
+        expect(result).to be_success
+
+        expect(result.result.api_format).to eq("openai")
+      end
+    end
+
+    context "when a stored provider with the same values speaks another format" do
+      let(:env_config) { { "base_url" => "https://admin.example/v1", "api_key" => "sk-admin" } }
+      let!(:stored) do
+        create(:inference_provider, base_url: "https://admin.example/v1", api_key: "sk-admin", api_format: "openrouter")
+      end
+
+      it "reuses it, since no variable sets a format" do
+        expect { result }.not_to change(InferenceProvider, :count)
+
+        expect(result.result).to eq(stored)
+      end
+    end
+
+    context "on an installation with nothing stored" do
+      let(:env_config) { { "base_url" => "https://example.com/v1", "api_key" => "sk-from-env" } }
+      let!(:provider) { nil }
+
+      it "creates both, with the default format" do
+        expect(result).to be_success
+
+        expect(result.result)
+          .to have_attributes(base_url: "https://example.com/v1", api_key: "sk-from-env", api_format: "openai")
+        expect(connection.env_provisioned_at).to be_present
+      end
     end
   end
 
@@ -151,7 +244,7 @@ RSpec.describe LlmConnections::EnvSyncService do
 
     it "stores the header names exactly as given" do
       expect(result).to be_success
-      expect(connection.reload.custom_headers).to eq("api-version" => "2024-02-01", "X-Gateway" => "on")
+      expect(result.result.custom_headers).to eq("api-version" => "2024-02-01", "X-Gateway" => "on")
     end
   end
 
@@ -162,50 +255,35 @@ RSpec.describe LlmConnections::EnvSyncService do
 
     it "stores the header names exactly as given" do
       expect(result).to be_success
-      expect(connection.reload.custom_headers).to eq("api-version" => "2024-02-01")
-    end
-  end
-
-  context "without custom headers while some are stored" do
-    let(:env_config) { { "base_url" => "https://example.com/v1" } }
-
-    before { connection.update!(custom_headers: { "api-version" => "2024-02-01" }) }
-
-    it "clears them" do
-      expect(result).to be_success
-      expect(connection.reload.custom_headers).to eq({})
+      expect(result.result.custom_headers).to eq("api-version" => "2024-02-01")
     end
   end
 
   context "with custom headers that are not a JSON object" do
     let(:env_config) { { "base_url" => "https://example.com/v1", "custom_headers" => '["api-version"]' } }
 
-    before { connection.update!(custom_headers: { "api-version" => "2024-02-01" }) }
+    it "fails and adds no provider" do
+      expect { result }.not_to change(InferenceProvider, :count)
 
-    it "fails and keeps the stored headers" do
       expect(result).to be_failure
       expect(result.errors).to be_of_kind(:custom_headers, :invalid)
-      expect(connection.reload.custom_headers).to eq("api-version" => "2024-02-01")
     end
   end
 
   context "when the default model cannot be bound" do
     let(:env_config) do
-      { "base_url" => "https://other.example.com/v1", "api_key" => "sk-from-env", "default_chat_model" => "bge-m3" }
+      { "base_url" => "https://example.com/v1", "api_key" => "sk-stored", "default_chat_model" => "bge-m3" }
     end
 
     before do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                       state: "supported", source: "admin")
     end
 
-    it "fails and keeps the stored connection as it was" do
+    it "fails and keeps no default" do
       expect(result).to be_failure
 
-      connection.reload
-      expect(connection.base_url).to eq("https://example.com/v1")
-      expect(connection.api_key).to eq("sk-stored")
-      expect(connection.default_chat_model_id).to be_nil
+      expect(connection.reload.default_chat_model_id).to be_nil
     end
 
     it "does not mark the connection as written by the environment" do
@@ -224,27 +302,19 @@ RSpec.describe LlmConnections::EnvSyncService do
     end
   end
 
-  context "when the connection itself is invalid" do
+  context "when the configured server is invalid" do
     let(:env_config) { { "base_url" => "not a url" } }
 
-    it "fails and keeps the stored connection as it was" do
+    it "fails and adds no provider" do
+      expect { result }.not_to change(InferenceProvider, :count)
+
       expect(result).to be_failure
-      expect(connection.reload.base_url).to eq("https://example.com/v1")
     end
 
     it "does not mark the connection as written by the environment" do
       expect(result).to be_failure
 
       expect(connection.reload.env_provisioned_at).to be_nil
-    end
-
-    it "keeps the time the environment last wrote the connection" do
-      applied_at = 1.day.ago.change(usec: 0)
-      connection.update_columns(env_provisioned_at: applied_at)
-
-      expect(result).to be_failure
-
-      expect(connection.reload.env_provisioned_at).to eq(applied_at)
     end
   end
 end

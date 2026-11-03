@@ -28,8 +28,8 @@
 #++
 
 module Llm
-  # Re-checks the configured connection, so a server that dies after setup does
-  # not stay green until somebody happens to look.
+  # Re-checks every provider, so a server that dies after setup does not stay
+  # green until somebody happens to look.
   #
   # Deliberately does *not* set deep_health_check: the inference group spends a
   # real completion, which is billed on a hosted provider. An unattended job must
@@ -43,7 +43,7 @@ module Llm
 
     class << self
       # Keeps the cron idle while there is nothing to check, rather than waking
-      # every six hours to find no connection.
+      # every six hours to find no provider.
       def toggle_cron_job
         if runnable?
           GoodJob::Setting.cron_key_enable(CRON_JOB_KEY) unless GoodJob::Setting.cron_key_enabled?(CRON_JOB_KEY)
@@ -62,9 +62,19 @@ module Llm
     def perform
       return unless self.class.runnable?
 
-      report = Llm::Validators::ConnectionValidator.new(LlmConnection.active_connection).call
-      report.save!
-      report
+      InferenceProvider.find_each { |provider| check(provider) }
+    end
+
+    private
+
+    # One provider's failure must not leave the others without a report.
+    def check(provider)
+      Llm::Validators::ConnectionValidator.new(provider).call.save!
+    rescue StandardError => e
+      Rails.logger.error do
+        "LLM health check failed for provider #{provider.id}: #{e.class}\n" \
+          "#{Rails.backtrace_cleaner.clean(Array(e.backtrace)).join("\n")}"
+      end
     end
   end
 end

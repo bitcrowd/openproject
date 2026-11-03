@@ -47,7 +47,7 @@ module Llm
 
       return fail_indexing(semantic_index, :no_connection) unless LlmConnection.available?
 
-      return fail_indexing(semantic_index, :model_missing) unless offers_embedding_model?(semantic_index.llm_model)
+      return fail_indexing(semantic_index, :model_missing) unless semantic_index.llm_model.offers_embeddings?
 
       batch.add do
         WorkPackage.find_in_batches(batch_size: 100) do |work_packages|
@@ -57,10 +57,6 @@ module Llm
     end
 
     private
-
-    def offers_embedding_model?(llm_model)
-      LlmConnection.active_connection.embedding_models.exists?(id: llm_model.id)
-    end
 
     def fail_indexing(semantic_index, status)
       message = I18n.t(status, scope: "admin.semantic_indexes.indexing.not_ready",

@@ -28,10 +28,11 @@
 #++
 
 RSpec.shared_context "with an embedding model offered" do
-  let!(:connection) { create(:llm_connection, :with_models) }
+  let!(:provider) { create(:inference_provider, :with_models) }
+  let(:connection) { LlmConnection.current }
 
   before do
-    connection.capability_verdicts.create!(model_id: "bge-m3", capability: "embeddings",
-                                           state: "supported", source: "probe", checked_at: Time.current)
+    provider.capability_verdicts.create!(model_id: "bge-m3", capability: "embeddings",
+                                         state: "supported", source: "probe", checked_at: Time.current)
   end
 end

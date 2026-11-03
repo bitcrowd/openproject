@@ -114,9 +114,9 @@ module SemanticIndexes
     def selected_model_id = model.llm_model_id
 
     def option_label(option)
-      return option.model.external_id if option.qualifies
+      return option.model.name_with_provider if option.qualifies
 
-      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model.external_id)
+      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model.name_with_provider)
     end
   end
 end

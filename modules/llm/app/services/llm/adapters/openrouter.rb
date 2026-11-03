@@ -37,7 +37,7 @@ module Llm
     class Openrouter < Openai
       EMBEDDINGS_FILTER = { output_modalities: "embeddings" }.freeze
 
-      def server_flavour = "openrouter"
+      def server_flavor = "openrouter"
 
       private
 
@@ -55,7 +55,7 @@ module Llm
       def embedding_cards
         cards(client.models(EMBEDDINGS_FILTER))
       rescue Llm::Client::Error => e
-        Rails.logger.info { "LLM embedding model discovery for connection #{connection.id} failed: #{e.class} #{e.message}" }
+        Rails.logger.info { "LLM embedding model discovery for provider #{connection.id} failed: #{e.class} #{e.message}" }
         []
       end
     end

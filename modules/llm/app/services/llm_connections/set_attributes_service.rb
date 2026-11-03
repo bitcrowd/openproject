@@ -34,7 +34,6 @@ module LlmConnections
     def set_attributes(params)
       super
 
-      model.base_url = normalized_base_url if model.base_url.present?
       set_identifying_defaults
       release_from_environment unless params.key?(:env_provisioned_at)
     end
@@ -52,14 +51,6 @@ module LlmConnections
       model.change_by_system do
         model.identifier ||= LlmConnection::DEFAULT_IDENTIFIER
       end
-    end
-
-    # Only trailing whitespace and slashes are removed. The /v1 segment is
-    # deliberately not added or stripped: silently rewriting an administrator's
-    # URL makes the eventual failure harder to diagnose, so a wrong shape is
-    # reported by the probe instead.
-    def normalized_base_url
-      model.base_url.strip.chomp("/")
     end
   end
 end

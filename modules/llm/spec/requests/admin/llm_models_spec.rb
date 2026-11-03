@@ -73,7 +73,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       # ignored, live updates stayed off and typing sent no request at all.
       # Nothing caught it because the request spec calls /search directly.
       it "declares live updates on the filter form, so the input is listened to" do
-        create(:llm_connection, :with_models, base_url:)
+        create(:inference_provider, :with_models, base_url:)
 
         get llm_models_path
 
@@ -82,7 +82,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "lists the cached models without contacting the server" do
-        create(:llm_connection, :with_models, base_url:)
+        create(:inference_provider, :with_models, base_url:)
 
         get llm_models_path
 
@@ -95,7 +95,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       # the underline, and both select the anchor, so the classes cannot sit on
       # an inner <i> as op_icon would place them.
       it "puts the icon classes on the action anchor itself" do
-        create(:llm_connection, :with_models, base_url:)
+        create(:inference_provider, :with_models, base_url:)
         llm_model = LlmModel.find_by(external_id: "qwen3.6-27b")
 
         get llm_models_path
@@ -104,30 +104,11 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(page).to have_css("a.icon.icon-edit .sr-only", text: I18n.t(:button_edit), visible: :all)
       end
 
-      it "warns that the list predates the current settings" do
-        connection = create(:llm_connection, :with_models, base_url:)
-        connection.update!(connection_fingerprint: connection.settings_fingerprint)
-        connection.update!(base_url: "https://elsewhere.example/v1")
-
-        get llm_models_path
-
-        expect(response.body).to include("llm-models--stale")
-      end
-
-      it "does not warn while the list matches the settings" do
-        connection = create(:llm_connection, :with_models, base_url:)
-        connection.update!(connection_fingerprint: connection.settings_fingerprint)
-
-        get llm_models_path
-
-        expect(response.body).not_to include("llm-models--stale")
-      end
-
       it "shows every model as either a chat or an embedding model" do
-        connection = create(:llm_connection, base_url:)
-        create(:llm_model, llm_connection: connection, external_id: "bge-m3")
-        create(:llm_model, llm_connection: connection, external_id: "qwen3.6-27b")
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+        provider = create(:inference_provider, base_url:)
+        create(:llm_model, inference_provider: provider, external_id: "bge-m3")
+        create(:llm_model, inference_provider: provider, external_id: "qwen3.6-27b")
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                         state: "supported", source: "probe")
 
         get llm_models_path
@@ -138,9 +119,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "keeps a long model name readable through the truncation" do
-        connection = create(:llm_connection, base_url:)
+        provider = create(:inference_provider, base_url:)
         long_name = "publisher/a-very-long-model-name-that-does-not-fit-the-column-32b-instruct-2026-05"
-        create(:llm_model, llm_connection: connection, external_id: long_name)
+        create(:llm_model, inference_provider: provider, external_id: long_name)
 
         get llm_models_path
 
@@ -149,8 +130,8 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "keeps the source label short and spells it out on hover" do
-        connection = create(:llm_connection, base_url:)
-        create(:llm_model, llm_connection: connection, external_id: "qwen3.6-27b")
+        provider = create(:inference_provider, base_url:)
+        create(:llm_model, inference_provider: provider, external_id: "qwen3.6-27b")
 
         get llm_models_path
 
@@ -161,8 +142,8 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "offers the default chat model next to the models it may be chosen from" do
-        connection = create(:llm_connection, :with_models, base_url:)
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+        provider = create(:inference_provider, :with_models, base_url:)
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                         state: "supported", source: "probe")
 
         get llm_models_path
@@ -173,9 +154,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "keeps offering a stored default the server has since withdrawn" do
-        connection = create(:llm_connection, :with_models, base_url:)
-        withdrawn_model = create(:llm_model, :withdrawn, llm_connection: connection, external_id: "retired-model")
-        connection.update_columns(default_chat_model_id: withdrawn_model.id)
+        provider = create(:inference_provider, :with_models, base_url:)
+        withdrawn_model = create(:llm_model, :withdrawn, inference_provider: provider, external_id: "retired-model")
+        LlmConnection.current.update_columns(default_chat_model_id: withdrawn_model.id)
 
         get llm_models_path
 
@@ -183,7 +164,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "asks for no default while the connection has no model to offer" do
-        create(:llm_connection, base_url:)
+        create(:inference_provider, base_url:)
 
         get llm_models_path
 
@@ -192,8 +173,8 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "shows the default read-only when the environment owns the connection" do
-        connection = create(:llm_connection, :with_models, :provisioned_from_env, base_url:)
-        connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b"))
+        provider = create(:inference_provider, :with_models, base_url:)
+        create(:llm_connection, :provisioned_from_env, default_chat_model: provider.models.find_by(external_id: "qwen3.6-27b"))
         allow(Setting).to receive(:llm_connection).and_return({ "base_url" => base_url })
 
         get llm_models_path
@@ -205,8 +186,8 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
       it "offers only models known to embed as the default embedding model",
          with_flag: { llm_connection: true, semantic_search: true } do
-        connection = create(:llm_connection, :with_models, base_url:)
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+        provider = create(:inference_provider, :with_models, base_url:)
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                         state: "supported", source: "probe")
 
         get llm_models_path
@@ -219,7 +200,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       # invites a choice that fails much later, at index time.
       it "says how to make a model eligible while none is known to embed",
          with_flag: { llm_connection: true, semantic_search: true } do
-        create(:llm_connection, :with_models, base_url:)
+        create(:inference_provider, :with_models, base_url:)
 
         get llm_models_path
 
@@ -229,8 +210,8 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       # Otherwise a save would silently blank a working configuration.
       it "keeps the stored embedding default listed, flagged, once it is ruled out",
          with_flag: { llm_connection: true, semantic_search: true } do
-        connection = create(:llm_connection, :with_models, base_url:)
-        connection.update_column(:default_embedding_model_id, connection.models.find_by(external_id: "qwen3.6-27b").id)
+        provider = create(:inference_provider, :with_models, base_url:)
+        LlmConnection.current.update_column(:default_embedding_model_id, provider.models.find_by(external_id: "qwen3.6-27b").id)
 
         get llm_models_path
 
@@ -240,7 +221,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
       it "sends the administrator to the settings while the features are off",
          with_settings: { llm_features_enabled: false } do
-        create(:llm_connection, :with_models, base_url:)
+        create(:inference_provider, :with_models, base_url:)
 
         get llm_models_path
 
@@ -257,7 +238,8 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
   end
 
   describe "POST /admin/llm_models/refresh" do
-    let!(:connection) { create(:llm_connection, base_url:) }
+    let!(:provider) { create(:inference_provider, base_url:) }
+    let(:connection) { LlmConnection.current }
 
     before { login_as admin }
 
@@ -267,7 +249,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       post refresh_llm_models_path
 
       expect(response).to redirect_to(llm_models_path)
-      expect(connection.reload.available_model_ids).to contain_exactly("qwen3.6-27b", "bge-m3")
+      expect(provider.reload.available_model_ids).to contain_exactly("qwen3.6-27b", "bge-m3")
       expect(flash[:notice]).to eq(I18n.t("admin.llm_models.refresh.success"))
     end
 
@@ -282,12 +264,13 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
   end
 
   describe "paginating the model list" do
-    let!(:connection) { create(:llm_connection, base_url: "https://example.com/v1") }
+    let!(:provider) { create(:inference_provider, base_url: "https://example.com/v1") }
+    let(:connection) { LlmConnection.current }
 
     before do
       login_as admin
       # A gateway can report hundreds; OpenRouter returns 341.
-      25.times { |n| create(:llm_model, llm_connection: connection, external_id: format("model-%03d", n)) }
+      25.times { |n| create(:llm_model, inference_provider: provider, external_id: format("model-%03d", n)) }
     end
 
     def rendered_rows(body) = body.scan("llm-model--edit-").size
@@ -307,14 +290,15 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
   end
 
   describe "filtering the model list" do
-    let!(:connection) { create(:llm_connection, base_url: "https://example.com/v1") }
+    let!(:provider) { create(:inference_provider, base_url: "https://example.com/v1") }
+    let(:connection) { LlmConnection.current }
     let(:filters) { [{ name: { operator: "~", values: ["bge"] } }].to_json }
 
     before do
       login_as admin
-      create(:llm_model, llm_connection: connection, external_id: "qwen3.6-27b")
-      create(:llm_model, llm_connection: connection, external_id: "bge-m3")
-      create(:llm_model, llm_connection: connection, external_id: "e5-large", display_name: "BGE compatible")
+      create(:llm_model, inference_provider: provider, external_id: "qwen3.6-27b")
+      create(:llm_model, inference_provider: provider, external_id: "bge-m3")
+      create(:llm_model, inference_provider: provider, external_id: "e5-large", display_name: "BGE compatible")
     end
 
     def rendered_rows(body) = body.scan("llm-model--edit-").size
@@ -351,7 +335,8 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
   # Manual entry exists for servers that route /v1/chat/completions but expose no
   # model list -- OpenProject's own hosted gateway does exactly that today.
   describe "models entered by hand" do
-    let!(:connection) { create(:llm_connection, base_url:) }
+    let!(:provider) { create(:inference_provider, base_url:) }
+    let(:connection) { LlmConnection.current }
 
     before { login_as admin }
 
@@ -362,11 +347,11 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
                                                      admin_context_window: "8192",
                                                      model_type: "embedding" } }
 
-        llm_model = connection.models.find_by(external_id: "bge-m3")
+        llm_model = provider.models.find_by(external_id: "bge-m3")
         expect(llm_model.display_name).to eq("BGE M3")
         expect(llm_model.context_window).to eq(8192)
 
-        verdicts = connection.capability_verdicts.for_model("bge-m3").pluck(:capability, :state, :source)
+        verdicts = provider.capability_verdicts.for_model("bge-m3").pluck(:capability, :state, :source)
         expect(verdicts).to include(["embeddings", "supported", "admin"])
       end
 
@@ -374,9 +359,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         post llm_models_path, params: { llm_model: { external_id: "qwen3.6-35b-a3b" } }
 
         expect(response).to redirect_to(llm_models_path)
-        llm_model = connection.models.find_by(external_id: "qwen3.6-35b-a3b")
+        llm_model = provider.models.find_by(external_id: "qwen3.6-35b-a3b")
         expect(llm_model).to be_manual
-        expect(connection.available_model_ids).to include("qwen3.6-35b-a3b")
+        expect(provider.available_model_ids).to include("qwen3.6-35b-a3b")
       end
 
       it "pins no type when the form is submitted untouched" do
@@ -391,22 +376,22 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         expect(response).to redirect_to(llm_models_path)
         expect(fields).to include("model_type" => "")
-        expect(connection.capability_verdicts.for_model("text-embedding-3-small")).to be_empty
+        expect(provider.capability_verdicts.for_model("text-embedding-3-small")).to be_empty
       end
 
       it "rejects a duplicate" do
-        create(:llm_model, llm_connection: connection, external_id: "already-there")
+        create(:llm_model, inference_provider: provider, external_id: "already-there")
 
         post llm_models_path, params: { llm_model: { external_id: "already-there" } }
 
-        expect(connection.models.where(external_id: "already-there").count).to eq(1)
+        expect(provider.models.where(external_id: "already-there").count).to eq(1)
       end
 
       it "makes the model bindable straight away" do
         post llm_models_path, params: { llm_model: { external_id: "qwen3.6-35b-a3b" } }
 
         patch llm_feature_binding_path("description_assistant"),
-              params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "qwen3.6-35b-a3b")&.id } }
+              params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "qwen3.6-35b-a3b")&.id } }
 
         expect(connection.feature_bindings.find_by(feature_key: "description_assistant").llm_model&.external_id)
           .to eq("qwen3.6-35b-a3b")
@@ -415,21 +400,21 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
     describe "a refresh that cannot see the manual model" do
       it "keeps it, and withdraws discovered models instead" do
-        create(:llm_model, llm_connection: connection, external_id: "was-discovered")
+        create(:llm_model, inference_provider: provider, external_id: "was-discovered")
         post llm_models_path, params: { llm_model: { external_id: "hand-typed" } }
         mock_llm_models_response(base_url)
 
         post refresh_llm_models_path
 
-        expect(connection.models.find_by(external_id: "hand-typed")).to be_active
-        expect(connection.models.find_by(external_id: "was-discovered")).not_to be_active
-        expect(connection.available_model_ids).to include("hand-typed", "qwen3.6-27b")
+        expect(provider.models.find_by(external_id: "hand-typed")).to be_active
+        expect(provider.models.find_by(external_id: "was-discovered")).not_to be_active
+        expect(provider.available_model_ids).to include("hand-typed", "qwen3.6-27b")
       end
 
       # The server reports an id and nothing else, so a refresh that adopts the
       # card verbatim would throw away the name an administrator gave the model.
       it "keeps an edited display name across a refresh that reports the model" do
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "qwen3.6-27b")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "qwen3.6-27b")
         patch llm_model_path(llm_model), params: { llm_model: { display_name: "Our house model" } }
         mock_llm_models_response(base_url)
 
@@ -440,7 +425,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
     end
 
     describe "PATCH /admin/llm_models/:id" do
-      let!(:llm_model) { create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed") }
+      let!(:llm_model) { create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed") }
 
       it "stores capabilities an administrator asserts" do
         patch llm_model_path(llm_model),
@@ -451,7 +436,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(response).to redirect_to(llm_models_path)
         expect(llm_model.reload.display_name).to eq("Hand typed")
 
-        verdicts = connection.capability_verdicts.for_model("hand-typed").pluck(:capability, :state, :source)
+        verdicts = provider.capability_verdicts.for_model("hand-typed").pluck(:capability, :state, :source)
         expect(verdicts).to include(["vision", "unsupported", "admin"])
       end
 
@@ -485,7 +470,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         patch llm_model_path(llm_model), params: { llm_model: { model_type: "embedding" } }
 
         patch llm_feature_binding_path("semantic_search"),
-              params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "hand-typed")&.id } }
+              params: { llm_feature_binding: { llm_model_id: provider.models.find_by(external_id: "hand-typed")&.id } }
 
         expect(connection.feature_bindings.find_by(feature_key: "semantic_search").llm_model&.external_id).to eq("hand-typed")
       end
@@ -496,7 +481,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         patch llm_model_path(llm_model), params: { llm_model: { capability_vision: "supported" } }
         patch llm_model_path(llm_model), params: { llm_model: { capability_vision: "" } }
 
-        expect(connection.capability_verdicts.for_model("hand-typed").for_capability(:vision)).to be_empty
+        expect(provider.capability_verdicts.for_model("hand-typed").for_capability(:vision)).to be_empty
       end
 
       it "answers 404 for an unknown model before it reads the submitted fields" do
@@ -522,16 +507,16 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       it "is not overwritten by registry enrichment" do
         patch llm_model_path(llm_model), params: { llm_model: { model_type: "embedding" } }
 
-        LlmConnections::EnrichCapabilitiesService.new(connection).call
+        LlmConnections::EnrichCapabilitiesService.new(provider).call
 
-        verdict = connection.capability_verdicts.find_by(model_id: "hand-typed", capability: "embeddings")
+        verdict = provider.capability_verdicts.find_by(model_id: "hand-typed", capability: "embeddings")
         expect(verdict.source).to eq("admin")
         expect(verdict.state).to eq("supported")
       end
     end
 
     describe "choosing the model type" do
-      let!(:llm_model) { create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed") }
+      let!(:llm_model) { create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed") }
 
       it "offers the chat capabilities to a chat model" do
         get edit_llm_model_path(llm_model)
@@ -555,20 +540,20 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         patch llm_model_path(llm_model), params: { llm_model: { model_type: "embedding" } }
 
-        verdicts = connection.capability_verdicts.for_model("hand-typed").pluck(:capability, :state)
+        verdicts = provider.capability_verdicts.for_model("hand-typed").pluck(:capability, :state)
         expect(verdicts).to contain_exactly(%w[embeddings supported])
       end
 
       # Saving a discovered model without touching its type must not turn what a
       # probe or a registry found into the administrator's own assertion.
       it "leaves the stored verdict alone when the type was not changed" do
-        discovered = create(:llm_model, llm_connection: connection, external_id: "from-server")
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "from-server", capability: "embeddings",
+        discovered = create(:llm_model, inference_provider: provider, external_id: "from-server")
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "from-server", capability: "embeddings",
                                         state: "unsupported", source: "probe")
 
         patch llm_model_path(discovered), params: { llm_model: { model_type: "chat", display_name: "From server" } }
 
-        verdict = connection.capability_verdicts.find_by(model_id: "from-server", capability: "embeddings")
+        verdict = provider.capability_verdicts.find_by(model_id: "from-server", capability: "embeddings")
         expect(verdict.source).to eq("probe")
       end
 
@@ -576,13 +561,13 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         patch llm_model_path(llm_model), params: { llm_model: { model_type: "chat", capability_vision: "maybe" } }
 
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(connection.capability_verdicts.for_model("hand-typed")).to be_empty
+        expect(provider.capability_verdicts.for_model("hand-typed")).to be_empty
       end
     end
 
     describe "the model type shown in the list" do
       it "reads as an embedding model once the type says so" do
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "bge-m3")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "bge-m3")
         patch llm_model_path(llm_model), params: { llm_model: { model_type: "embedding" } }
 
         get llm_models_path
@@ -591,7 +576,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "reads as a chat model when the type says so" do
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "qwen")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "qwen")
         patch llm_model_path(llm_model), params: { llm_model: { model_type: "chat" } }
 
         get llm_models_path
@@ -616,19 +601,19 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "re-renders with the error inline when the name is taken" do
-        create(:llm_model, llm_connection: connection, external_id: "already-there")
+        create(:llm_model, inference_provider: provider, external_id: "already-there")
 
         post llm_models_path, params: { llm_model: { external_id: "already-there" } }
 
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(connection.models.where(external_id: "already-there").count).to eq(1)
+        expect(provider.models.where(external_id: "already-there").count).to eq(1)
       end
     end
 
     describe "renaming to a taken id" do
       it "re-renders the form with the error instead of failing" do
-        create(:llm_model, llm_connection: connection, external_id: "taken")
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "mine")
+        create(:llm_model, inference_provider: provider, external_id: "taken")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "mine")
 
         patch llm_model_path(llm_model), params: { llm_model: { external_id: "taken" } }
 
@@ -639,7 +624,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
     describe "DELETE /admin/llm_models/:id" do
       it "removes a manual model" do
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed")
 
         delete llm_model_path(llm_model)
 
@@ -648,7 +633,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "refuses while a connection default uses it" do
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed")
         connection.update!(default_chat_model: llm_model)
 
         delete llm_model_path(llm_model)
@@ -659,7 +644,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "refuses while a feature binding uses it" do
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed")
         create(:llm_feature_binding, llm_connection: connection, llm_model:)
 
         delete llm_model_path(llm_model)
@@ -669,7 +654,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "refuses while a semantic index uses it" do
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed")
         create(:semantic_index, title: "Docs", llm_model:)
 
         delete llm_model_path(llm_model)
@@ -680,7 +665,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
       # Discovered models are the server's to add and remove, not the administrator's.
       it "refuses to remove a discovered model" do
-        llm_model = create(:llm_model, llm_connection: connection, external_id: "from-server")
+        llm_model = create(:llm_model, inference_provider: provider, external_id: "from-server")
 
         delete llm_model_path(llm_model)
 
@@ -691,7 +676,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
     describe "the capability assertions a save touches" do
       let!(:llm_model) do
-        create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed")
       end
 
       # An admin-sourced verdict is the one thing detection must never undo, and
@@ -719,7 +704,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       it "asserts no type for a model created without one" do
         post llm_models_path, params: { llm_model: { external_id: "text-embedding-3-small" } }
 
-        created = connection.models.find_by(external_id: "text-embedding-3-small")
+        created = provider.models.find_by(external_id: "text-embedding-3-small")
         expect(created.verdict_for(:embeddings)).to be_nil
       end
 
@@ -727,7 +712,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         post llm_models_path,
              params: { llm_model: { external_id: "text-embedding-3-small", model_type: "embedding" } }
 
-        created = connection.models.find_by(external_id: "text-embedding-3-small")
+        created = provider.models.find_by(external_id: "text-embedding-3-small")
         expect(created.verdict_for(:embeddings).state).to eq("supported")
         expect(created.verdict_for(:embeddings).source).to eq("admin")
       end
@@ -735,7 +720,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
     describe "an administrator's context window" do
       let!(:llm_model) do
-        create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed")
       end
 
       it "refuses one that is not a positive number" do
@@ -759,7 +744,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
     end
 
     describe "an administrator's dimensions" do
-      let!(:llm_model) { create(:llm_model, llm_connection: connection, external_id: "from-server") }
+      let!(:llm_model) { create(:llm_model, inference_provider: provider, external_id: "from-server") }
 
       it "are stored on a discovered model and shown in the list" do
         patch llm_model_path(llm_model), params: { llm_model: { embedding_vector_dimensions: "1024" } }
@@ -772,7 +757,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "fall back to what a probe measured once cleared" do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "from-server", capability: "embeddings",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "from-server", capability: "embeddings",
                                         state: "supported", source: "probe", detail: { "dimensions" => 768 })
         llm_model.update!(embedding_vector_dimensions: 1024)
 
@@ -789,7 +774,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "say on the form what a probe measured" do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "from-server", capability: "embeddings",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "from-server", capability: "embeddings",
                                         state: "supported", source: "probe", detail: { "dimensions" => 768 })
 
         get edit_llm_model_path(llm_model)
@@ -800,7 +785,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
     describe "GET /admin/llm_models/:id/delete_dialog" do
       let!(:llm_model) do
-        create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed")
       end
 
       # Requested by the async-dialog Stimulus controller, which asks for a turbo
@@ -836,14 +821,14 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
     describe "renaming a manually added model" do
       let!(:llm_model) do
-        create(:llm_model, :manual, llm_connection: connection, external_id: "qwen/qwen3.6-35b-a3b")
+        create(:llm_model, :manual, inference_provider: provider, external_id: "qwen/qwen3.6-35b-a3b")
       end
 
       before do
         connection.update!(default_chat_model: llm_model)
         create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
                                      model_identifier: "qwen/qwen3.6-35b-a3b")
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen/qwen3.6-35b-a3b", capability: "embeddings",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "qwen/qwen3.6-35b-a3b", capability: "embeddings",
                                         state: "unsupported", source: "probe")
       end
 
@@ -855,7 +840,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       end
 
       it "does not offer it for a discovered model" do
-        discovered = create(:llm_model, llm_connection: connection, external_id: "server-named")
+        discovered = create(:llm_model, inference_provider: provider, external_id: "server-named")
 
         get edit_llm_model_path(discovered)
 
@@ -871,7 +856,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(llm_model.reload.external_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
         expect(connection.reload.default_chat_model).to eq(llm_model)
         expect(connection.feature_bindings.first.llm_model&.external_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
-        expect(connection.capability_verdicts.first.model_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
+        expect(provider.capability_verdicts.first.model_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
       end
 
       it "keeps the feature resolving afterwards", with_flag: { llm_connection: true } do
@@ -883,7 +868,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       # The server names its own models; renaming one here would only be undone by
       # the next refresh.
       it "refuses to rename a discovered model" do
-        discovered = create(:llm_model, llm_connection: connection, external_id: "server-named")
+        discovered = create(:llm_model, inference_provider: provider, external_id: "server-named")
 
         patch llm_model_path(discovered), params: { llm_model: { external_id: "renamed" } }
 
@@ -894,8 +879,8 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
     # The seed creates the models the environment names as manual rows, and the
     # connection's defaults point at them.
     describe "a model the environment names as a default" do
-      let!(:env_default) { create(:llm_model, :manual, llm_connection: connection, external_id: "env-chat") }
-      let!(:hand_typed) { create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed") }
+      let!(:env_default) { create(:llm_model, :manual, inference_provider: provider, external_id: "env-chat") }
+      let!(:hand_typed) { create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed") }
       let(:refusal) { I18n.t("admin.llm_models.configured_from_env") }
 
       before do
@@ -986,7 +971,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         expect(response).to redirect_to(llm_models_path)
         expect(env_default.reload.context_window).to eq(32_768)
-        expect(connection.capability_verdicts.for_model("env-chat").pluck(:capability, :state))
+        expect(provider.capability_verdicts.for_model("env-chat").pluck(:capability, :state))
           .to include(%w[vision unsupported])
       end
 
@@ -1004,7 +989,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       let(:taken) { I18n.t("activerecord.errors.messages.taken") }
 
       before do
-        create(:llm_model, :manual, llm_connection: connection, external_id: "taken-meanwhile")
+        create(:llm_model, :manual, inference_provider: provider, external_id: "taken-meanwhile")
         uniqueness = LlmModel.validators_on(:external_id).grep(ActiveRecord::Validations::UniquenessValidator).first
         allow(uniqueness).to receive(:validate_each)
       end
@@ -1014,11 +999,11 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         expect(response).to have_http_status(:unprocessable_entity)
         expect(response.body).to include(taken)
-        expect(connection.models.where(external_id: "taken-meanwhile").count).to eq(1)
+        expect(provider.models.where(external_id: "taken-meanwhile").count).to eq(1)
       end
 
       it "re-renders the edit form with the error" do
-        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        llm_model = create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed")
 
         patch llm_model_path(llm_model), params: { llm_model: { external_id: "taken-meanwhile" } }
 
@@ -1031,11 +1016,11 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
     # Administrator verdicts outlive the discovered models a deployment change
     # purges, so an identifier no model owns can still carry some.
     describe "renaming onto an identifier with leftover verdicts" do
-      let(:llm_model) { create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed") }
+      let(:llm_model) { create(:llm_model, :manual, inference_provider: provider, external_id: "hand-typed") }
 
       before do
         %w[hand-typed purged].each do |model_id|
-          create(:llm_capability_verdict, llm_connection: connection, model_id:, capability: "vision", state: "supported",
+          create(:llm_capability_verdict, inference_provider: provider, model_id:, capability: "vision", state: "supported",
                                           source: "admin")
         end
       end
@@ -1048,18 +1033,18 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
           .to include(I18n.t("activerecord.errors.models.llm_model.attributes.external_id.conflicting_capabilities"))
         expect(response.body).not_to include(I18n.t("activerecord.errors.messages.taken"))
         expect(llm_model.reload.external_id).to eq("hand-typed")
-        expect(connection.capability_verdicts.for_model("hand-typed").count).to eq(1)
+        expect(provider.capability_verdicts.for_model("hand-typed").count).to eq(1)
       end
     end
 
     describe "how an inherited capability verdict is shown" do
-      let!(:llm_model) { create(:llm_model, :manual, llm_connection: connection, external_id: "qwen3.6-27b") }
+      let!(:llm_model) { create(:llm_model, :manual, inference_provider: provider, external_id: "qwen3.6-27b") }
 
       # The blank option names what applies while nothing is asserted here, so
       # that choosing it is understood as "follow the server" rather than as an
       # assertion of ignorance.
       it "offers to inherit the value the server reports" do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen3.6-27b", capability: "function_calling",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "qwen3.6-27b", capability: "function_calling",
                                         state: "supported", source: "metadata")
 
         get edit_llm_model_path(llm_model)
@@ -1076,7 +1061,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       # An administrator's own assertion is loaded into the field, so the blank
       # option must not claim it as inherited.
       it "does not present an administrator's own assertion as inherited" do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen3.6-27b", capability: "function_calling",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "qwen3.6-27b", capability: "function_calling",
                                         state: "supported", source: "admin")
 
         get edit_llm_model_path(llm_model)
@@ -1088,8 +1073,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
   end
 
   describe "PATCH /admin/llm_models/defaults" do
-    let!(:connection) { create(:llm_connection, :with_models, base_url:) }
-    let(:chat_model) { connection.models.find_by(external_id: "qwen3.6-27b") }
+    let!(:provider) { create(:inference_provider, :with_models, base_url:) }
+    let(:connection) { LlmConnection.current }
+    let(:chat_model) { provider.models.find_by(external_id: "qwen3.6-27b") }
 
     before { login_as admin }
 
@@ -1111,21 +1097,21 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
     end
 
     it "stores the default embedding model" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                       state: "supported", source: "probe")
 
       patch defaults_llm_models_path,
-            params: { llm_connection: { default_embedding_model_id: connection.models.find_by(external_id: "bge-m3").id } }
+            params: { llm_connection: { default_embedding_model_id: provider.models.find_by(external_id: "bge-m3").id } }
 
       expect(connection.reload.default_embedding_model.external_id).to eq("bge-m3")
     end
 
     it "refuses a model the server has ruled out" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen3.6-27b", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "qwen3.6-27b", capability: "embeddings",
                                       state: "unsupported", source: "probe")
 
       patch defaults_llm_models_path,
-            params: { llm_connection: { default_embedding_model_id: connection.models.find_by(external_id: "qwen3.6-27b").id } }
+            params: { llm_connection: { default_embedding_model_id: provider.models.find_by(external_id: "qwen3.6-27b").id } }
 
       expect(connection.reload.default_embedding_model_id).to be_nil
       expect(flash[:error]).to be_present
@@ -1135,7 +1121,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
     # environment, where the same configuration passes on an empty catalogue.
     it "accepts a model nothing has ruled out" do
       patch defaults_llm_models_path,
-            params: { llm_connection: { default_embedding_model_id: connection.models.find_by(external_id: "qwen3.6-27b").id } }
+            params: { llm_connection: { default_embedding_model_id: provider.models.find_by(external_id: "qwen3.6-27b").id } }
 
       expect(connection.reload.default_embedding_model.external_id).to eq("qwen3.6-27b")
     end
@@ -1144,7 +1130,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       patch defaults_llm_models_path,
             params: { llm_connection: { default_chat_model_id: chat_model.id, base_url: "https://elsewhere.test/v1" } }
 
-      expect(connection.reload.base_url).to eq(base_url)
+      expect(provider.reload.base_url).to eq(base_url)
     end
 
     it "refuses a default the environment owns" do

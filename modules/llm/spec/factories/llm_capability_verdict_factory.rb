@@ -29,7 +29,7 @@
 
 FactoryBot.define do
   factory :llm_capability_verdict do
-    llm_connection
+    inference_provider
     sequence(:model_id) { |n| "model-#{n}" }
     capability { "embeddings" }
     state { "supported" }

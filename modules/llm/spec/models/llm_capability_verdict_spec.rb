@@ -30,15 +30,16 @@
 require "spec_helper"
 
 RSpec.describe LlmCapabilityVerdict do
-  let(:connection) { create(:llm_connection) }
+  let(:provider) { create(:inference_provider) }
+  let(:connection) { LlmConnection.current }
 
   describe "validations" do
     it "allows one verdict per capability of a model on a connection" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings")
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings")
 
-      expect(build(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings"))
+      expect(build(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings"))
         .not_to be_valid
-      expect(build(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "vision"))
+      expect(build(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "vision"))
         .to be_valid
       expect(build(:llm_capability_verdict, model_id: "bge-m3", capability: "embeddings")).to be_valid
     end
@@ -56,12 +57,12 @@ RSpec.describe LlmCapabilityVerdict do
 
   describe "blocking" do
     let!(:unsupported) do
-      create(:llm_capability_verdict, llm_connection: connection, capability: "embeddings", state: "unsupported")
+      create(:llm_capability_verdict, inference_provider: provider, capability: "embeddings", state: "unsupported")
     end
 
     before do
-      create(:llm_capability_verdict, llm_connection: connection, capability: "embeddings", state: "unknown")
-      create(:llm_capability_verdict, llm_connection: connection, capability: "vision", state: "unsupported")
+      create(:llm_capability_verdict, inference_provider: provider, capability: "embeddings", state: "unknown")
+      create(:llm_capability_verdict, inference_provider: provider, capability: "vision", state: "unsupported")
     end
 
     it "is caused by an unsupported verdict only" do
@@ -70,16 +71,16 @@ RSpec.describe LlmCapabilityVerdict do
     end
 
     it "selects the unsupported verdicts for the required capabilities" do
-      expect(connection.capability_verdicts.blocking(%i[embeddings])).to contain_exactly(unsupported)
+      expect(provider.capability_verdicts.blocking(%i[embeddings])).to contain_exactly(unsupported)
     end
   end
 
   describe ".sticky" do
     it "selects an administrator's assertions" do
-      admin = create(:llm_capability_verdict, llm_connection: connection, source: "admin")
-      create(:llm_capability_verdict, llm_connection: connection, source: "probe")
+      admin = create(:llm_capability_verdict, inference_provider: provider, source: "admin")
+      create(:llm_capability_verdict, inference_provider: provider, source: "probe")
 
-      expect(connection.capability_verdicts.sticky).to contain_exactly(admin)
+      expect(provider.capability_verdicts.sticky).to contain_exactly(admin)
     end
   end
 

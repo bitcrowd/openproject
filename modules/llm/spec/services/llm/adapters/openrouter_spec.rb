@@ -34,7 +34,7 @@ RSpec.describe Llm::Adapters::Openrouter, :llm_server_helpers, :webmock do
   subject(:adapter) { described_class.new(connection) }
 
   let(:base_url) { "https://openrouter.ai/api/v1" }
-  let(:connection) { build(:llm_connection, base_url:, api_format: "openrouter", api_key: "sk-test") }
+  let(:connection) { build(:inference_provider, base_url:, api_format: "openrouter", api_key: "sk-test") }
 
   before { mock_llm_models_response(base_url) }
 
@@ -80,7 +80,7 @@ RSpec.describe Llm::Adapters::Openrouter, :llm_server_helpers, :webmock do
 
     adapter.models
 
-    expect(logged.join).to include("connection #{connection.id}")
+    expect(logged.join).to include("provider #{connection.id}")
     expect(logged.join).not_to include("openrouter.ai")
   end
 
@@ -94,6 +94,6 @@ RSpec.describe Llm::Adapters::Openrouter, :llm_server_helpers, :webmock do
   it "names the server it is talking to" do
     mock_llm_embedding_models_response(base_url)
 
-    expect(adapter.server_flavour).to eq("openrouter")
+    expect(adapter.server_flavor).to eq("openrouter")
   end
 end

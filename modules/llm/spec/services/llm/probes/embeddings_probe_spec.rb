@@ -32,7 +32,7 @@ require "spec_helper"
 RSpec.describe Llm::Probes::EmbeddingsProbe, :webmock do
   subject(:result) { described_class.new(connection).call("some-model") }
 
-  let(:connection) { build(:llm_connection, base_url: "https://example.com/v1") }
+  let(:connection) { build(:inference_provider, base_url: "https://example.com/v1") }
 
   def stub_embeddings(status:, body:)
     stub_request(:post, "https://example.com/v1/embeddings")

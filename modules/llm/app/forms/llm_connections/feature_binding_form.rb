@@ -82,9 +82,9 @@ module LlmConnections
     # The bound model stays choosable once it no longer qualifies, so that saving
     # the form again does not blank the binding. The label says what changed.
     def option_label(option)
-      return option.model.external_id if option.qualifies
+      return option.model.name_with_provider if option.qualifies
 
-      I18n.t("admin.llm_feature_bindings.option_unqualified", model: option.model.external_id)
+      I18n.t("admin.llm_feature_bindings.option_unqualified", model: option.model.name_with_provider)
     end
   end
 end

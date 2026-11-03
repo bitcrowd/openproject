@@ -30,16 +30,11 @@
 Rails.application.routes.draw do
   scope "admin" do
     resource :llm_connection, only: %i[show update], controller: "admin/llm_connections" do
-      collection do
-        delete :api_key, action: :delete_api_key
-        get :delete_api_key_dialog
-        get :disconnect_dialog
-        post :disconnect
-      end
+      post :setup
+    end
 
-      resource :health_status_report, only: %i[show create], controller: "admin/llm_health_status" do
-        post :create_health_status_report
-      end
+    resources :inference_providers, only: [] do
+      resource :health_status_report, only: %i[show create], controller: "admin/llm_health_status"
     end
 
     resources :llm_models, only: %i[index new create edit update destroy], controller: "admin/llm_models" do
