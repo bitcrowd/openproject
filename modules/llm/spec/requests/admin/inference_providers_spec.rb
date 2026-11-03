@@ -68,7 +68,8 @@ RSpec.describe "Admin inference providers", :llm_server_helpers, :skip_csrf, :we
         -> { get deletion_dialog_inference_provider_path(provider), headers: turbo_headers },
         -> { delete inference_provider_path(provider) },
         -> { get delete_api_key_dialog_inference_provider_path(provider), headers: turbo_headers },
-        -> { delete api_key_inference_provider_path(provider) }
+        -> { delete api_key_inference_provider_path(provider) },
+        -> { get status_inference_providers_path, headers: turbo_headers }
       ].each do |request|
         request.call
 
@@ -110,6 +111,9 @@ RSpec.describe "Admin inference providers", :llm_server_helpers, :skip_csrf, :we
       expect(response).to have_http_status(:forbidden)
 
       delete api_key_inference_provider_path(provider)
+      expect(response).to have_http_status(:forbidden)
+
+      get status_inference_providers_path, headers: turbo_headers
       expect(response).to have_http_status(:forbidden)
 
       expect(provider.reload.api_key).to eq("sk-test-key")
@@ -167,6 +171,123 @@ RSpec.describe "Admin inference providers", :llm_server_helpers, :skip_csrf, :we
       get llm_connection_path
 
       expect(page).to have_no_test_selector("llm-inference-provider--box")
+    end
+
+    it "offers running the health check and its results on each row" do
+      get llm_connection_path
+
+      check_path = check_inference_provider_health_status_report_path(provider)
+      expect(page).to have_css("form[action='#{check_path}'][method='post'] " \
+                               "button[data-test-selector='llm-inference-provider--run-health-check-#{provider.id}']",
+                               visible: :all)
+      expect(page).to have_css("a[data-test-selector='llm-inference-provider--results-#{provider.id}']" \
+                               "[href='#{inference_provider_health_status_report_path(provider)}']", visible: :all)
+    end
+
+    describe "the health label" do
+      def store_report(*results)
+        provider.health_reports.create!(results: [HealthReport::ResultGroup.new(key: :configuration, results:)])
+      end
+
+      it "says that a provider has not been checked yet" do
+        get llm_connection_path
+
+        expect(row_for(provider)).to have_text(I18n.t("admin.inference_providers.health.never"))
+      end
+
+      it "shows a report without problems" do
+        store_report(HealthReport::Result.success(:enabled))
+
+        get llm_connection_path
+
+        expect(page).to have_css("[data-test-selector='llm-inference-provider--health-#{provider.id}'].Label--success",
+                                 text: "Healthy")
+        expect(row_for(provider)).to have_link(text: /\A\S+ \d{2}:\d{2}\z/,
+                                               href: inference_provider_health_status_report_path(provider))
+      end
+
+      it "shows warnings" do
+        store_report(HealthReport::Result.warning(:enabled, :api_key_missing, {}))
+
+        get llm_connection_path
+
+        expect(page).to have_css("[data-test-selector='llm-inference-provider--health-#{provider.id}'].Label--attention",
+                                 text: "1 warning")
+      end
+
+      it "shows failures, which the scheduled check may have found unattended" do
+        store_report(HealthReport::Result.failure(:enabled, :connection_error, {}))
+
+        get llm_connection_path
+
+        expect(page).to have_css("[data-test-selector='llm-inference-provider--health-#{provider.id}'].Label--danger",
+                                 text: "1 failure")
+      end
+
+      it "goes by the provider's own latest report" do
+        store_report(HealthReport::Result.failure(:enabled, :connection_error, {}))
+        store_report(HealthReport::Result.success(:enabled))
+
+        get llm_connection_path
+
+        expect(page).to have_css("[data-test-selector='llm-inference-provider--health-#{provider.id}'].Label--success")
+      end
+    end
+
+    describe "while a job works on a provider", with_good_job_batches: [Llm::CheckProviderHealthJob] do
+      def activity_of(provider) = page.find("[data-test-selector='llm-inference-provider--activity-#{provider.id}']")
+
+      it "says that the checks are running while its health check runs" do
+        Llm::CheckProviderHealthJob.perform_later(provider.id)
+
+        get llm_connection_path
+
+        expect(activity_of(provider)).to have_text("Running checks…")
+      end
+
+      it "asks for updates only then" do
+        get llm_connection_path
+
+        expect(page).to have_no_css("[data-controller='poll-for-changes']")
+
+        Llm::CheckProviderHealthJob.perform_later(provider.id)
+        get llm_connection_path
+
+        expect(page).to have_css("[data-test-selector='llm-inference-provider--box'][data-controller='poll-for-changes']" \
+                                 "[data-poll-for-changes-url-value='#{status_inference_providers_path}']")
+      end
+    end
+  end
+
+  describe "GET status" do
+    let!(:provider) { create(:inference_provider, base_url:) }
+
+    def poll(reference = nil)
+      get status_inference_providers_path(reference:), headers: turbo_headers
+    end
+
+    it "answers with the list while a job works on a provider", with_good_job_batches: [Llm::CheckProviderHealthJob] do
+      Llm::CheckProviderHealthJob.perform_later(provider.id)
+
+      poll
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('action="replace"', "Running checks…")
+    end
+
+    it "answers with nothing while no row would change", with_good_job_batches: [Llm::CheckProviderHealthJob] do
+      Llm::CheckProviderHealthJob.perform_later(provider.id)
+
+      poll(Llm::ProviderActivity.new(InferenceProvider.by_title).reference)
+
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "answers with a list that stops asking once nothing runs any more" do
+      poll("from before the job finished")
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).not_to include("poll-for-changes")
     end
   end
 

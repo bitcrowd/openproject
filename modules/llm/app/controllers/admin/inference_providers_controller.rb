@@ -37,10 +37,20 @@ module Admin
     before_action :require_feature
     before_action :require_admin
     before_action :require_features_enabled
-    before_action :find_inference_provider, except: %i[new_dialog create]
+    before_action :find_inference_provider, except: %i[new_dialog create status]
 
     def new_dialog
       respond_with_dialog LlmConnections::InferenceProviders::DialogComponent.new(InferenceProvider.new)
+    end
+
+    # Polled while a job works on a provider. Answers with the list only once a
+    # row would show something else.
+    def status
+      providers = InferenceProvider.by_title
+      return head :no_content if params[:reference] == Llm::ProviderActivity.new(providers).reference
+
+      replace_via_turbo_stream(component: LlmConnections::InferenceProviders::BoxComponent.new(inference_providers: providers))
+      respond_with_turbo_streams
     end
 
     def edit_dialog

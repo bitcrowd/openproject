@@ -30,13 +30,15 @@
 module LlmConnections
   module InferenceProviders
     class TableComponent < OpPrimer::BorderBoxTableComponent
-      columns :title, :base_url, :api_format, :api_key
+      options :activity
 
-      main_column :title, :base_url
+      columns :title, :base_url, :api_format, :api_key, :health
 
-      mobile_columns :title, :api_format
+      main_column :title, :base_url, :health
 
-      mobile_labels :api_format
+      mobile_columns :title, :api_format, :health
+
+      mobile_labels :api_format, :health
 
       def has_actions? = true
 
@@ -55,7 +57,8 @@ module LlmConnections
           [:title, { caption: InferenceProvider.human_attribute_name(:title) }],
           [:base_url, { caption: InferenceProvider.human_attribute_name(:base_url) }],
           [:api_format, { caption: InferenceProvider.human_attribute_name(:api_format) }],
-          [:api_key, { caption: InferenceProvider.human_attribute_name(:api_key) }]
+          [:api_key, { caption: InferenceProvider.human_attribute_name(:api_key) }],
+          [:health, { caption: I18n.t("admin.inference_providers.health.caption") }]
         ]
       end
     end

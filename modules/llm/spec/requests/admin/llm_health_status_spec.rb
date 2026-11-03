@@ -229,6 +229,37 @@ RSpec.describe "LLM connection health status", :llm_server_helpers, :skip_csrf, 
     end
   end
 
+  describe "POST /admin/inference_providers/:id/health_status_report/check" do
+    let!(:provider) { create(:inference_provider, :with_models, base_url:) }
+
+    def check
+      post check_inference_provider_health_status_report_path(provider),
+           headers: { "Accept" => "text/vnd.turbo-stream.html" }
+    end
+
+    it "runs the full check in the background" do
+      expect { check }.to have_enqueued_job(Llm::CheckProviderHealthJob).with(provider.id)
+
+      expect(response).to have_http_status(:ok)
+      expect(provider.health_reports).to be_empty
+    end
+
+    it "has the provider's row say so until the outcome replaces it",
+       with_good_job_batches: [Llm::CheckProviderHealthJob] do
+      check
+
+      expect(response.body).to include("llm-inference-provider--activity-#{provider.id}", "Running checks…",
+                                       "poll-for-changes")
+    end
+
+    it "refuses to run the checks while the features are off" do
+      allow(Setting).to receive(:llm_features_enabled?).and_return(false)
+
+      expect { check }.not_to have_enqueued_job(Llm::CheckProviderHealthJob)
+      expect(response).to redirect_to(llm_connection_path)
+    end
+  end
+
   shared_examples "a refused request" do |status|
     it "refuses the page" do
       get inference_provider_health_status_report_path(provider)
@@ -245,6 +276,13 @@ RSpec.describe "LLM connection health status", :llm_server_helpers, :skip_csrf, 
     it "refuses to run the checks" do
       expect { post inference_provider_health_status_report_path(provider) }
         .not_to change(HealthReport, :count)
+
+      expect(response).to have_http_status(status)
+    end
+
+    it "refuses to run the checks from the list" do
+      expect { post check_inference_provider_health_status_report_path(provider) }
+        .not_to have_enqueued_job(Llm::CheckProviderHealthJob)
 
       expect(response).to have_http_status(status)
     end

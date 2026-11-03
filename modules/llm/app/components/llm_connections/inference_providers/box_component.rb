@@ -33,9 +33,28 @@ module LlmConnections
       include OpPrimer::ComponentHelpers
       include OpTurbo::Streamable
 
+      POLL_INTERVAL_MS = 2000
+
       options :inference_providers
 
       def rows = inference_providers
+
+      def activity
+        @activity ||= Llm::ProviderActivity.new(inference_providers)
+      end
+
+      def wrapper_data_attrs
+        data = { test_selector: "llm-inference-provider--box" }
+        return { data: } unless activity.any?
+
+        data.merge!(
+          controller: "poll-for-changes",
+          poll_for_changes_url_value: status_inference_providers_path,
+          poll_for_changes_interval_value: POLL_INTERVAL_MS,
+          poll_for_changes_reference_value: activity.reference
+        )
+        { data: }
+      end
     end
   end
 end

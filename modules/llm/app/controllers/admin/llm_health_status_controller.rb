@@ -29,6 +29,8 @@
 
 module Admin
   class LlmHealthStatusController < ApplicationController
+    include OpTurbo::ComponentStream
+
     layout "admin"
 
     before_action :require_feature
@@ -63,6 +65,17 @@ module Admin
       report = run_checks
       flash[:notice] = t(".success", **tally_counts(report))
       redirect_to inference_provider_health_status_report_path(@inference_provider), status: :see_other
+    end
+
+    # The same run, started from the provider list. It runs in the background,
+    # and the provider's row says so until its outcome replaces that.
+    def check
+      Llm::CheckProviderHealthJob.perform_later(@inference_provider.id)
+
+      replace_via_turbo_stream(
+        component: LlmConnections::InferenceProviders::BoxComponent.new(inference_providers: InferenceProvider.by_title)
+      )
+      respond_with_turbo_streams
     end
 
     private

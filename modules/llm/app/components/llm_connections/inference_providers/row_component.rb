@@ -49,9 +49,61 @@ module LlmConnections
         I18n.t(inference_provider.api_key_stored? ? :stored : :none, scope: "admin.inference_providers.api_key")
       end
 
+      # The scheduled check runs unattended, so this is what shows a server that
+      # stopped working without anybody opening the report.
+      def health
+        step = table.activity.for(inference_provider)
+        return busy(step) if step
+
+        health_status
+      end
+
       def button_links = [action_menu]
 
       private
+
+      def health_status
+        report = inference_provider.latest_health_report
+        return render(Primer::Beta::Text.new(color: :muted)) { I18n.t("admin.inference_providers.health.never") } if report.nil?
+
+        safe_join([health_label(report.tally), checked_at(report)], " ")
+      end
+
+      def health_label(tally)
+        scheme, text = health_summary(tally)
+
+        render(Primer::Beta::Label.new(scheme:, test_selector: "llm-inference-provider--health-#{inference_provider.id}")) { text }
+      end
+
+      def checked_at(report)
+        render(
+          Primer::Beta::Link.new(href: inference_provider_health_status_report_path(inference_provider),
+                                 scheme: :secondary, font_size: :small, ml: 1, classes: "no-wrap",
+                                 test_selector: "llm-inference-provider--checked-at-#{inference_provider.id}")
+        ) { helpers.format_time(report.created_at, format: "%H:%M") }
+      end
+
+      def busy(step)
+        render(Primer::Box.new(test_selector: "llm-inference-provider--activity-#{inference_provider.id}")) do
+          safe_join(
+            [
+              render(Primer::Beta::Spinner.new(size: :small, mr: 1, vertical_align: :middle)),
+              I18n.t(step, scope: "admin.inference_providers.health")
+            ]
+          )
+        end
+      end
+
+      def health_summary(tally)
+        case tally
+        in { failure: 1.. }
+          [:danger, I18n.t("admin.inference_providers.health.failures", count: tally[:failure])]
+        in { warning: 1.. }
+          [:attention, I18n.t("admin.inference_providers.health.warnings", count: tally[:warning])]
+        else
+          [:success, I18n.t("admin.inference_providers.health.healthy")]
+        end
+      end
 
       def action_menu
         render(Primer::Alpha::ActionMenu.new(anchor_align: :end,
@@ -60,6 +112,9 @@ module LlmConnections
 
           edit_item(menu)
           delete_api_key_item(menu) if inference_provider.api_key_stored?
+          menu.with_divider
+          run_health_check_item(menu)
+          results_item(menu)
           menu.with_divider
           delete_item(menu)
         end
@@ -87,6 +142,28 @@ module LlmConnections
           }
         ) do |item|
           item.with_leading_visual_icon(icon: :key)
+        end
+      end
+
+      def run_health_check_item(menu)
+        menu.with_item(
+          label: I18n.t("admin.inference_providers.menu.run_health_check"),
+          href: check_inference_provider_health_status_report_path(inference_provider),
+          form_arguments: { method: :post },
+          content_arguments: { test_selector: "llm-inference-provider--run-health-check-#{inference_provider.id}" }
+        ) do |item|
+          item.with_leading_visual_icon(icon: :pulse)
+        end
+      end
+
+      def results_item(menu)
+        menu.with_item(
+          label: I18n.t("admin.inference_providers.menu.results"),
+          tag: :a,
+          href: inference_provider_health_status_report_path(inference_provider),
+          content_arguments: { test_selector: "llm-inference-provider--results-#{inference_provider.id}" }
+        ) do |item|
+          item.with_leading_visual_icon(icon: :checklist)
         end
       end
 

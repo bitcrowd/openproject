@@ -57,7 +57,7 @@ RSpec.describe "LLM connection administration",
   def choose_row_action(provider, label)
     within_test_selector("llm-inference-provider--menu-#{provider.id}") do
       find("button[aria-haspopup='true']").click
-      click_link(label)
+      click_on(label)
     end
   end
 
@@ -321,6 +321,32 @@ RSpec.describe "LLM connection administration",
 
     describe "the health report" do
       before { mock_llm_chat_response(base_url) }
+
+      it "runs in the background from the row of the provider, and shows the result there with its time",
+         with_good_job_batches: [Llm::CheckProviderHealthJob] do
+        visit llm_connection_path
+
+        choose_row_action(provider, I18n.t("admin.inference_providers.menu.run_health_check"))
+
+        within_test_selector("llm-inference-provider--row-#{provider.id}") do
+          expect(page).to have_test_selector("llm-inference-provider--activity-#{provider.id}", text: "Running checks…")
+        end
+
+        GoodJob.perform_inline
+
+        within_test_selector("llm-inference-provider--row-#{provider.id}") do
+          expect(page).to have_test_selector("llm-inference-provider--health-#{provider.id}")
+          expect(page).to have_test_selector("llm-inference-provider--checked-at-#{provider.id}", text: /\d{2}:\d{2}\z/)
+          expect(page).to have_no_test_selector("llm-inference-provider--activity-#{provider.id}")
+        end
+        expect(page).to have_current_path(llm_connection_path)
+        expect(provider.health_reports.count).to eq(1)
+
+        find_test_selector("llm-inference-provider--checked-at-#{provider.id}").click
+
+        expect(page).to have_current_path(inference_provider_health_status_report_path(provider))
+        expect(page).to have_text("Configuration")
+      end
 
       it "runs the checks and renders the report accessibly" do
         visit inference_provider_health_status_report_path(provider)

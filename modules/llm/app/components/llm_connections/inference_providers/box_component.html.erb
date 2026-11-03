@@ -26,7 +26,7 @@ See COPYRIGHT and LICENSE files for more details.
 
 ++#%>
 
-<%= component_wrapper(class: "mt-4", data: { test_selector: "llm-inference-provider--box" }) do %>
+<%= component_wrapper(class: "mt-4", **wrapper_data_attrs) do %>
   <%=
     render(Primer::OpenProject::SubHeader.new) do |subheader|
       subheader.with_action_button(
@@ -45,5 +45,5 @@ See COPYRIGHT and LICENSE files for more details.
     end
   %>
 
-  <%= render(LlmConnections::InferenceProviders::TableComponent.new(rows:)) %>
+  <%= render(LlmConnections::InferenceProviders::TableComponent.new(rows:, activity:)) %>
 <% end %>

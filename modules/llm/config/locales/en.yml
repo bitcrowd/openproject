@@ -127,8 +127,21 @@ en:
         label_connecting: "Contacting the LLM server…"
         server_description: "Connect OpenProject to a server that speaks the %{api_format} API, so AI features can use it. The host URL below decides which server that is."
         title_caption: "Leave blank to use the host and port of the server."
+      health:
+        caption: "Health"
+        failures:
+          one: "1 failure"
+          other: "%{count} failures"
+        healthy: "Healthy"
+        never: "Not checked yet"
+        running_checks: "Running checks…"
+        warnings:
+          one: "1 warning"
+          other: "%{count} warnings"
       menu:
         delete: "Delete"
+        results: "Results"
+        run_health_check: "Run health check"
     semantic_indexes:
       activate:
         body_html: "Semantic search will use <b>%{title}</b> immediately."
