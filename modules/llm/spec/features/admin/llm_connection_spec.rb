@@ -49,6 +49,18 @@ RSpec.describe "LLM connection administration",
          "opce-autocompleter[data-input-name*='default_chat_model_id']")
   end
 
+  def new_provider_dialog
+    find_test_selector("llm-inference-provider--new-button").click
+    expect(page).to have_test_selector("llm-inference-provider-dialog")
+  end
+
+  def choose_row_action(provider, label)
+    within_test_selector("llm-inference-provider--menu-#{provider.id}") do
+      find("button[aria-haspopup='true']").click
+      click_link(label)
+    end
+  end
+
   context "when nothing is configured yet" do
     it "renders an accessible, empty settings page" do
       visit llm_connection_path
@@ -133,6 +145,120 @@ RSpec.describe "LLM connection administration",
 
       expect(page).to have_text("speaks the Anthropic API")
       expect(page).to have_no_text("speaks the OpenAI API")
+    end
+  end
+
+  describe "the provider list" do
+    let(:elsewhere) { "https://elsewhere.example/v1" }
+    let!(:stored) { create(:inference_provider, title: "Stored", base_url: elsewhere, api_key: "sk-elsewhere") }
+
+    before { Setting.llm_features_enabled = true }
+
+    it "renders the new provider dialog accessibly" do
+      visit llm_connection_path
+
+      new_provider_dialog
+
+      within_test_selector("llm-inference-provider-dialog") do
+        expect(page).to be_axe_clean.skipping("color-contrast")
+      end
+    end
+
+    it "adds a provider through the dialog" do
+      mock_llm_models_response(base_url)
+
+      visit llm_connection_path
+
+      new_provider_dialog
+
+      within_test_selector("llm-inference-provider-dialog") do
+        fill_in "Display name", with: "Second"
+        fill_in "Host URL", with: base_url
+        find_test_selector("llm-inference-provider--submit").click
+      end
+
+      expect(page).to have_text(I18n.t(:notice_successful_create))
+      expect(page).to have_test_selector("llm-inference-provider--row-#{InferenceProvider.find_by!(title: 'Second').id}")
+    end
+
+    it "keeps the dialog open with the reason when the server refuses" do
+      mock_llm_models_response(base_url, response_code: 401)
+
+      visit llm_connection_path
+
+      new_provider_dialog
+
+      fill_in "Host URL", with: base_url
+      fill_in "API key", with: "sk-typed"
+      find_test_selector("llm-inference-provider--submit").click
+
+      within_test_selector("llm-inference-provider-dialog") do
+        expect(page).to have_text("was rejected by the LLM server.")
+        expect(page).to have_field("API key", with: "")
+      end
+      expect(InferenceProvider.where(base_url:)).to be_empty
+    end
+
+    it "edits the title, with the server locked" do
+      visit llm_connection_path
+
+      choose_row_action(stored, I18n.t(:button_edit))
+
+      within_test_selector("llm-inference-provider-dialog") do
+        expect(page).to have_field("Host URL", disabled: true, with: elsewhere)
+        expect(page).to have_field("API key", placeholder: "API key stored", with: "")
+        fill_in "Display name", with: "Renamed"
+        find_test_selector("llm-inference-provider--submit").click
+      end
+
+      expect(page).to have_text("Renamed")
+      expect(stored.reload.api_key).to eq("sk-elsewhere")
+    end
+
+    it "removes the key of a provider, keeping the provider" do
+      visit llm_connection_path
+
+      choose_row_action(stored, I18n.t("admin.inference_providers.delete_api_key.menu_label"))
+
+      within_test_selector("llm-inference-provider--delete-api-key-dialog") do
+        # The muted description and the danger button label Primer renders around
+        # our content miss the 4.5:1 contrast ratio, app-wide.
+        expect(page).to be_axe_clean.skipping("color-contrast")
+        click_on I18n.t("admin.inference_providers.delete_api_key.title")
+      end
+
+      expect(page).to have_text(I18n.t("admin.inference_providers.delete_api_key.success"))
+      expect(stored.reload).to have_attributes(api_key: nil, base_url: elsewhere)
+    end
+
+    it "deletes the last provider and returns to the form" do
+      visit llm_connection_path
+
+      choose_row_action(stored, I18n.t("admin.inference_providers.menu.delete"))
+
+      within_test_selector("llm-inference-provider--delete-dialog") do
+        click_on I18n.t(:button_delete)
+      end
+
+      expect(page).to have_text(I18n.t(:notice_successful_delete))
+      expect(page).to have_field("Host URL")
+      expect(InferenceProvider.count).to eq(0)
+    end
+
+    it "says what keeps a provider in use from being deleted" do
+      create(:semantic_index, title: "Docs", llm_model: create(:llm_model, inference_provider: stored, external_id: "bge-m3"))
+
+      visit llm_connection_path
+
+      choose_row_action(stored, I18n.t("admin.inference_providers.menu.delete"))
+
+      within_test_selector("llm-inference-provider--delete-dialog") do
+        expect(page).to have_text("Docs")
+        expect(page).to have_text("bge-m3")
+        expect(page).to have_no_button(I18n.t(:button_delete))
+      end
+
+      expect(InferenceProvider.exists?(stored.id)).to be(true)
     end
   end
 

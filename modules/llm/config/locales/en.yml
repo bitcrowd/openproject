@@ -51,6 +51,8 @@ en:
               not_supported: "needs credentials that OpenProject cannot store, such as a separate secret key or region."
             api_key:
               invalid_api_key: "was rejected by the LLM server."
+            base:
+              in_use: "This provider can't be deleted while its models are in use. Delete or move these indexes and choose other models for the rest: %{uses}"
             base_url:
               cannot_be_connected_to: "could not be reached. Please ensure the LLM server is running and reachable from OpenProject."
               models_endpoint_missing: "has no model list at this address, so the API key could not be verified either. Please check the URL, in particular that it includes the API version segment (for example https://example.com/v1)."
@@ -91,15 +93,42 @@ en:
           locked_once_indexed: "cannot be changed once the semantic index has been indexed."
   admin:
     inference_providers:
+      api_key:
+        none: "None"
+        stored: "Stored"
+      box:
+        empty_description: "Add an inference provider to connect OpenProject to an LLM server."
+        empty_title: "No inference provider yet"
+        new: "New provider"
+        title: "Inference providers"
+      delete_api_key:
+        description: "OpenProject will stop sending an API key to this server. Features will keep working only if the server requires no authentication. You can enter a new key at any time."
+        heading: "Remove the stored API key?"
+        menu_label: "Remove API key"
+        success: "The API key has been removed."
+        title: "Remove API key"
+      destroy:
+        description: "Its stored settings, including the API key, and its model list will be removed. This cannot be undone."
+        heading: "Delete %{title}?"
+        title: "Delete inference provider"
+        use: "%{use} (%{model})"
+      dialog:
+        edit_title: "Edit \"%{title}\""
+        new_title: "New inference provider"
       form:
         api_format_caption: "Which API the server speaks. Choose OpenAI for most gateways and self-hosted servers."
+        api_format_caption_stored: "Which API the server speaks. After changing it, refresh the model list on the Models tab."
         api_key_caption: "The key OpenProject authenticates with. Leave blank if the server requires no authentication."
         api_key_caption_discarded: "The key you entered was not saved and is not shown again. Enter it once more to save it, or leave blank to keep the stored key."
         api_key_caption_stored: "A key is stored. Leave blank to keep the current key, or enter a new one to replace it."
         api_key_placeholder_stored: "API key stored"
         base_url_caption: "The base URL of the server, for example https://example.com/v1."
+        base_url_caption_locked: "To use another server, create a new provider."
+        label_connecting: "Contacting the LLM server…"
         server_description: "Connect OpenProject to a server that speaks the %{api_format} API, so AI features can use it. The host URL below decides which server that is."
         title_caption: "Leave blank to use the host and port of the server."
+      menu:
+        delete: "Delete"
     semantic_indexes:
       activate:
         body_html: "Semantic search will use <b>%{title}</b> immediately."
@@ -133,8 +162,8 @@ en:
           one: "1 request failed."
           other: "%{count} requests failed."
         not_ready:
-          model_missing: "The model %{model} is no longer offered by the connection."
-          no_connection: "No active LLM connection is configured."
+          model_missing: "The model %{model} is no longer offered by its inference provider."
+          no_connection: "LLM features are switched off, or no inference provider is configured."
           pgvector_missing: "The pgvector extension is not installed. Install it and run the migrations again to start indexing."
         progress: "%{percentage}% done"
         unexpected_dimensions: "The server returned vectors with %{returned} dimensions instead of the %{expected} this semantic index asks for."
@@ -169,9 +198,9 @@ en:
         server_group: "Server"
       show:
         description: "Connect OpenProject to an LLM server so that AI features can use it."
-        description_enabled: "Once connected, review the models offered by the server on the [Models](models_url) tab."
+        description_enabled: "Review the models each inference provider offers on the [Models](models_url) tab."
       tabs:
-        connection: "Connection"
+        connection: "Inference providers"
         features: "Feature configuration"
         models: "Models"
       update:
@@ -313,7 +342,7 @@ en:
         api_format_supported: "Endpoint format is usable"
         base_url_present: "Endpoint is configured"
         credentials_present: "API key is stored"
-        enabled: "Connection is switched on"
+        enabled: "LLM features are switched on"
         feature_flag: "AI features are switched on"
         header: "Configuration"
       errors:
@@ -321,12 +350,12 @@ en:
         catalogue_never_fetched: "The model list has never been retrieved from the server."
         catalogue_stale: "The model list was last retrieved on %{fetched_at} and may no longer match what the server offers."
         chat_failed: "The server refused a request for %{model} with status %{status}."
-        connection_disabled: "The connection is configured but switched off, so no feature will use it."
+        connection_disabled: "The provider is configured, but LLM features are switched off, so no feature will use it."
         connection_error: "The server could not be reached. Please ensure it is running and reachable from OpenProject."
         default_model_missing: "%{model} is no longer offered by the server."
         default_model_unset: "No default model has been chosen on the Models tab, so features fall back to their own selection."
         empty_completion: "%{model} answered with an empty message."
-        feature_flag_off: "The LLM connection feature is switched off, so the connection is not used yet."
+        feature_flag_off: "The LLM feature flag is switched off, so this provider is not used yet."
         features_incapable: "%{features} cannot run, because the chosen model does not provide: %{capabilities}."
         features_model_missing: "%{features} point at a model the server no longer offers."
         features_unbound: "%{features} have no model chosen yet."

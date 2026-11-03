@@ -52,3 +52,7 @@ See COPYRIGHT and LICENSE files for more details.
 %>
 
 <%= render(LlmConnections::FormComponent.new(@connection, inference_provider: @inference_provider, features_enabled: @features_enabled)) %>
+
+<% if @inference_provider.nil? && Setting.llm_features_enabled? %>
+  <%= render(LlmConnections::InferenceProviders::BoxComponent.new(inference_providers: InferenceProvider.by_title)) %>
+<% end %>

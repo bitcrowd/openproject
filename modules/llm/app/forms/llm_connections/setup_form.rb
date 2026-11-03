@@ -31,7 +31,7 @@ module LlmConnections
   # The settings page while no inference provider exists: switching the AI
   # features on and naming the first server are one save.
   class SetupForm < ApplicationForm
-    include InferenceProviders::FormFields
+    include ::InferenceProviders::FormFields
 
     def initialize(features_enabled:)
       super()

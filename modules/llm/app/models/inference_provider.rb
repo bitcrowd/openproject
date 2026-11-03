@@ -59,6 +59,26 @@ class InferenceProvider < ApplicationRecord
   # A key assigned but not saved, as after a failed update, is not stored.
   def api_key_stored? = persisted? && api_key_in_database.present?
 
+  # Bypasses the contract: removing a credential must always be possible, even
+  # against a server that would reject the resulting unauthenticated probe.
+  def remove_api_key!
+    update_columns(api_key: nil, updated_at: Time.current)
+  end
+
+  def in_use? = models_in_use.exists?
+
+  # What keeps this provider from being deleted, each with the model it uses,
+  # named for an administrator.
+  def uses
+    models_in_use.flat_map do |llm_model|
+      llm_model.uses.map { |use| I18n.t("admin.inference_providers.destroy.use", use:, model: llm_model.name) }
+    end
+  end
+
+  def in_use_message
+    I18n.t("activerecord.errors.models.inference_provider.attributes.base.in_use", uses: uses.to_sentence)
+  end
+
   # Never the whole URL: its userinfo or query string can carry a credential.
   def host_and_port
     uri = URI.parse(base_url.to_s)
@@ -139,6 +159,14 @@ class InferenceProvider < ApplicationRecord
   end
 
   private
+
+  def models_in_use
+    connection = LlmConnection.current
+
+    models.where(id: SemanticIndex.select(:llm_model_id))
+          .or(models.where(id: LlmFeatureBinding.select(:llm_model_id)))
+          .or(models.where(id: [connection.default_chat_model_id, connection.default_embedding_model_id].compact))
+  end
 
   def base_url_is_absolute_http
     uri = URI.parse(base_url)

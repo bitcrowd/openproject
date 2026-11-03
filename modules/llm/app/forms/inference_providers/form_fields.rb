@@ -66,7 +66,7 @@ module InferenceProviders
       form.select_list(
         name: :api_format,
         label: InferenceProvider.human_attribute_name(:api_format),
-        caption: I18n.t("admin.inference_providers.form.api_format_caption"),
+        caption: I18n.t("admin.inference_providers.form.api_format_caption#{'_stored' if model.persisted?}"),
         include_blank: false,
         data: { target_name: "inference_provider_api_format", show_when_value_selected_target: "cause" }
       ) do |select|
@@ -75,6 +75,10 @@ module InferenceProviders
         end
       end
 
+      model.persisted? ? locked_base_url_field(form) : base_url_field(form)
+    end
+
+    def base_url_field(form)
       form.text_field(
         name: :base_url,
         label: InferenceProvider.human_attribute_name(:base_url),
@@ -82,6 +86,18 @@ module InferenceProviders
         placeholder: "https://example.com/v1",
         required: true,
         type: :url
+      )
+    end
+
+    # A different URL is a different server, and so a new provider.
+    def locked_base_url_field(form)
+      form.text_field(
+        name: :base_url,
+        label: InferenceProvider.human_attribute_name(:base_url),
+        caption: I18n.t("admin.inference_providers.form.base_url_caption_locked"),
+        # The userinfo and query string of a URL can carry a credential.
+        value: model.base_url_without_credentials,
+        disabled: true
       )
     end
 

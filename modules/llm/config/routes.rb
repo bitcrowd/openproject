@@ -33,7 +33,18 @@ Rails.application.routes.draw do
       post :setup
     end
 
-    resources :inference_providers, only: [] do
+    resources :inference_providers, only: %i[create update destroy], controller: "admin/inference_providers" do
+      collection do
+        get :new_dialog, defaults: { format: :turbo_stream }
+      end
+
+      member do
+        get :edit_dialog, defaults: { format: :turbo_stream }
+        get :deletion_dialog, defaults: { format: :turbo_stream }
+        get :delete_api_key_dialog, defaults: { format: :turbo_stream }
+        delete :api_key, action: :delete_api_key
+      end
+
       resource :health_status_report, only: %i[show create], controller: "admin/llm_health_status"
     end
 
