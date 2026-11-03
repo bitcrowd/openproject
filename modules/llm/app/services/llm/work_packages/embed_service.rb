@@ -40,7 +40,7 @@ module Llm
 
         raise Llm::Errors::NotReady, :no_connection unless LlmConnection.available?
 
-        vectors = session.embed(texts, model: semantic_index.model_id, dimensions:).vectors
+        vectors = session.embed(texts, model: semantic_index.llm_model.external_id, dimensions:).vectors
         ensure_requested_dimensions(vectors)
 
         store(vectors)

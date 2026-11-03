@@ -33,13 +33,15 @@ require_module_spec_helper
 RSpec.describe LlmFeatureBinding do
   let(:connection) { create(:llm_connection, :with_models) }
 
-  def bind(model_id)
-    connection.feature_bindings.new(feature_key: "description_assistant", model_id:)
+  let(:llm_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
+
+  def bind(llm_model)
+    connection.feature_bindings.new(feature_key: "description_assistant", llm_model:)
   end
 
   describe "the bound model" do
     it "may be one the connection offers" do
-      expect(bind("qwen3.6-27b")).to be_valid
+      expect(bind(llm_model)).to be_valid
     end
 
     it "may be left blank to inherit the connection default" do
@@ -47,29 +49,30 @@ RSpec.describe LlmFeatureBinding do
     end
 
     it "must be one the connection offers" do
-      binding = bind("no-such-model")
+      binding = bind(create(:llm_model, llm_connection: create(:llm_connection, active: false)))
 
       expect(binding).not_to be_valid
-      expect(binding.errors.details[:model_id]).to include(error: :not_available)
+      expect(binding.errors.details[:llm_model_id]).to include(error: :not_available)
     end
 
     it "must not be one an administrator switched off" do
-      connection.models.find_by!(external_id: "qwen3.6-27b").update!(active: false)
+      llm_model.update!(active: false)
 
-      expect(bind("qwen3.6-27b")).not_to be_valid
+      expect(bind(llm_model)).not_to be_valid
     end
 
     # A catalogue that shrinks underneath a stored binding must not block every
     # later save of it; the page flags the binding as dangling instead.
     it "is not checked again while it stays the same" do
-      binding = bind("qwen3.6-27b").tap(&:save!)
-      connection.models.find_by!(external_id: "qwen3.6-27b").update!(active: false)
+      binding = bind(llm_model).tap(&:save!)
+      llm_model.update!(active: false)
 
       expect(binding.reload).to be_valid
+      expect(binding).to be_dangling
     end
 
     it "reports a missing connection instead of raising" do
-      binding = described_class.new(feature_key: "description_assistant", model_id: "qwen3.6-27b")
+      binding = described_class.new(feature_key: "description_assistant", llm_model:)
 
       expect(binding).not_to be_valid
       expect(binding.errors.details[:llm_connection]).to include(error: :blank)
@@ -83,10 +86,10 @@ RSpec.describe LlmFeatureBinding do
              default_embedding_model_identifier: "bge-m3")
     end
 
-    it "resolves to the identifier the server knows the default model by" do
+    it "resolves to the default model" do
       binding = bind(nil).tap(&:save!)
 
-      expect(binding.resolved_model_id).to eq("qwen3.6-27b")
+      expect(binding.resolved_model).to eq(llm_model)
       expect(binding).not_to be_dangling
     end
   end

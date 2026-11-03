@@ -67,7 +67,7 @@ RSpec.describe Llm::IndexWorkPackagesJob,
     end
 
     it "fails the Semantic Index and enqueues nothing without a connection" do
-      connection.destroy!
+      allow(LlmConnection).to receive(:available?).and_return(false)
 
       job.perform(semantic_index.id)
 
@@ -78,7 +78,7 @@ RSpec.describe Llm::IndexWorkPackagesJob,
     end
 
     it "fails the Semantic Index when the connection no longer offers its model" do
-      semantic_index.update!(model_id: "no-longer-offered")
+      semantic_index.llm_model.update!(active: false)
 
       job.perform(semantic_index.id)
 
@@ -86,7 +86,7 @@ RSpec.describe Llm::IndexWorkPackagesJob,
       expect(semantic_index.reload)
         .to have_attributes(state: "failed",
                             error_message: I18n.t("admin.semantic_indexes.indexing.not_ready.model_missing",
-                                                  model: "no-longer-offered"))
+                                                  model: "bge-m3"))
     end
 
     it "does nothing with the feature flag off", with_flag: { semantic_search: false } do

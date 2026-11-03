@@ -41,37 +41,37 @@ module LlmConnections
   # listed even once it no longer qualifies, flagged, so that opening the page
   # cannot silently blank a working binding.
   class SelectableModelsQuery
-    Option = Data.define(:model_id, :qualifies)
+    Option = Data.define(:model, :qualifies)
 
-    def initialize(connection, feature, bound_model_id: nil)
+    def initialize(connection, feature, bound_model: nil)
       @connection = connection
       @feature = feature
-      @bound_model_id = bound_model_id
+      @bound_model = bound_model
     end
 
     def call
-      offerable_model_ids.map { |model_id| Option.new(model_id:, qualifies: qualifying_ids.include?(model_id)) }
+      offerable_models.map { |model| Option.new(model:, qualifies: qualifying_models.include?(model)) }
     end
 
     def models_left_out?
-      (model_ids_of_kind & ruled_out_model_ids).without(bound_model_id).any?
+      (models_of_kind - qualifying_models).without(bound_model).any?
     end
 
     private
 
-    attr_reader :connection, :feature, :bound_model_id
+    attr_reader :connection, :feature, :bound_model
 
-    def offerable_model_ids
-      (qualifying_ids + [bound_model_id]).compact_blank.uniq
+    def offerable_models
+      (qualifying_models + [bound_model]).compact.uniq
     end
 
-    def qualifying_ids
-      @qualifying_ids ||= model_ids_of_kind - ruled_out_model_ids
+    def qualifying_models
+      @qualifying_models ||= models_of_kind.reject { |model| ruled_out_model_ids.include?(model.external_id) }
     end
 
     # Withdrawn models are not offered: both lists are built from the active ones.
-    def model_ids_of_kind
-      feature.embedding? ? connection.embedding_model_ids : connection.chat_model_ids
+    def models_of_kind
+      @models_of_kind ||= (feature.embedding? ? connection.embedding_models : connection.chat_models).to_a
     end
 
     def ruled_out_model_ids

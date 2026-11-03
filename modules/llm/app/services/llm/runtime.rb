@@ -33,7 +33,8 @@ module Llm
   # The single place model resolution happens, so that every feature agrees on
   # what an unset value means:
   #
-  #   per-item override -> feature binding -> connection default -> unbound
+  #   per-item override -> active semantic index -> feature binding ->
+  #     connection default -> unbound
   #
   # A blank value at any level means "inherit from the level below".
   class Runtime
@@ -43,8 +44,10 @@ module Llm
     # :unbound          - nothing has chosen a model for this feature yet
     # :model_missing    - the chosen model is not in the server's catalogue
     # :incapable        - the chosen model is known not to support what is needed
-    Resolution = Data.define(:feature, :connection, :model_id, :status, :missing_capabilities) do
+    Resolution = Data.define(:feature, :connection, :model, :status, :missing_capabilities) do
       def ready? = status == :ready
+
+      def model_id = model&.external_id
 
       # A chat builder for the resolved model.
       #
@@ -85,8 +88,8 @@ module Llm
 
     class << self
       # @param feature_key [Symbol] a key registered with OpenProject::Llm::Features
-      # @param override [String, nil] a per-item model choice, e.g. one stored on
-      #   a description assistant action. Blank means inherit.
+      # @param override [Integer, nil] the LlmModel id of a per-item choice, e.g.
+      #   one stored on a description assistant action. Blank means inherit.
       def for(feature_key, override: nil)
         new(OpenProject::Llm::Features[feature_key], override:).call
       end
@@ -101,14 +104,14 @@ module Llm
       return resolution(:feature_disabled) unless feature.available?
       return resolution(:no_connection) unless LlmConnection.available?
 
-      model_id = resolved_model_id
-      return resolution(:unbound) if model_id.blank?
-      return resolution(:model_missing, model_id:) unless usable?(model_id)
+      model = resolved_model
+      return resolution(effective_override ? :model_missing : :unbound) if model.nil?
+      return resolution(:model_missing, model:) unless model.active?
 
-      missing = unsupported_capabilities(model_id)
-      return resolution(:incapable, model_id:, missing_capabilities: missing) if missing.any?
+      missing = unsupported_capabilities(model)
+      return resolution(:incapable, model:, missing_capabilities: missing) if missing.any?
 
-      resolution(:ready, model_id:)
+      resolution(:ready, model:)
     end
 
     private
@@ -119,9 +122,14 @@ module Llm
       @connection ||= LlmConnection.active_connection
     end
 
-    def resolved_model_id
-      effective_override || binding_model_id || connection_default
+    def resolved_model
+      return connection.models.find_by(id: effective_override) if effective_override
+
+      active_index_model || binding&.llm_model || connection.default_model_for(feature)
     end
+
+    # The stored vectors are meaningless under any other model.
+    def active_index_model = binding&.semantic_index&.llm_model
 
     # A feature declared overridable: false must not follow a caller's override:
     # semantic_search's vectors were written with one model, and a different one
@@ -132,38 +140,28 @@ module Llm
       override.presence
     end
 
-    def usable?(model_id)
-      connection.available_model_ids.include?(model_id)
-    end
-
     def binding
       return @binding if defined?(@binding)
 
       @binding = connection.feature_bindings.find_by(feature_key: feature.key.to_s)
     end
 
-    def binding_model_id
-      return binding&.model_id.presence unless feature.embedding?
-
-      binding&.semantic_index&.model_id
-    end
-
-    def connection_default
-      connection.default_model_for(feature)&.external_id
-    end
-
     # Only a definite :unsupported blocks. An :unknown verdict -- which is the
     # normal state for a server that reports nothing about its models -- is
     # surfaced in the UI as a warning but never prevents a call.
-    def unsupported_capabilities(model_id)
+    def unsupported_capabilities(model)
       return [] if feature.requires.empty?
 
-      connection.capability_verdicts.for_model(model_id).blocking(feature.requires).pluck(:capability).map(&:to_sym)
+      connection.capability_verdicts
+                .for_model(model.external_id)
+                .blocking(feature.requires)
+                .pluck(:capability)
+                .map(&:to_sym)
     end
 
-    def resolution(status, model_id: nil, missing_capabilities: [])
+    def resolution(status, model: nil, missing_capabilities: [])
       Resolution.new(feature:, connection: status == :feature_disabled ? nil : connection,
-                     model_id:, status:, missing_capabilities:)
+                     model:, status:, missing_capabilities:)
     end
   end
 end

@@ -38,8 +38,10 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
   shared_let(:admin) { create(:admin) }
 
   let(:turbo_headers) { { "Accept" => "text/vnd.turbo-stream.html" } }
+  let(:embedding_model) { connection.models.find_by!(external_id: "bge-m3") }
+  let(:chat_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
   let(:valid_params) do
-    { semantic_index: { title: "Nomic small", description: "Trial", model_id: "bge-m3",
+    { semantic_index: { title: "Nomic small", description: "Trial", llm_model_id: embedding_model.id,
                         embedding_vector_dimensions: 768, context_token_length: 2048 } }
   end
 
@@ -153,7 +155,7 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(response.body).to include(I18n.t("admin.semantic_indexes.dialog.new_title"))
 
       items = Nokogiri::HTML(response.parsed_body).at_css("opce-autocompleter")["data-items"]
-      expect(JSON.parse(items).pluck("id")).to contain_exactly("bge-m3")
+      expect(JSON.parse(items).pluck("name")).to contain_exactly("bge-m3")
     end
   end
 
@@ -162,17 +164,17 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       post semantic_indexes_path, params: valid_params
 
       expect(response).to redirect_to(llm_feature_bindings_path)
-      expect(SemanticIndex.sole).to have_attributes(title: "Nomic small", model_id: "bge-m3",
+      expect(SemanticIndex.sole).to have_attributes(title: "Nomic small", llm_model: embedding_model,
                                                     embedding_vector_dimensions: 768,
                                                     context_token_length: 2048, state: "not_indexed")
     end
 
     it "re-renders the form with errors" do
-      post semantic_indexes_path, params: { semantic_index: valid_params[:semantic_index].merge(model_id: "qwen3.6-27b") },
+      post semantic_indexes_path, params: { semantic_index: valid_params[:semantic_index].merge(llm_model_id: chat_model.id) },
                                   headers: turbo_headers
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.body).to include(I18n.t("activerecord.errors.models.semantic_index.attributes.model_id.not_offered"))
+      expect(response.body).to include(I18n.t("activerecord.errors.models.semantic_index.attributes.llm_model_id.not_offered"))
       expect(SemanticIndex.count).to eq(0)
     end
   end

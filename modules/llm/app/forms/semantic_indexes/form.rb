@@ -51,8 +51,9 @@ module SemanticIndexes
 
       if locked
         f.text_field(
-          name: :model_id,
-          label: SemanticIndex.human_attribute_name(:model_id),
+          name: :llm_model_id,
+          label: SemanticIndex.human_attribute_name(:llm_model_id),
+          value: model.llm_model&.external_id,
           disabled: true
         )
       else
@@ -88,8 +89,8 @@ module SemanticIndexes
 
     def model_autocompleter(form)
       form.autocompleter(
-        name: :model_id,
-        label: SemanticIndex.human_attribute_name(:model_id),
+        name: :llm_model_id,
+        label: SemanticIndex.human_attribute_name(:llm_model_id),
         caption: I18n.t("admin.semantic_indexes.form.model_caption"),
         required: true,
         autocomplete_options: {
@@ -101,18 +102,18 @@ module SemanticIndexes
       ) do |list|
         model_options.each do |option|
           list.option(label: option_label(option),
-                      value: option.model_id,
-                      selected: selected_model_id == option.model_id)
+                      value: option.model.id,
+                      selected: selected_model_id == option.model.id)
         end
       end
     end
 
-    def selected_model_id = model.model_id
+    def selected_model_id = model.llm_model_id
 
     def option_label(option)
-      return option.model_id if option.qualifies
+      return option.model.external_id if option.qualifies
 
-      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model_id)
+      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model.external_id)
     end
   end
 end

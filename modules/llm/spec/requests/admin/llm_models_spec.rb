@@ -406,9 +406,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         post llm_models_path, params: { llm_model: { external_id: "qwen3.6-35b-a3b" } }
 
         patch llm_feature_binding_path("description_assistant"),
-              params: { llm_feature_binding: { model_id: "qwen3.6-35b-a3b" } }
+              params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "qwen3.6-35b-a3b")&.id } }
 
-        expect(connection.feature_bindings.find_by(feature_key: "description_assistant").model_id)
+        expect(connection.feature_bindings.find_by(feature_key: "description_assistant").llm_model&.external_id)
           .to eq("qwen3.6-35b-a3b")
       end
     end
@@ -485,9 +485,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         patch llm_model_path(llm_model), params: { llm_model: { model_type: "embedding" } }
 
         patch llm_feature_binding_path("semantic_search"),
-              params: { llm_feature_binding: { model_id: "hand-typed" } }
+              params: { llm_feature_binding: { llm_model_id: connection.models.find_by(external_id: "hand-typed")&.id } }
 
-        expect(connection.feature_bindings.find_by(feature_key: "semantic_search").model_id).to eq("hand-typed")
+        expect(connection.feature_bindings.find_by(feature_key: "semantic_search").llm_model&.external_id).to eq("hand-typed")
       end
 
       # Clearing an assertion records nothing rather than recording ignorance as
@@ -647,15 +647,35 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(LlmModel.where(id: llm_model.id)).to be_empty
       end
 
-      # cascade_rename! keeps the defaults pointing at the model; deleting one has
-      # to let go of it, or the connection keeps a default no model answers to.
-      it "lets go of a connection default that named the deleted model" do
+      it "refuses while a connection default uses it" do
         llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
         connection.update!(default_chat_model: llm_model)
 
         delete llm_model_path(llm_model)
 
-        expect(connection.reload.default_chat_model).to be_nil
+        expect(response).to redirect_to(llm_models_path)
+        expect(flash[:error]).to include(LlmConnection.human_attribute_name(:default_chat_model_id))
+        expect(connection.reload.default_chat_model).to eq(llm_model)
+      end
+
+      it "refuses while a feature binding uses it" do
+        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        create(:llm_feature_binding, llm_connection: connection, llm_model:)
+
+        delete llm_model_path(llm_model)
+
+        expect(flash[:error]).to include("Description assistant")
+        expect(LlmModel.where(id: llm_model.id)).to exist
+      end
+
+      it "refuses while a semantic index uses it" do
+        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        create(:semantic_index, title: "Docs", llm_model:)
+
+        delete llm_model_path(llm_model)
+
+        expect(flash[:error]).to include("Docs")
+        expect(LlmModel.where(id: llm_model.id)).to exist
       end
 
       # Discovered models are the server's to add and remove, not the administrator's.
@@ -745,25 +765,27 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
       # Requested by the async-dialog Stimulus controller, which asks for a turbo
       # stream rather than HTML.
-      it "names a connection default as something that would break" do
+      it "names a connection default that keeps the model from being deleted" do
         connection.update!(default_chat_model: llm_model)
 
         get delete_dialog_llm_model_path(llm_model), headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
         expect(response).to have_http_status(:ok)
-        expect(response.body).to include("stop working until another model is selected")
-        expect(response.body).to include(LlmConnection.human_attribute_name(:default_chat_model_id))
+        expect(CGI.unescapeHTML(response.body))
+          .to include("can't be deleted while it's in use", LlmConnection.human_attribute_name(:default_chat_model_id))
+        expect(response.body).not_to include(%(action="#{llm_model_path(llm_model)}"))
       end
 
-      it "says only that the model goes when nothing depends on it" do
+      it "offers the deletion when nothing depends on the model" do
         get delete_dialog_llm_model_path(llm_model), headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
         expect(response.body).to include("no longer be offered to AI features")
-        expect(response.body).not_to include("stop working until another model is selected")
+        expect(response.body).to include(%(action="#{llm_model_path(llm_model)}"))
       end
 
-      it "offers a confirmation naming the features that would break" do
-        create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "hand-typed")
+      it "names a feature that keeps the model from being deleted" do
+        create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                     model_identifier: "hand-typed")
 
         get delete_dialog_llm_model_path(llm_model), headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
@@ -780,7 +802,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       before do
         connection.update!(default_chat_model: llm_model)
         create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
-                                     model_id: "qwen/qwen3.6-35b-a3b")
+                                     model_identifier: "qwen/qwen3.6-35b-a3b")
         create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen/qwen3.6-35b-a3b", capability: "embeddings",
                                         state: "unsupported", source: "probe")
       end
@@ -808,7 +830,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         expect(llm_model.reload.external_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
         expect(connection.reload.default_chat_model).to eq(llm_model)
-        expect(connection.feature_bindings.first.model_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
+        expect(connection.feature_bindings.first.llm_model&.external_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
         expect(connection.capability_verdicts.first.model_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
       end
 
@@ -850,18 +872,11 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(page).to have_css("[data-test-selector='llm-model--delete-#{hand_typed.id}']", visible: :all)
       end
 
-      it "refuses to open the delete dialog" do
-        get delete_dialog_llm_model_path(env_default), headers: { "Accept" => "text/vnd.turbo-stream.html" }
-
-        expect(response).to redirect_to(llm_models_path)
-        expect(flash[:error]).to eq(refusal)
-      end
-
       it "refuses to delete it and keeps the default" do
         delete llm_model_path(env_default)
 
         expect(response).to redirect_to(llm_models_path)
-        expect(flash[:error]).to eq(refusal)
+        expect(flash[:error]).to include(LlmConnection.human_attribute_name(:default_chat_model_id))
         expect(LlmModel.where(id: env_default.id)).to exist
         expect(connection.reload.default_chat_model_id).to eq(env_default.id)
       end
@@ -906,13 +921,6 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
           end
         end
 
-        it "refuses to delete it" do
-          delete llm_model_path(env_default)
-
-          expect(flash[:error]).to eq(refusal)
-          expect(connection.reload.default_chat_model_id).to eq(env_default.id)
-        end
-
         it "refuses to rename it" do
           patch llm_model_path(env_default), params: { llm_model: { external_id: "renamed" } }
 
@@ -923,12 +931,6 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
       context "when the environment no longer configures the connection" do
         before { allow(Setting).to receive(:llm_connection).and_return({}) }
-
-        it "ends the environment's hold on the connection when the former default is deleted" do
-          delete llm_model_path(env_default)
-
-          expect(connection.reload.env_provisioned_at).to be_nil
-        end
 
         it "ends the environment's hold on the connection when the former default is renamed" do
           patch llm_model_path(env_default), params: { llm_model: { external_id: "renamed" } }
@@ -953,17 +955,6 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         expect(response).to redirect_to(llm_models_path)
         expect(LlmModel.where(id: hand_typed.id)).to be_empty
-      end
-
-      context "when the environment has not applied its values yet" do
-        before { connection.update_columns(env_provisioned_at: nil) }
-
-        it "deletes it like any other model entered by hand" do
-          delete llm_model_path(env_default)
-
-          expect(LlmModel.where(id: env_default.id)).to be_empty
-          expect(connection.reload.default_chat_model_id).to be_nil
-        end
       end
     end
 

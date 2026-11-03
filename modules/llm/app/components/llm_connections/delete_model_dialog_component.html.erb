@@ -1,21 +1,32 @@
-<%=
-  render(
-    Primer::OpenProject::DangerDialog.new(
-      title: t("admin.llm_models.destroy.title"),
-      form_arguments:,
-      size: :large,
-      test_selector: TEST_SELECTOR
-    )
-  ) do |dialog|
-    dialog.with_confirmation_message do |message|
-      message.with_heading(tag: :h2) { t("admin.llm_models.destroy.heading", model: llm_model.external_id) }
-      message.with_description_content(
-        if bound_features.any?
-          t("admin.llm_models.destroy.description_bound", features: bound_features.to_sentence)
-        else
-          t("admin.llm_models.destroy.description")
-        end
+<% if llm_model.in_use? %>
+  <%=
+    render(
+      Primer::OpenProject::FeedbackDialog.new(
+        title: t("admin.llm_models.destroy.title"),
+        size: :large,
+        test_selector: TEST_SELECTOR
       )
+    ) do |dialog|
+      dialog.with_feedback_message(icon_arguments: { icon: :alert, color: :danger }) do |message|
+        message.with_heading(tag: :h2) { t("admin.llm_models.destroy.heading", model: llm_model.external_id) }
+        message.with_description_content(t("admin.llm_models.destroy.in_use", uses: llm_model.uses.to_sentence))
+      end
     end
-  end
-%>
+  %>
+<% else %>
+  <%=
+    render(
+      Primer::OpenProject::DangerDialog.new(
+        title: t("admin.llm_models.destroy.title"),
+        form_arguments:,
+        size: :large,
+        test_selector: TEST_SELECTOR
+      )
+    ) do |dialog|
+      dialog.with_confirmation_message do |message|
+        message.with_heading(tag: :h2) { t("admin.llm_models.destroy.heading", model: llm_model.external_id) }
+        message.with_description_content(t("admin.llm_models.destroy.description"))
+      end
+    end
+  %>
+<% end %>

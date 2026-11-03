@@ -31,8 +31,9 @@ class SemanticIndex < ApplicationRecord
   class InvalidTransitionError < StandardError; end
 
   INDEXABLE_STATES = %w[not_indexed failed ready].freeze
-  PARAMETERS = %w[model_id embedding_vector_dimensions context_token_length].freeze
+  PARAMETERS = %w[llm_model_id embedding_vector_dimensions context_token_length].freeze
 
+  belongs_to :llm_model
   has_many :llm_feature_bindings, dependent: :restrict_with_error
 
   enum :state, {
@@ -43,7 +44,7 @@ class SemanticIndex < ApplicationRecord
   }
 
   validates :title, presence: true
-  validates :model_id, presence: true, length: { maximum: LlmModel::MAX_EXTERNAL_ID_LENGTH }
+  validates :llm_model_id, presence: true
   validates :embedding_vector_dimensions,
             numericality: { only_integer: true, greater_than: 0,
                             less_than_or_equal_to: WorkPackageEmbedding::DIMENSIONS }

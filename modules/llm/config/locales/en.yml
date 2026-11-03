@@ -20,7 +20,7 @@ en:
       llm_feature_binding:
         feature_key: "Feature"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
-        model: "Model"
+        llm_model: "Model"
         semantic_index: "Semantic Index"
       llm_model:
         admin_context_window: "Context window"
@@ -33,7 +33,7 @@ en:
         embedding_vector_dimensions: "Dimensions"
         llm_feature_bindings: "Feature configuration"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
-        model: "Model"
+        llm_model: "Model"
         state: "Status"
         title: "Display name"
     errors:
@@ -69,7 +69,7 @@ en:
           attributes:
             feature_key:
               not_registered: "does not belong to a known AI feature."
-            model_id:
+            llm_model_id:
               not_available: "is not offered by the configured LLM server."
             semantic_index:
               not_for_chat_feature: "only applies to features that create embeddings."
@@ -82,7 +82,7 @@ en:
             base:
               active: "The semantic index is active. Activate another semantic index first."
               locked_while_indexing: "cannot be changed while it is being indexed."
-            model_id:
+            llm_model_id:
               not_offered: "is not an embedding model offered by the configured LLM server."
           locked_once_indexed: "cannot be changed once the semantic index has been indexed."
   admin:
@@ -228,8 +228,8 @@ en:
         success: "The default models have been saved."
       destroy:
         description: "The model will no longer be offered to AI features."
-        description_bound: "This model is currently used by %{features}. Those features will stop working until another model is selected."
         heading: "Remove %{model}?"
+        in_use: "This model can't be deleted while it's in use: %{uses}"
         success: "%{model} has been removed."
         title: "Remove model"
       edit:
@@ -275,6 +275,8 @@ en:
         success: "The model list has been refreshed."
       update:
         success: "%{model} has been updated."
+      uses:
+        semantic_index: "Semantic index \"%{title}\""
   attributes:
     semantic_similarity: "Similarity"
   label_search_by_meaning: "Search by meaning"

@@ -105,20 +105,20 @@ module Admin
 
     def build_binding(feature)
       binding = binding_for(feature)
-      binding.model_id = binding_params[:model_id].presence
+      binding.llm_model_id = binding_params[:llm_model_id].presence
       binding
     end
 
     def binding_params
-      @binding_params ||= params.expect(llm_feature_binding: %i[model_id])
+      @binding_params ||= params.expect(llm_feature_binding: %i[llm_model_id])
     end
 
     # The verdict that actually matters is the one for the model an administrator
     # just chose, so it is fetched now rather than left unknown until first use.
     def probe_capabilities(feature, binding)
-      return if feature.requires.empty? || binding.model_id.blank?
+      return if feature.requires.empty? || binding.llm_model.blank?
 
-      LlmConnections::DetectCapabilitiesService.new(@connection).detect(binding.model_id).result
+      LlmConnections::DetectCapabilitiesService.new(@connection).detect(binding.llm_model.external_id).result
     end
   end
 end

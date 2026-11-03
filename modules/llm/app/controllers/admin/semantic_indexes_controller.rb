@@ -134,7 +134,9 @@ module Admin
 
     def status
       replace_via_turbo_stream(
-        component: LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.order(:created_at))
+        component: LlmConnections::SemanticIndexes::BoxComponent.new(
+          semantic_indexes: SemanticIndex.includes(:llm_model).order(:created_at)
+        )
       )
       respond_with_turbo_streams
     end
@@ -177,7 +179,7 @@ module Admin
     end
 
     def semantic_index_params
-      params.expect(semantic_index: %i[title description model_id embedding_vector_dimensions context_token_length])
+      params.expect(semantic_index: %i[title description llm_model_id embedding_vector_dimensions context_token_length])
     end
   end
 end

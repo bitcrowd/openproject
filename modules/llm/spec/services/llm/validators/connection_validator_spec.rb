@@ -45,7 +45,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
   # a later refresh withdraws that model.
   def bind_to_withdrawn_model(feature_key, model_id, **)
     llm_model = create(:llm_model, llm_connection: connection, external_id: model_id)
-    create(:llm_feature_binding, llm_connection: connection, feature_key:, model_id:, **)
+    create(:llm_feature_binding, llm_connection: connection, feature_key:, llm_model:, **)
     llm_model.update!(active: false)
   end
 

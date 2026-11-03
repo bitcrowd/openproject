@@ -41,7 +41,7 @@ module LlmConnections
     end
 
     # The record the select binds to. A feature without a stored binding still
-    # needs one so the form has a model_id to read.
+    # needs one so the form has an llm_model_id to read.
     def form_model
       binding || connection.feature_bindings.new(feature_key: feature.key.to_s)
     end
@@ -69,7 +69,7 @@ module LlmConnections
     attr_reader :feature, :connection, :binding
 
     def selectable_models
-      @selectable_models ||= SelectableModelsQuery.new(connection, feature, bound_model_id: binding&.model_id)
+      @selectable_models ||= SelectableModelsQuery.new(connection, feature, bound_model: binding&.llm_model)
     end
 
     def default_model

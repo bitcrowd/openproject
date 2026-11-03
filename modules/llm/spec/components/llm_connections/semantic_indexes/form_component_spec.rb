@@ -54,13 +54,13 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       rendered_component
 
       autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
-      expect(autocompleter[:"data-input-name"]).to include("semantic_index[model_id]")
+      expect(autocompleter[:"data-input-name"]).to include("semantic_index[llm_model_id]")
       expect(autocompleter[:"data-items"]).to include("bge-m3")
     end
   end
 
   context "for a persisted semantic index" do
-    let(:semantic_index) { create(:semantic_index, title: "Qwen3 baseline", model_id: "bge-m3") }
+    let(:semantic_index) { create(:semantic_index, title: "Qwen3 baseline", model_identifier: "bge-m3") }
 
     it "patches the semantic index's own route" do
       rendered_component
@@ -73,7 +73,7 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       rendered_component
 
       autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
-      expect(autocompleter[:"data-input-value"]).to include("bge-m3")
+      expect(autocompleter[:"data-input-value"]).to include(semantic_index.llm_model_id.to_s)
     end
   end
 
@@ -89,7 +89,7 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
     it "renders the parameter fields disabled" do
       rendered_component
 
-      expect(page).to have_field(SemanticIndex.human_attribute_name(:model_id), disabled: true)
+      expect(page).to have_field(SemanticIndex.human_attribute_name(:llm_model_id), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:context_token_length), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:embedding_vector_dimensions), disabled: true)
       expect(page).to have_no_css("[data-test-selector='llm-semantic-index--model']")

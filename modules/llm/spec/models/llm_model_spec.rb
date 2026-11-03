@@ -120,15 +120,15 @@ RSpec.describe LlmModel do
     before do
       llm_model
       create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3")
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "bge-m3")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_identifier: "bge-m3")
     end
 
-    it "carries verdicts and bindings over to the new identifier" do
+    it "carries verdicts over to the new identifier, and bindings follow the row" do
       llm_model.update!(external_id: "bge-m3-v2")
       llm_model.cascade_rename!("bge-m3")
 
       expect(connection.capability_verdicts.pluck(:model_id)).to eq(["bge-m3-v2"])
-      expect(connection.feature_bindings.pluck(:model_id)).to eq(["bge-m3-v2"])
+      expect(connection.feature_bindings.map { it.llm_model&.external_id }).to eq(["bge-m3-v2"])
     end
 
     it "takes the connection out of the environment's hands when it renames a default" do
@@ -150,15 +150,36 @@ RSpec.describe LlmModel do
   end
 
   describe "#cascade_delete!" do
-    it "removes the model's verdicts and the defaults that named it" do
+    it "removes the model's verdicts" do
       create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3")
       create(:llm_capability_verdict, llm_connection: connection, model_id: "another")
-      connection.update_columns(default_embedding_model_id: llm_model.id)
 
       llm_model.cascade_delete!
 
       expect(connection.capability_verdicts.pluck(:model_id)).to eq(["another"])
-      expect(connection.reload.default_embedding_model_id).to be_nil
+    end
+  end
+
+  describe "#uses" do
+    it "is empty while nothing uses the model" do
+      expect(llm_model.uses).to be_empty
+      expect(llm_model).not_to be_in_use
+    end
+
+    it "names a semantic index, a feature and a default" do
+      create(:semantic_index, title: "Docs", llm_model:)
+      create(:llm_feature_binding, llm_connection: connection, llm_model:)
+      connection.update_columns(default_embedding_model_id: llm_model.id)
+
+      expect(llm_model.reload).to be_in_use
+      expect(llm_model.uses).to eq(["Semantic index \"Docs\"", "Description assistant", "Default embedding model"])
+    end
+
+    it "names a feature that is no longer registered by its key" do
+      binding = create(:llm_feature_binding, llm_connection: connection, llm_model:)
+      binding.update_columns(feature_key: "retired_feature")
+
+      expect(llm_model.reload.uses).to eq(["retired_feature"])
     end
   end
 
@@ -209,7 +230,8 @@ RSpec.describe LlmModel do
     let!(:connection) { create(:llm_connection, :with_models, base_url: "https://example.com/v1") }
 
     it "keeps the bound model available and resolves the feature to it" do
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "qwen3.6-27b")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                   model_identifier: "qwen3.6-27b")
 
       resolution = Llm::Runtime.for(:description_assistant)
 

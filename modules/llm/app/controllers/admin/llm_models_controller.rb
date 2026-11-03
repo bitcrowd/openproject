@@ -113,17 +113,13 @@ module Admin
 
     def delete_dialog
       llm_model = @connection.models.manual.find(params.expect(:id))
-      return refuse_env_named_default if @connection.env_named_default?(llm_model)
 
       respond_with_dialog LlmConnections::DeleteModelDialogComponent.new(llm_model)
     end
 
     def destroy
-      llm_model = @connection.models.manual.find(params.expect(:id))
-      destroyed = unless_env_named_default(llm_model) { destroy_with_references(llm_model) }
-      return refuse_env_named_default if destroyed == :refused
+      destroy_unless_in_use(@connection.models.manual.find(params.expect(:id)))
 
-      flash[:notice] = t(".success", model: llm_model.external_id)
       redirect_to llm_models_path, status: :see_other
     end
 
@@ -160,7 +156,7 @@ module Admin
 
     # Judged on the committed row under the connection's advisory lock: a seed
     # applying the environment's values holds that lock until it commits.
-    def unless_env_named_default(llm_model, applies: true)
+    def unless_env_named_default(llm_model, applies:)
       OpenProject::Mutex.with_advisory_lock_transaction(@connection) do
         next :refused if applies && @connection.reload.env_named_default?(llm_model)
 
@@ -171,6 +167,15 @@ module Admin
     def refuse_env_named_default
       flash[:error] = t("admin.llm_models.configured_from_env")
       redirect_to llm_models_path, status: :see_other
+    end
+
+    def destroy_unless_in_use(llm_model)
+      if llm_model.in_use?
+        flash[:error] = t(".in_use", uses: llm_model.uses.to_sentence)
+      else
+        destroy_with_references(llm_model)
+        flash[:notice] = t(".success", model: llm_model.external_id)
+      end
     end
 
     def destroy_with_references(llm_model)
