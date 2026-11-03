@@ -145,7 +145,7 @@ module Admin
     def status
       replace_via_turbo_stream(
         component: LlmConnections::SemanticIndexes::BoxComponent.new(
-          semantic_indexes: SemanticIndex.includes(:llm_model).order(:created_at)
+          semantic_indexes: SemanticIndex.includes(llm_model: :inference_provider).order(:created_at)
         )
       )
       respond_with_turbo_streams

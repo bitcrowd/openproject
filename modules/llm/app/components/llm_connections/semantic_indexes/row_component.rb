@@ -34,6 +34,8 @@ module LlmConnections
 
       delegate :context_token_length, :embedding_vector_dimensions, to: :semantic_index
 
+      def inference_provider = semantic_index.llm_model.inference_provider.title
+
       def llm_model = semantic_index.llm_model.external_id
 
       STATE_LABEL_SCHEMES = {

@@ -349,6 +349,18 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
     end
   end
 
+  describe "the list on the feature configuration page" do
+    let!(:semantic_index) { create(:semantic_index, title: "Docs") }
+
+    it "names the inference provider of each semantic index next to its model" do
+      get llm_feature_bindings_path
+
+      row = page.find("[data-test-selector='llm-semantic-index--row-#{semantic_index.id}']")
+      expect(row).to have_text(semantic_index.llm_model.inference_provider.title)
+      expect(row).to have_text(semantic_index.llm_model.external_id)
+    end
+  end
+
   describe "activation" do
     let!(:current) { create(:semantic_index, title: "Qwen3 baseline", state: "ready") }
     let!(:candidate) { create(:semantic_index, title: "Nomic small", state: "ready") }
