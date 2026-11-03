@@ -51,6 +51,15 @@ module LlmConnections
         model.persisted? ? refresh_form_semantic_index_path(model) : refresh_form_semantic_indexes_path
       end
 
+      def banner_text
+        return t("admin.semantic_indexes.form.locked_while_indexing") if model.indexing?
+
+        t("admin.semantic_indexes.form.locked_once_indexed",
+          model: LlmModel.find(model.llm_model_id_in_database).external_id,
+          context_token_length: model.context_token_length_in_database,
+          embedding_vector_dimensions: model.embedding_vector_dimensions_in_database)
+      end
+
       def http_method
         model.persisted? ? :patch : :post
       end

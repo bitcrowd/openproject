@@ -86,4 +86,50 @@ RSpec.describe SemanticIndexes::UpdateContract do
       end
     end
   end
+
+  # The admin moves the index on to a compatible model, so its vectors stay.
+  context "when moving the Semantic Index to another embedding model" do
+    let(:current_user) { build_stubbed(:admin) }
+    let(:other_model) { create(:llm_model, llm_connection: connection, external_id: "bge-m3-elsewhere") }
+
+    before do
+      connection.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
+                                             state: "supported", source: "probe", checked_at: Time.current)
+      semantic_index.update!(state:)
+      semantic_index.llm_model = other_model
+    end
+
+    %w[ready failed].each do |allowed_state|
+      context "when it is #{allowed_state}" do
+        let(:state) { allowed_state }
+
+        it "is allowed" do
+          expect(contract.validate).to be(true)
+        end
+      end
+    end
+
+    context "when it is indexing" do
+      let(:state) { "indexing" }
+
+      it "is refused" do
+        expect(contract.validate).to be(false)
+        expect(contract.errors.details[:llm_model_id]).to include(error: :locked_while_indexing)
+      end
+    end
+  end
+
+  context "when moving an indexed Semantic Index to a chat model" do
+    let(:current_user) { build_stubbed(:admin) }
+
+    before do
+      semantic_index.update!(state: "ready")
+      semantic_index.llm_model = connection.models.find_by!(external_id: "qwen3.6-27b")
+    end
+
+    it "is refused" do
+      expect(contract.validate).to be(false)
+      expect(contract.errors.details[:llm_model_id]).to include(error: :not_offered)
+    end
+  end
 end

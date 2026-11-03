@@ -247,7 +247,22 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
 
       get edit_dialog_semantic_index_path(semantic_index), headers: turbo_headers
 
-      expect(response.body).to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.locked_once_indexed")))
+      expect(response.body).to include(
+        CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.locked_once_indexed",
+                              model: "bge-m3", context_token_length: 8192, embedding_vector_dimensions: 1024))
+      )
+    end
+
+    it "moves an indexed semantic index to another embedding model, keeping its state" do
+      other_model = create(:llm_model, llm_connection: connection, external_id: "bge-m3-elsewhere")
+      connection.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
+                                             state: "supported", source: "probe", checked_at: Time.current)
+      semantic_index.update!(state: "ready")
+
+      patch semantic_index_path(semantic_index), params: { semantic_index: { llm_model_id: other_model.id } }
+
+      expect(response).to redirect_to(llm_feature_bindings_path)
+      expect(semantic_index.reload).to have_attributes(llm_model: other_model, state: "ready")
     end
 
     it "updates the semantic index" do

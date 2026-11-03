@@ -52,17 +52,8 @@ module SemanticIndexes
         rows: 3
       )
 
-      if locked
-        f.text_field(
-          name: :llm_model_id,
-          label: SemanticIndex.human_attribute_name(:llm_model_id),
-          value: model.llm_model&.external_id,
-          disabled: true
-        )
-      else
-        f.hidden(name: :prefilled_from_model_id, value: selected_model_id)
-        model_autocompleter(f)
-      end
+      f.hidden(name: :prefilled_from_model_id, value: selected_model_id) unless locked
+      model_autocompleter(f)
 
       f.text_field(
         name: :context_token_length,
@@ -99,10 +90,11 @@ module SemanticIndexes
         required: true,
         autocomplete_options: {
           decorated: true,
+          disabled: model.indexing?,
           inputValue: selected_model_id,
           append_to: "##{LlmConnections::SemanticIndexes::DialogComponent::DIALOG_ID}",
-          hiddenFieldAction: "change->refresh-on-form-changes#triggerTurboStream",
-          data: { test_selector: "llm-semantic-index--model" }
+          data: { test_selector: "llm-semantic-index--model" },
+          **refresh_on_change
         }
       ) do |list|
         model_options.each do |option|
@@ -111,6 +103,12 @@ module SemanticIndexes
                       selected: selected_model_id == option.model.id)
         end
       end
+    end
+
+    # An indexed Semantic Index keeps its numbers, so picking another model has
+    # nothing to fill in.
+    def refresh_on_change
+      locked ? {} : { hiddenFieldAction: "change->refresh-on-form-changes#triggerTurboStream" }
     end
 
     def selected_model_id = model.llm_model_id

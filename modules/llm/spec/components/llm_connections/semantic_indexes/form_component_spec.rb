@@ -95,25 +95,40 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
   context "when the parameters are locked" do
     let(:semantic_index) { create(:semantic_index, state: :ready) }
 
-    it "warns that the parameters cannot be changed" do
+    it "warns to only use a compatible model" do
       rendered_component
 
-      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_once_indexed"))
+      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_once_indexed",
+                                       model: "bge-m3", context_token_length: 8192, embedding_vector_dimensions: 1024))
     end
 
-    it "renders the parameter fields disabled" do
+    it "renders the numbers disabled and keeps the model choosable" do
       rendered_component
 
-      expect(page).to have_field(SemanticIndex.human_attribute_name(:llm_model_id), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:context_token_length), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:embedding_vector_dimensions), disabled: true)
-      expect(page).to have_no_css("[data-test-selector='llm-semantic-index--model']")
+
+      autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
+      expect(autocompleter[:"data-disabled"]).to eq("false")
     end
 
-    it "does not refresh" do
+    it "does not refresh, because there is nothing to fill in" do
       rendered_component
 
       expect(page).to have_no_css("[data-controller='refresh-on-form-changes']")
+    end
+  end
+
+  context "when it is being indexed" do
+    let(:semantic_index) { create(:semantic_index, state: :indexing) }
+
+    it "says that the model can't be changed either" do
+      rendered_component
+
+      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_while_indexing"))
+
+      autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
+      expect(autocompleter[:"data-disabled"]).to eq("true")
     end
   end
 
