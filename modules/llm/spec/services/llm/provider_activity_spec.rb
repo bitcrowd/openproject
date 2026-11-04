@@ -30,7 +30,8 @@
 require "spec_helper"
 require_module_spec_helper
 
-RSpec.describe Llm::ProviderActivity, with_good_job_batches: [Llm::CheckProviderHealthJob] do
+RSpec.describe Llm::ProviderActivity,
+               with_good_job_batches: [Llm::SyncModelsJob, Llm::DetectCapabilitiesJob, Llm::CheckProviderHealthJob] do
   subject(:activity) { described_class.new(InferenceProvider.by_title) }
 
   let!(:provider) { create(:inference_provider) }
@@ -49,12 +50,38 @@ RSpec.describe Llm::ProviderActivity, with_good_job_batches: [Llm::CheckProvider
     expect(activity).to be_any
   end
 
+  it "is checking models while the list is fetched" do
+    Llm::SyncModelsJob.perform_later(provider.id)
+
+    expect(activity.for(provider)).to eq(:checking_models)
+  end
+
+  it "is checking models while their capabilities are detected" do
+    Llm::DetectCapabilitiesJob.perform_later(provider.id)
+    job_for(Llm::DetectCapabilitiesJob).update!(performed_at: Time.current)
+
+    expect(activity.for(provider)).to eq(:checking_models)
+  end
+
+  it "names the earlier step while both are pending" do
+    Llm::CheckProviderHealthJob.perform_later(provider.id)
+    Llm::DetectCapabilitiesJob.perform_later(provider.id)
+
+    expect(activity.for(provider)).to eq(:checking_models)
+  end
+
   it "keeps another provider's jobs apart" do
     other = create(:inference_provider)
     Llm::CheckProviderHealthJob.perform_later(other.id)
 
     expect(activity.for(provider)).to be_nil
     expect(activity.for(other)).to eq(:running_checks)
+  end
+
+  it "leaves out a fetch waiting for its next attempt" do
+    Llm::SyncModelsJob.set(wait: 1.hour).perform_later(provider.id)
+
+    expect(activity.for(provider)).to be_nil
   end
 
   it "leaves out a finished job" do

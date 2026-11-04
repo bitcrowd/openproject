@@ -234,8 +234,17 @@ RSpec.describe "Admin inference providers", :llm_server_helpers, :skip_csrf, :we
       end
     end
 
-    describe "while a job works on a provider", with_good_job_batches: [Llm::CheckProviderHealthJob] do
+    describe "while a job works on a provider",
+             with_good_job_batches: [Llm::SyncModelsJob, Llm::CheckProviderHealthJob] do
       def activity_of(provider) = page.find("[data-test-selector='llm-inference-provider--activity-#{provider.id}']")
+
+      it "says that its models are being checked while its list is fetched" do
+        Llm::SyncModelsJob.perform_later(provider.id)
+
+        get llm_connection_path
+
+        expect(activity_of(provider)).to have_text("Checking models…")
+      end
 
       it "says that the checks are running while its health check runs" do
         Llm::CheckProviderHealthJob.perform_later(provider.id)

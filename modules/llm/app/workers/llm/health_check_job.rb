@@ -35,7 +35,8 @@ module Llm
   # real completion, which is billed on a hosted provider. An unattended job must
   # not run up a bill, so the schedule covers everything that is free -- an
   # expired key, a withdrawn model, a binding that stopped resolving -- and the
-  # billed round trip stays behind the administrator's "Run checks".
+  # billed round trip stays with what an administrator starts: a check, or a
+  # fetch of a provider's model list.
   class HealthCheckJob < ApplicationJob
     CRON_JOB_KEY = name.to_sym
 

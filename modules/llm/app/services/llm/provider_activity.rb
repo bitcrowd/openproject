@@ -32,7 +32,10 @@ module Llm
   # GoodJob rather than stored, so a worker that dies leaves no state behind that
   # says otherwise.
   class ProviderActivity
+    # In the order a model list fetch runs them: while both are pending, the
+    # provider is still at the first step.
     STEPS = {
+      checking_models: [Llm::SyncModelsJob, Llm::DetectCapabilitiesJob],
       running_checks: [Llm::CheckProviderHealthJob]
     }.freeze
 
@@ -61,8 +64,11 @@ module Llm
       end
     end
 
+    # Queued or running. A retry waiting for its time does not count: a failed
+    # fetch can wait hours for its next attempt, and the health check that
+    # followed it already says what went wrong.
     def busy_keys
-      @busy_keys ||= GoodJob::Job.where(concurrency_key: all_keys).unfinished
+      @busy_keys ||= GoodJob::Job.where(concurrency_key: all_keys).unfinished.only_scheduled
                                  .distinct.pluck(:concurrency_key).to_set
     end
 

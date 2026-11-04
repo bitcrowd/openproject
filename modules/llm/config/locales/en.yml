@@ -129,6 +129,7 @@ en:
         title_caption: "Leave blank to use the host and port of the server."
       health:
         caption: "Health"
+        checking_models: "Checking models…"
         failures:
           one: "1 failure"
           other: "%{count} failures"

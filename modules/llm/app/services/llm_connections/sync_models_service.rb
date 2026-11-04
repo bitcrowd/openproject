@@ -57,8 +57,12 @@ module LlmConnections
 
     attr_reader :provider
 
+    # Detection checks the provider after a fetch that worked. A failed one
+    # leaves nothing to detect, so the check follows straight away and the
+    # provider list says what went wrong.
     def failed(error, reason, errors)
       Rails.logger.info { "LLM model sync for provider #{provider.id} #{reason}" }
+      Llm::CheckProviderHealthJob.perform_later(provider.id)
 
       ServiceResult.failure(errors:, result: error)
     end

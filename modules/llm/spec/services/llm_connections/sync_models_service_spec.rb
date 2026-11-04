@@ -329,6 +329,24 @@ RSpec.describe LlmConnections::SyncModelsService, :llm_server_helpers, :webmock 
     end
   end
 
+  describe "the health check that follows" do
+    it "leaves it to the capability detection after a successful sync" do
+      expect { service.call }.not_to have_enqueued_job(Llm::CheckProviderHealthJob)
+    end
+
+    it "asks for it straight away when the server does not answer with a list" do
+      mock_llm_models_response(base_url, response_code: 404)
+
+      expect { service.call }.to have_enqueued_job(Llm::CheckProviderHealthJob).with(provider.id)
+    end
+
+    it "asks for it straight away when the list cannot be stored" do
+      allow(LlmConnections::EnrichCapabilitiesService).to receive(:new).and_raise(ActiveRecord::RecordInvalid)
+
+      expect { service.call }.to have_enqueued_job(Llm::CheckProviderHealthJob).with(provider.id)
+    end
+  end
+
   describe "naming a model and sizing its context window" do
     let(:provider) { create(:inference_provider, base_url:, api_key: "sk-test") }
     let(:connection) { LlmConnection.current }

@@ -29,8 +29,8 @@
 
 module Llm
   # The full check of one provider, billed completion included: what an
-  # administrator asks for with "Run health check", so that the provider list
-  # shows how it went.
+  # administrator asks for with "Run health check", and what follows every fetch
+  # of its model list, so that the provider list shows how it went.
   class CheckProviderHealthJob < ApplicationJob
     include GoodJob::ActiveJobExtensions::Concurrency
 

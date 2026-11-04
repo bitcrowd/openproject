@@ -52,7 +52,21 @@ RSpec.describe Llm::DetectCapabilitiesJob, :llm_server_helpers, :webmock do
   end
 
   it "does nothing once the provider is gone" do
-    expect { described_class.perform_now(0) }.not_to raise_error
+    expect { described_class.perform_now(0) }.not_to have_enqueued_job(Llm::CheckProviderHealthJob)
+  end
+
+  it "checks the provider once detection has run" do
+    mock_llm_embeddings_response(base_url)
+
+    expect { described_class.perform_now(provider.id) }
+      .to have_enqueued_job(Llm::CheckProviderHealthJob).with(provider.id)
+  end
+
+  it "checks the provider even when detection fails" do
+    allow(LlmConnections::DetectCapabilitiesService).to receive(:new).and_raise(ActiveRecord::RecordNotFound)
+
+    expect { described_class.perform_now(provider.id) }
+      .to have_enqueued_job(Llm::CheckProviderHealthJob).with(provider.id)
   end
 
   it "logs what went wrong without the error's message" do

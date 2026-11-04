@@ -181,6 +181,37 @@ RSpec.describe "LLM connection administration",
       expect(page).to have_test_selector("llm-inference-provider--row-#{InferenceProvider.find_by!(title: 'Second').id}")
     end
 
+    it "shows a new provider's model check, then its health check, then the result",
+       with_good_job_batches: [Llm::SyncModelsJob, Llm::DetectCapabilitiesJob, Llm::CheckProviderHealthJob] do
+      mock_llm_models_response(base_url)
+      mock_llm_embeddings_response(base_url)
+      mock_llm_chat_response(base_url)
+
+      visit llm_connection_path
+
+      new_provider_dialog
+
+      within_test_selector("llm-inference-provider-dialog") do
+        fill_in "Display name", with: "Second"
+        fill_in "Host URL", with: base_url
+        find_test_selector("llm-inference-provider--submit").click
+      end
+
+      expect(page).to have_text(I18n.t(:notice_successful_create))
+      second = InferenceProvider.find_by!(title: "Second")
+      expect(page).to have_test_selector("llm-inference-provider--activity-#{second.id}", text: "Checking models…")
+
+      GoodJob.perform_inline(limit: 2) # The fetch, then the capability detection.
+
+      expect(page).to have_test_selector("llm-inference-provider--activity-#{second.id}", text: "Running checks…")
+
+      GoodJob.perform_inline
+
+      expect(page).to have_test_selector("llm-inference-provider--health-#{second.id}")
+      expect(page).to have_no_test_selector("llm-inference-provider--activity-#{second.id}")
+      expect(second.health_reports.count).to eq(1)
+    end
+
     it "keeps the dialog open with the reason when the server refuses" do
       mock_llm_models_response(base_url, response_code: 401)
 

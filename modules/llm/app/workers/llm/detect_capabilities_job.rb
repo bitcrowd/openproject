@@ -29,7 +29,9 @@
 
 module Llm
   # Pre-colors the model list after a refresh, out of band so that fetching the
-  # catalogue does not wait on one request per candidate model.
+  # catalogue does not wait on one request per candidate model. The provider's
+  # health check follows either way, since it picks its chat model from what
+  # this finds.
   class DetectCapabilitiesJob < ApplicationJob
     include GoodJob::ActiveJobExtensions::Concurrency
 
@@ -41,10 +43,17 @@ module Llm
       provider = InferenceProvider.find_by(id: inference_provider_id)
       return if provider.nil?
 
+      detect(provider)
+      Llm::CheckProviderHealthJob.perform_later(provider.id)
+    end
+
+    private
+
+    def detect(provider)
       LlmConnections::DetectCapabilitiesService.new(provider).detect_likely_embedding_models
     rescue StandardError => e
       Rails.logger.error do
-        "LLM capability detection failed for provider #{inference_provider_id}: #{e.class}\n" \
+        "LLM capability detection failed for provider #{provider.id}: #{e.class}\n" \
           "#{Rails.backtrace_cleaner.clean(Array(e.backtrace)).join("\n")}"
       end
     end
