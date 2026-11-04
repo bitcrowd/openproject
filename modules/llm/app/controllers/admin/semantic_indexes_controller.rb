@@ -67,11 +67,10 @@ module Admin
 
     def refresh_form
       semantic_index = params[:id] ? SemanticIndex.find(params.expect(:id)) : SemanticIndex.new
-      semantic_index.assign_attributes(semantic_index_params)
-      semantic_index.prefill_from_model(LlmModel.find_by(id: params.dig(:semantic_index, :prefilled_from_model_id)))
+      assign_choice(semantic_index)
 
       update_via_turbo_stream(
-        component: LlmConnections::SemanticIndexes::FormComponent.new(semantic_index, refreshed: true)
+        component: LlmConnections::SemanticIndexes::FormComponent.new(semantic_index, refreshed: true, picked_provider_id:)
       )
       respond_with_turbo_streams
     end
@@ -161,7 +160,7 @@ module Admin
 
       result.on_failure do
         update_via_turbo_stream(
-          component: LlmConnections::SemanticIndexes::FormComponent.new(result.result),
+          component: LlmConnections::SemanticIndexes::FormComponent.new(result.result, picked_provider_id:),
           status: :unprocessable_entity
         )
         respond_with_turbo_streams
@@ -182,6 +181,16 @@ module Admin
 
     def find_semantic_index
       @semantic_index = SemanticIndex.find(params.expect(:id))
+    end
+
+    def picked_provider_id = params.dig(:semantic_index, :provider_id)
+
+    def assign_choice(semantic_index)
+      semantic_index.assign_attributes(semantic_index_params)
+      semantic_index.llm_model = LlmConnections::ModelChoice.new(semantic_index.llm_model_id, picked_provider_id).model
+      return if semantic_index.parameters_locked?
+
+      semantic_index.prefill_from_model(LlmModel.find_by(id: params.dig(:semantic_index, :prefilled_from_model_id)))
     end
 
     def semantic_index_params

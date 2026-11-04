@@ -112,10 +112,12 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       expect(autocompleter[:"data-disabled"]).to eq("false")
     end
 
-    it "does not refresh, because there is nothing to fill in" do
+    it "refreshes for another provider but not for another model, because there is nothing to fill in" do
       rendered_component
 
-      expect(page).to have_no_css("[data-controller='refresh-on-form-changes']")
+      expect(page.find("[data-test-selector='llm-semantic-index--provider']")[:"data-hidden-field-action"])
+        .to include("refresh-on-form-changes#triggerTurboStream")
+      expect(page.find("[data-test-selector='llm-semantic-index--model']")[:"data-hidden-field-action"]).to be_nil
     end
   end
 
@@ -129,6 +131,7 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
 
       autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
       expect(autocompleter[:"data-disabled"]).to eq("true")
+      expect(page.find("[data-test-selector='llm-semantic-index--provider']")[:"data-disabled"]).to eq("true")
     end
   end
 

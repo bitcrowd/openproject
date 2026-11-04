@@ -30,6 +30,8 @@
 module Admin
   # Assigns a model to each registered AI feature.
   class LlmFeatureBindingsController < ApplicationController
+    include OpTurbo::ComponentStream
+
     layout "admin"
     menu_item :llm_connection
 
@@ -48,6 +50,23 @@ module Admin
       assign(feature)
 
       redirect_to llm_feature_bindings_path, status: :see_other
+    rescue OpenProject::Llm::UnknownFeature
+      render_404
+    end
+
+    def refresh_form
+      feature = OpenProject::Llm::Features[params[:id]]
+
+      update_via_turbo_stream(
+        component: LlmConnections::FeatureBindingFormComponent.new(
+          feature:,
+          connection: @connection,
+          binding: build_binding(feature),
+          picked_provider_id: params.dig(:llm_feature_binding, :provider_id),
+          refreshed: true
+        )
+      )
+      respond_with_turbo_streams
     rescue OpenProject::Llm::UnknownFeature
       render_404
     end

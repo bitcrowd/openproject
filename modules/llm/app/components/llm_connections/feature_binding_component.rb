@@ -40,46 +40,10 @@ module LlmConnections
       @binding = binding
     end
 
-    # The record the select binds to. A feature without a stored binding still
-    # needs one so the form has an llm_model_id to read.
-    def form_model
-      binding || connection.feature_bindings.new(feature_key: feature.key.to_s)
-    end
-
-    # Not named +options+: ApplicationComponent already owns that name and
-    # initializes it to an empty hash, which silently swallowed the memoisation.
-    def model_options
-      @model_options ||= selectable_models.flat_map(&:call)
-    end
-
-    def models_left_out? = feature.chat? && selectable_models.any?(&:models_left_out?)
-
-    def inherit_label
-      if default_model
-        I18n.t("admin.llm_feature_bindings.inherit_with_default", model: default_model.name_with_provider)
-      else
-        I18n.t("admin.llm_feature_bindings.inherit_without_default")
-      end
-    end
-
     def dangling? = binding&.dangling?
 
     private
 
     attr_reader :feature, :connection, :binding
-
-    def selectable_models
-      @selectable_models ||= InferenceProvider.by_title.map do |provider|
-        SelectableModelsQuery.new(provider, feature, bound_model: binding&.llm_model)
-      end
-    end
-
-    def default_model
-      connection.default_model_for(feature)
-    end
-
-    def form_url
-      url_helpers.llm_feature_binding_path(feature.key)
-    end
   end
 end

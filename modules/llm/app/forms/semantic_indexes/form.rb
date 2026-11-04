@@ -29,8 +29,12 @@
 
 module SemanticIndexes
   class Form < ApplicationForm
-    def initialize(model_options:, locked: false, refreshed: false)
+    include LlmConnections::ModelChoiceFields
+
+    def initialize(provider:, selected_model:, model_options:, locked: false, refreshed: false)
       super()
+      @provider = provider
+      @selected_model = selected_model
       @model_options = model_options
       @locked = locked
       @refreshed = refreshed
@@ -52,7 +56,17 @@ module SemanticIndexes
         rows: 3
       )
 
-      f.hidden(name: :prefilled_from_model_id, value: selected_model_id) unless locked
+      f.hidden(name: :prefilled_from_model_id, value: selected_model&.id) unless locked
+
+      provider_autocompleter(f,
+                             name: :provider_id,
+                             label: InferenceProvider.model_name.human,
+                             provider:,
+                             clearable: false,
+                             disabled: model.indexing?,
+                             append_to: dialog_selector,
+                             data: { test_selector: "llm-semantic-index--provider" })
+
       model_autocompleter(f)
 
       f.text_field(
@@ -80,43 +94,35 @@ module SemanticIndexes
 
     private
 
-    attr_reader :model_options, :locked, :refreshed
+    attr_reader :provider, :selected_model, :model_options, :locked, :refreshed
+
+    def dialog_selector = "##{LlmConnections::SemanticIndexes::DialogComponent::DIALOG_ID}"
 
     def model_autocompleter(form)
-      form.autocompleter(
-        name: :llm_model_id,
-        label: SemanticIndex.human_attribute_name(:llm_model_id),
-        caption: I18n.t("admin.semantic_indexes.form.model_caption"),
-        required: true,
-        autocomplete_options: {
-          decorated: true,
-          disabled: model.indexing?,
-          inputValue: selected_model_id,
-          append_to: "##{LlmConnections::SemanticIndexes::DialogComponent::DIALOG_ID}",
-          data: { test_selector: "llm-semantic-index--model" },
-          **refresh_on_change
-        }
-      ) do |list|
-        model_options.each do |option|
-          list.option(label: option_label(option),
-                      value: option.model.id,
-                      selected: selected_model_id == option.model.id)
-        end
-      end
+      choice_autocompleter(form,
+                           name: :llm_model_id,
+                           label: SemanticIndex.human_attribute_name(:llm_model_id),
+                           caption: I18n.t("admin.semantic_indexes.form.model_caption"),
+                           required: true,
+                           options: model_options.map { |option| [option_label(option), option.model] },
+                           selected: selected_model,
+                           disabled: model.indexing?,
+                           append_to: dialog_selector,
+                           focusDirectly: refreshed,
+                           data: { test_selector: "llm-semantic-index--model" },
+                           **refresh_on_change)
     end
 
     # An indexed Semantic Index keeps its numbers, so picking another model has
     # nothing to fill in.
     def refresh_on_change
-      locked ? {} : { hiddenFieldAction: "change->refresh-on-form-changes#triggerTurboStream" }
+      locked ? {} : { hiddenFieldAction: REFRESH_ON_CHANGE }
     end
 
-    def selected_model_id = model.llm_model_id
-
     def option_label(option)
-      return option.model.name_with_provider if option.qualifies
+      return option.model.name if option.qualifies
 
-      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model.name_with_provider)
+      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model.name)
     end
   end
 end

@@ -40,7 +40,7 @@ See COPYRIGHT and LICENSE files for more details.
       method: http_method,
       data: { turbo: true, refresh_on_form_changes_target: "form" }
     ) do |f|
-      render(::SemanticIndexes::Form.new(f, model_options:, locked: locked?, refreshed:))
+      render(::SemanticIndexes::Form.new(f, provider:, selected_model: choice.model, model_options:, locked: locked?, refreshed:))
     end
   %>
 <% end %>

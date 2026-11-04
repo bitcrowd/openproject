@@ -25,18 +25,7 @@
       <% end %>
     <% end %>
 
-    <%= settings_primer_form_with(model: form_model, url: form_url, method: :patch, scope: :llm_feature_binding) do |f| %>
-      <%= render(
-            LlmConnections::FeatureBindingForm.new(
-              f,
-              options: model_options,
-              inherit_label:,
-              feature_key: feature.key,
-              models_left_out: models_left_out?,
-              selected_model_id: binding&.llm_model_id
-            )
-          ) %>
-    <% end %>
+    <%= render(LlmConnections::FeatureBindingFormComponent.new(feature:, connection:, binding:)) %>
   <% end %>
 
   <% if feature.embedding? %>

@@ -56,6 +56,7 @@ Rails.application.routes.draw do
         get :search, defaults: { format: :turbo_stream }
         post :refresh
         patch :defaults, action: :update_defaults
+        post :refresh_defaults, defaults: { format: :turbo_stream }
       end
 
       member do
@@ -65,7 +66,11 @@ Rails.application.routes.draw do
 
     # Keyed by feature key rather than by record id: the binding is an attribute
     # of a registered feature, and a feature may not have a row yet.
-    resources :llm_feature_bindings, only: %i[index update], controller: "admin/llm_feature_bindings"
+    resources :llm_feature_bindings, only: %i[index update], controller: "admin/llm_feature_bindings" do
+      member do
+        post :refresh_form, defaults: { format: :turbo_stream }
+      end
+    end
 
     resources :semantic_indexes, only: %i[create update destroy], controller: "admin/semantic_indexes" do
       collection do

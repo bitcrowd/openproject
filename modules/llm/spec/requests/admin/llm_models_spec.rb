@@ -38,12 +38,26 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
   # The picker is an autocompleter, so its options are serialized into the
   # element rather than rendered as markup.
+  def default_models_picker(field)
+    Nokogiri::HTML(response.parsed_body.to_s)
+            .css("[data-test-selector='llm-connection--defaults-form'] opce-autocompleter")
+            .find { |node| node["data-input-name"].include?(field.to_s) }
+  end
+
   def offered_default_models(field = :default_chat_model_id)
-    element = page.all("[data-test-selector='llm-connection--defaults-form'] opce-autocompleter")
-                  .find { |node| node["data-input-name"].include?(field.to_s) }
-    ids = JSON.parse(element["data-items"]).pluck("id").compact_blank
+    ids = JSON.parse(default_models_picker(field)["data-items"]).pluck("id").compact_blank
 
     LlmModel.where(id: ids).pluck(:external_id)
+  end
+
+  def selected_in_default_models(field)
+    JSON.parse(default_models_picker(field)["data-model"])&.fetch("id").presence
+  end
+
+  def refresh_defaults(**fields)
+    post refresh_defaults_llm_models_path,
+         params: { llm_connection: { default_chat_model_id: "", **fields } },
+         headers: { "Accept" => "text/vnd.turbo-stream.html" }
   end
 
   describe "with the feature flag off", with_flag: { llm_connection: false } do
@@ -149,6 +163,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         get llm_models_path
 
         expect(response.body).to include(I18n.t("admin.llm_models.defaults.heading"))
+
+        refresh_defaults(default_chat_provider_id: provider.id)
+
         # An embedding model is a different kind of model, not a chat choice.
         expect(offered_default_models).to contain_exactly("qwen3.6-27b")
       end
@@ -190,7 +207,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                         state: "supported", source: "probe")
 
-        get llm_models_path
+        refresh_defaults(default_embedding_provider_id: provider.id)
 
         expect(offered_default_models(:default_embedding_model_id)).to contain_exactly("bge-m3")
         expect(response.body).to include("huggingface.co/blog/getting-started-with-embeddings")
@@ -1210,6 +1227,112 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(response.body).to include("Inherit from server (not verified)")
         expect(response.body).not_to include("Inherit from server (supported)")
       end
+    end
+  end
+
+  describe "choosing the default models" do
+    let!(:provider) { create(:inference_provider, :with_models, title: "A first", base_url:) }
+    let!(:other_provider) { create(:inference_provider, title: "Elsewhere", base_url: "https://elsewhere.example/v1") }
+    let!(:other_model) { create(:llm_model, inference_provider: other_provider, external_id: "llama4-8b") }
+    let(:connection) { LlmConnection.current }
+
+    def blank_model_field(attribute)
+      Nokogiri::HTML(response.parsed_body.to_s).at_css("input[type='hidden'][name='llm_connection[#{attribute}]']")
+    end
+
+    before { login_as admin }
+
+    it "asks for a provider first, offering every one of them and none" do
+      get llm_models_path
+
+      names = JSON.parse(default_models_picker(:default_chat_provider_id)["data-items"]).pluck("name")
+      expect(names).to eq(["(none)", "A first", "Elsewhere"])
+      expect(default_models_picker(:default_chat_provider_id)["data-focus-directly"]).to eq("false")
+      expect(default_models_picker(:default_chat_model_id)).to be_nil
+      expect(blank_model_field(:default_chat_model_id)["value"]).to eq("")
+    end
+
+    it "shows the provider of a stored default, and only the models of that provider" do
+      connection.update!(default_chat_model: other_model)
+
+      get llm_models_path
+
+      expect(selected_in_default_models(:default_chat_provider_id)).to eq(other_provider.id)
+      expect(selected_in_default_models(:default_chat_model_id)).to eq(other_model.id)
+      expect(offered_default_models).to contain_exactly("llama4-8b")
+    end
+
+    it "offers the models of a picked provider by their name alone, without saving" do
+      refresh_defaults(default_chat_provider_id: other_provider.id)
+
+      expect(response).to have_http_status(:ok)
+      names = JSON.parse(default_models_picker(:default_chat_model_id)["data-items"]).pluck("name")
+      expect(names).to eq(["(none)", "llama4-8b"])
+      expect(connection.reload.default_chat_model).to be_nil
+    end
+
+    it "forgets a model of the provider left behind, without saving" do
+      connection.update!(default_chat_model: other_model)
+
+      refresh_defaults(default_chat_provider_id: provider.id, default_chat_model_id: other_model.id)
+
+      expect(selected_in_default_models(:default_chat_model_id)).to be_nil
+      expect(offered_default_models).to contain_exactly("qwen3.6-27b", "bge-m3")
+      expect(connection.reload.default_chat_model).to eq(other_model)
+    end
+
+    it "keeps the model when its own provider is posted" do
+      refresh_defaults(default_chat_provider_id: other_provider.id, default_chat_model_id: other_model.id)
+
+      expect(selected_in_default_models(:default_chat_model_id)).to eq(other_model.id)
+    end
+
+    it "offers no model once no provider is picked, and saving that clears the default" do
+      connection.update!(default_chat_model: other_model)
+
+      refresh_defaults(default_chat_provider_id: "", default_chat_model_id: other_model.id)
+
+      expect(default_models_picker(:default_chat_model_id)).to be_nil
+      expect(blank_model_field(:default_chat_model_id)["value"]).to eq("")
+
+      patch defaults_llm_models_path, params: { llm_connection: { default_chat_model_id: "" } }
+
+      expect(connection.reload.default_chat_model).to be_nil
+    end
+
+    it "lets the two defaults come from different providers",
+       with_flag: { llm_connection: true, semantic_search: true } do
+      embedding_model = provider.models.find_by!(external_id: "bge-m3")
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
+                                      state: "supported", source: "probe")
+
+      refresh_defaults(default_chat_provider_id: other_provider.id, default_chat_model_id: other_model.id,
+                       default_embedding_provider_id: provider.id, default_embedding_model_id: embedding_model.id)
+
+      expect(selected_in_default_models(:default_chat_model_id)).to eq(other_model.id)
+      expect(selected_in_default_models(:default_embedding_model_id)).to eq(embedding_model.id)
+
+      patch defaults_llm_models_path,
+            params: { llm_connection: { default_chat_model_id: other_model.id, default_embedding_model_id: embedding_model.id } }
+
+      expect(connection.reload).to have_attributes(default_chat_model: other_model, default_embedding_model: embedding_model)
+    end
+
+    it "stays with the list it was opened from" do
+      post refresh_defaults_llm_models_path(inference_provider_id: other_provider.id),
+           params: { llm_connection: { default_chat_model_id: "", default_chat_provider_id: provider.id } },
+           headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      form = Nokogiri::HTML(response.parsed_body.to_s).at_css("[data-test-selector='llm-connection--defaults-form']")
+      expect(form["action"]).to eq(defaults_llm_models_path(inference_provider_id: other_provider.id))
+    end
+
+    it "is refused for a non-admin" do
+      login_as create(:user)
+
+      refresh_defaults(default_chat_provider_id: provider.id)
+
+      expect(response).to have_http_status(:forbidden)
     end
   end
 
