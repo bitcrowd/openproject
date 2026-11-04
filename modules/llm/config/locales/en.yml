@@ -378,6 +378,7 @@ en:
         header: "AI features"
       inference:
         chat_round_trip: "The server answers a request"
+        embedding_round_trip: "The server answers an embedding request"
         header: "Inference"
       models:
         catalogue_fresh: "Model list is up to date"

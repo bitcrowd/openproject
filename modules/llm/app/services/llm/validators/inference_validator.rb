@@ -43,12 +43,40 @@ module Llm
       private
 
       def validate
+        chat_model = chat_model_id
+        embedding_model = subject.embedding_model_ids.first
+
+        if chat_model.blank? && embedding_model.present?
+          register_checks(:embedding_round_trip)
+          return embedding_round_trip(embedding_model)
+        end
+
         register_checks(:chat_round_trip)
+        return warn_check(:chat_round_trip, :no_model_to_test) if chat_model.blank?
 
-        model_id = chat_model_id
-        return warn_check(:chat_round_trip, :no_model_to_test) if model_id.blank?
+        round_trip(chat_model)
+      end
 
-        round_trip(model_id)
+      # A provider that only serves embeddings has nothing to chat with, and its
+      # inference would otherwise go untested. Same request the capability probe
+      # sends, so it is read the same way.
+      def embedding_round_trip(model_id)
+        result = Llm::Probes::EmbeddingsProbe.new(subject).call(model_id)
+        return pass_check(:embedding_round_trip) if result.state == :supported
+
+        embedding_failure(model_id, result)
+      end
+
+      def embedding_failure(model, result)
+        case result.detail.fetch("reason") { "http_#{result.detail['http_status']}" }
+        when "unauthorized" then fail_check(:embedding_round_trip, :invalid_api_key)
+        when "timeout_error" then fail_check(:embedding_round_trip, :request_timed_out)
+        when "http_404" then fail_check(:embedding_round_trip, :model_not_served, context: { model: })
+        when "unexpected_body" then warn_check(:embedding_round_trip, :empty_completion, context: { model: })
+        when /\Ahttp_(\d+)\z/
+          fail_check(:embedding_round_trip, :chat_failed, context: { model:, status: Regexp.last_match(1) })
+        else fail_check(:embedding_round_trip, :connection_error)
+        end
       end
 
       def round_trip(model_id)

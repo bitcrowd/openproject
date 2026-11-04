@@ -195,6 +195,79 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
     end
   end
 
+  describe "a provider that only serves embeddings" do
+    let(:embeddings_url) { "#{base_url}/embeddings" }
+
+    before do
+      mock_llm_models_response(base_url)
+      provider.models.find_by!(external_id: "qwen3.6-27b").destroy!
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
+                                      state: "supported", source: "probe")
+      provider.deep_health_check = true
+    end
+
+    it "sends an embedding request instead of finding nothing to test" do
+      request = mock_llm_embeddings_response(base_url)
+
+      expect(result_for(:inference, :embedding_round_trip).state).to eq(:success)
+      expect(result_for(:inference, :chat_round_trip)).to be_nil
+      expect(request).to have_been_made.once
+    end
+
+    it "is left out of the scheduled check, because it is billed" do
+      provider.deep_health_check = false
+
+      expect(report.group(:inference)).to be_nil
+      expect(a_request(:post, embeddings_url)).not_to have_been_made
+    end
+
+    {
+      "rejects the key" => [{ status: 401 }, :invalid_api_key],
+      "has no route for the model" => [{ status: 404 }, :model_not_served],
+      "refuses the request" => [{ status: 400 }, :chat_failed],
+      "fails" => [{ status: 500 }, :chat_failed]
+    }.each do |situation, (response, code)|
+      it "fails with #{code} when the server #{situation}" do
+        stub_request(:post, embeddings_url).to_return(body: "{}", **response)
+
+        result = result_for(:inference, :embedding_round_trip)
+
+        expect(result.state).to eq(:failure)
+        expect(result.code).to eq(code)
+      end
+    end
+
+    it "fails when the request times out" do
+      stub_request(:post, embeddings_url).to_raise(Net::ReadTimeout)
+
+      expect(result_for(:inference, :embedding_round_trip).code).to eq(:request_timed_out)
+    end
+
+    it "fails when the server cannot be reached" do
+      stub_request(:post, embeddings_url).to_timeout
+
+      expect(result_for(:inference, :embedding_round_trip).code).to eq(:connection_error)
+    end
+
+    it "warns when the answer is not an embedding" do
+      stub_request(:post, embeddings_url).to_return(status: 200, body: { data: [] }.to_json,
+                                                    headers: { "Content-Type" => "application/json" })
+
+      result = result_for(:inference, :embedding_round_trip)
+
+      expect(result.state).to eq(:warning)
+      expect(result.code).to eq(:empty_completion)
+    end
+
+    it "still prefers a chat model when there is one" do
+      create(:llm_model, inference_provider: provider, external_id: "a-chat-model")
+      mock_llm_chat_response(base_url, content: "pong")
+
+      expect(result_for(:inference, :chat_round_trip).state).to eq(:success)
+      expect(result_for(:inference, :embedding_round_trip)).to be_nil
+    end
+  end
+
   describe "what the models of another provider are used for" do
     let(:other) { create(:inference_provider, :with_models, base_url: "https://other.example/v1") }
     let(:other_model) { other.models.find_by!(external_id: "qwen3.6-27b") }
