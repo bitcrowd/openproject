@@ -37,70 +37,33 @@ module Admin
     before_action :require_feature
     before_action :require_admin
     before_action :set_connection
-    before_action :require_stored_connection,
-                  only: %i[disconnect disconnect_dialog delete_api_key delete_api_key_dialog]
 
-    def show; end
+    def show
+      @inference_provider = InferenceProvider.new if InferenceProvider.none?
+      @features_enabled = Setting.llm_features_enabled?
+    end
 
     def update
-      result = ::LlmConnections::UpdateService
-                 .new(user: current_user, model: @connection)
-                 .call(**llm_connection_params)
-
-      result.on_success { refresh_models_then_redirect(result.result) }
-      result.on_failure { render_form_with_errors }
+      save_switch(params.expect(llm_connection: %i[llm_features_enabled])[:llm_features_enabled])
     end
 
-    def disconnect_dialog
-      respond_with_dialog LlmConnections::DisconnectDialogComponent.new(@connection)
-    end
+    # While no provider exists, switching the features on and naming the first
+    # server are one save, and a server that does not answer saves neither.
+    def setup
+      return save_switch("0") unless features_requested?
 
-    # Clears the credential and switches the AI features off, keeping the endpoint
-    # and the catalogue. Deliberately not a destroy.
-    def disconnect
-      cleared = clear_api_key_unless_configured_from_env do
-        Setting.llm_features_enabled = false if Setting.llm_features_enabled_writable?
-      end
-      return redirect_with_error(t(".configured_from_env")) unless cleared
+      result = ::InferenceProviders::CreateService
+                 .new(user: current_user)
+                 .call(inference_provider_params)
 
-      Llm::HealthCheckJob.toggle_cron_job
-
-      redirect_with_notice(t(".success"))
-    end
-
-    def delete_api_key_dialog
-      respond_with_dialog LlmConnections::DeleteApiKeyDialogComponent.new(@connection)
-    end
-
-    # The environment guard is checked explicitly because this write bypasses
-    # the contract: removing a credential must always be possible, even against
-    # a server that would reject the resulting unauthenticated probe.
-    def delete_api_key
-      return redirect_with_error(t(".configured_from_env")) unless clear_api_key_unless_configured_from_env
-
-      redirect_with_notice(t(".success"))
+      result.on_success { save_switch("1") }
+      result.on_failure { render_form_with_errors(result.result) }
     end
 
     private
 
-    def require_stored_connection
-      render_404 unless @connection.persisted?
-    end
-
-    # Judged on the committed row under the connection's advisory lock: a seed
-    # applying the environment's values holds that lock until it commits.
-    def clear_api_key_unless_configured_from_env
-      OpenProject::Mutex.with_advisory_lock_transaction(@connection) do
-        next false if @connection.reload.configured_from_env?
-
-        @connection.update_columns(api_key: nil, env_provisioned_at: nil, env_fingerprint: nil, updated_at: Time.current)
-        yield if block_given?
-        true
-      end
-    end
-
     def set_connection
-      @connection = LlmConnection.active_connection
+      @connection = LlmConnection.current
     end
 
     # The flag gates the endpoints, not only the menu entry: an unfinished page
@@ -109,55 +72,48 @@ module Admin
       render_404 unless OpenProject::FeatureDecisions.llm_connection_active?
     end
 
-    # Synchronous, because the flash below reports what the catalogue holds. The
-    # contract has already proven the server reachable when the credentials
-    # changed, so this cannot be the thing that fails the save: a sync failure is
-    # logged by the service and shows up as the "no models" warning.
-    def refresh_models_then_redirect(connection)
-      ::LlmConnections::SyncModelsService.new(connection).call if
-        ::LlmConnections::UpdateService.models_to_refresh?(connection)
+    def features_requested?
+      return Setting.llm_features_enabled? unless Setting.llm_features_enabled_writable?
 
-      redirect_after_save
+      ActiveModel::Type::Boolean.new.cast(params[:llm_features_enabled])
     end
 
-    # A connection can be perfectly usable without offering a model list, so the
-    # save succeeds either way; the administrator is told what to do next rather
-    # than being left with an empty table and no explanation.
-    def redirect_after_save
-      return redirect_with_notice(t(".disabled")) unless @connection.llm_features_enabled
+    def save_switch(enabled)
+      result = update_switch(enabled)
+      # Switching the AI features on or off decides whether the scheduled health
+      # check has anything to do.
+      Llm::HealthCheckJob.toggle_cron_job
 
-      if @connection.reload.models.none?
-        flash[:warning] = t(".no_models")
+      if result.success?
+        flash[:notice] = t("admin.llm_connections.update.#{Setting.llm_features_enabled? ? :success : :disabled}")
       else
-        flash[:notice] = t(".success")
+        flash[:error] = result.message
       end
 
       redirect_to llm_connection_path, status: :see_other
     end
 
-    def render_form_with_errors
-      update_via_turbo_stream(component: ::LlmConnections::FormComponent.new(@connection))
+    def update_switch(enabled)
+      return ServiceResult.success unless Setting.llm_features_enabled_writable?
+
+      ::Settings::UpdateService.new(user: current_user).call(llm_features_enabled: enabled)
+    end
+
+    def render_form_with_errors(inference_provider)
+      @inference_provider = inference_provider
+      @features_enabled = true
+
+      update_via_turbo_stream(
+        component: ::LlmConnections::FormComponent.new(@connection, inference_provider:, features_enabled: true)
+      )
       respond_with_turbo_streams do |format|
         format.html { render :show }
       end
     end
 
-    def redirect_with_notice(message)
-      flash[:notice] = message
-      redirect_to llm_connection_path, status: :see_other
-    end
-
-    def redirect_with_error(message)
-      flash[:error] = message
-      redirect_to llm_connection_path, status: :see_other
-    end
-
-    # A blank API key means "keep the stored one": the form never renders the
-    # saved value, so submitting it unchanged posts an empty string.
-    def llm_connection_params
-      permitted = params.expect(
-        llm_connection: %i[llm_features_enabled api_format base_url api_key]
-      )
+    # A blank API key means "no key": the form never renders a saved value.
+    def inference_provider_params
+      permitted = params.expect(inference_provider: %i[title api_format base_url api_key])
       permitted.delete(:api_key) if permitted[:api_key].blank?
       permitted.to_h.symbolize_keys
     end

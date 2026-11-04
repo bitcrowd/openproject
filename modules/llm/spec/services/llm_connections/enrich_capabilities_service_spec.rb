@@ -30,9 +30,10 @@
 require "spec_helper"
 
 RSpec.describe LlmConnections::EnrichCapabilitiesService do
-  subject(:service) { described_class.new(connection) }
+  subject(:service) { described_class.new(provider) }
 
-  let(:connection) { create(:llm_connection) }
+  let(:provider) { create(:inference_provider) }
+  let(:connection) { LlmConnection.current }
   let(:registry) { {} }
 
   before do
@@ -46,11 +47,11 @@ RSpec.describe LlmConnections::EnrichCapabilitiesService do
   end
 
   def verdict(model_id, capability)
-    connection.capability_verdicts.find_by(model_id:, capability: capability.to_s)
+    provider.capability_verdicts.find_by(model_id:, capability: capability.to_s)
   end
 
   context "with a model the registry catalogues" do
-    let!(:llm_model) { create(:llm_model, llm_connection: connection, external_id: "gpt-4o") }
+    let!(:llm_model) { create(:llm_model, inference_provider: provider, external_id: "gpt-4o") }
     let(:registry) do
       { "gpt-4o" => catalogued("gpt-4o", capabilities: %w[function_calling vision], name: "GPT-4o", context_window: 128_000) }
     end
@@ -79,7 +80,7 @@ RSpec.describe LlmConnections::EnrichCapabilitiesService do
 
     %w[admin probe observed].each do |source|
       it "leaves a verdict from #{source} alone" do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "gpt-4o", capability: "vision",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "gpt-4o", capability: "vision",
                                         state: "unsupported", source:)
 
         service.call
@@ -89,7 +90,7 @@ RSpec.describe LlmConnections::EnrichCapabilitiesService do
     end
 
     it "refreshes an earlier metadata verdict" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "gpt-4o", capability: "vision",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "gpt-4o", capability: "vision",
                                       state: "unsupported", source: "metadata", checked_at: 1.day.ago)
 
       service.call
@@ -101,10 +102,10 @@ RSpec.describe LlmConnections::EnrichCapabilitiesService do
   context "when the registry entry has stopped publishing anything about the model" do
     let(:registry) { { "gpt-4o" => catalogued("gpt-4o", output: []) } }
 
-    before { create(:llm_model, llm_connection: connection, external_id: "gpt-4o") }
+    before { create(:llm_model, inference_provider: provider, external_id: "gpt-4o") }
 
     it "follows it, so an earlier metadata verdict no longer blocks the model" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "gpt-4o", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "gpt-4o", capability: "embeddings",
                                       state: "unsupported", source: "metadata")
 
       service.call
@@ -120,14 +121,14 @@ RSpec.describe LlmConnections::EnrichCapabilitiesService do
   end
 
   context "with a model the registry does not know" do
-    before { create(:llm_model, llm_connection: connection, external_id: "my-finetune-v3") }
+    before { create(:llm_model, inference_provider: provider, external_id: "my-finetune-v3") }
 
     it "records nothing" do
       expect { service.call }.not_to change(LlmCapabilityVerdict, :count)
     end
 
     it "still takes the output modality the model card declares" do
-      connection.models.first.update!(raw_metadata: { "architecture" => { "output_modalities" => ["embeddings"] } })
+      provider.models.first.update!(raw_metadata: { "architecture" => { "output_modalities" => ["embeddings"] } })
 
       service.call
 
@@ -139,7 +140,7 @@ RSpec.describe LlmConnections::EnrichCapabilitiesService do
     let(:registry) { { "openai/text-embedding-3-small" => catalogued("openai/text-embedding-3-small") } }
 
     before do
-      create(:llm_model, llm_connection: connection, external_id: "openai/text-embedding-3-small",
+      create(:llm_model, inference_provider: provider, external_id: "openai/text-embedding-3-small",
                          raw_metadata: { "architecture" => { "output_modalities" => ["embeddings"] } })
     end
 
@@ -152,18 +153,18 @@ RSpec.describe LlmConnections::EnrichCapabilitiesService do
 
   context "when the registry lookup raises" do
     before do
-      create(:llm_model, llm_connection: connection, external_id: "gpt-4o")
+      create(:llm_model, inference_provider: provider, external_id: "gpt-4o")
       allow(RubyLLM.models).to receive(:find).and_raise(JSON::ParserError, "broken registry")
     end
 
     it "skips the model without failing" do
       expect(service.call).to be_success
-      expect(connection.capability_verdicts).to be_empty
+      expect(provider.capability_verdicts).to be_empty
     end
   end
 
   context "with a withdrawn model" do
-    before { create(:llm_model, :withdrawn, llm_connection: connection, external_id: "gpt-4o") }
+    before { create(:llm_model, :withdrawn, inference_provider: provider, external_id: "gpt-4o") }
 
     it "does not look it up" do
       service.call

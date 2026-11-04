@@ -29,7 +29,7 @@
 
 FactoryBot.define do
   factory :llm_model do
-    llm_connection
+    inference_provider
     sequence(:external_id) { |n| "model-#{n}" }
     active { true }
     manual { false }

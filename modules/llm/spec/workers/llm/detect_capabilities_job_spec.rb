@@ -32,43 +32,64 @@ require_module_spec_helper
 
 RSpec.describe Llm::DetectCapabilitiesJob, :llm_server_helpers, :webmock do
   let(:base_url) { "https://example.com/v1" }
+  let!(:provider) { create(:inference_provider, :with_models, base_url:) }
 
-  it "probes the likely embedding models of every stored connection" do
-    connection = create(:llm_connection, :with_models, base_url:)
+  it "probes the likely embedding models of the provider" do
     mock_llm_embeddings_response(base_url)
 
-    described_class.perform_now
+    described_class.perform_now(provider.id)
 
-    expect(connection.capability_verdicts.pluck(:model_id, :source)).to eq([["bge-m3", "probe"]])
+    expect(provider.capability_verdicts.pluck(:model_id, :source)).to eq([["bge-m3", "probe"]])
   end
 
-  it "does nothing while no connection is stored" do
-    expect { described_class.perform_now }.not_to raise_error
-  end
-
-  it "probes the connections after one whose detection raises" do
-    broken = create(:llm_connection, :with_models, base_url: "https://broken.example/v1")
-    healthy = create(:llm_connection, :with_models, base_url:, active: false)
+  it "leaves another provider alone" do
+    other = create(:inference_provider, :with_models, base_url: "https://other.example/v1")
     mock_llm_embeddings_response(base_url)
-    allow(LlmConnections::DetectCapabilitiesService).to receive(:new).and_call_original
-    allow(LlmConnections::DetectCapabilitiesService).to receive(:new).with(broken)
+
+    described_class.perform_now(provider.id)
+
+    expect(other.capability_verdicts).to be_empty
+  end
+
+  it "does nothing once the provider is gone" do
+    expect { described_class.perform_now(0) }.not_to have_enqueued_job(Llm::CheckProviderHealthJob)
+  end
+
+  it "checks the provider once detection has run" do
+    mock_llm_embeddings_response(base_url)
+
+    expect { described_class.perform_now(provider.id) }
+      .to have_enqueued_job(Llm::CheckProviderHealthJob).with(provider.id)
+  end
+
+  it "checks the provider even when detection fails" do
+    allow(LlmConnections::DetectCapabilitiesService).to receive(:new).and_raise(ActiveRecord::RecordNotFound)
+
+    expect { described_class.perform_now(provider.id) }
+      .to have_enqueued_job(Llm::CheckProviderHealthJob).with(provider.id)
+  end
+
+  it "logs what went wrong without the error's message" do
+    allow(LlmConnections::DetectCapabilitiesService).to receive(:new)
       .and_raise(ActiveRecord::RecordNotFound, "sk-leaked")
     logged = []
     allow(Rails.logger).to receive(:error) { |&message| logged << message.call }
 
-    expect { described_class.perform_now }.not_to raise_error
+    expect { described_class.perform_now(provider.id) }.not_to raise_error
 
-    expect(healthy.capability_verdicts.pluck(:model_id)).to eq(["bge-m3"])
     expect(logged).to include(
-      a_string_starting_with("LLM capability detection failed for connection #{broken.id}: ActiveRecord::RecordNotFound\n")
+      a_string_starting_with("LLM capability detection failed for provider #{provider.id}: ActiveRecord::RecordNotFound\n")
     )
     expect(logged.join).to match(%r{app/workers/llm/detect_capabilities_job\.rb:\d+})
     expect(logged.join).not_to include("sk-leaked")
   end
 
-  it "keeps a single run waiting however often it is enqueued", with_good_job: described_class do
-    2.times { described_class.set(wait: 1.minute).perform_later }
+  it "keeps a single run waiting per provider however often it is enqueued", with_good_job: described_class do
+    other = create(:inference_provider)
 
-    expect(GoodJob::Job.where(job_class: described_class.name, finished_at: nil).count).to eq(1)
+    2.times { described_class.set(wait: 1.minute).perform_later(provider.id) }
+    described_class.set(wait: 1.minute).perform_later(other.id)
+
+    expect(GoodJob::Job.where(job_class: described_class.name, finished_at: nil).count).to eq(2)
   end
 end

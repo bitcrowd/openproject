@@ -28,61 +28,65 @@
 #++
 
 module Llm
-  # Refreshes the cached model catalogue out of band.
+  # Refreshes the cached model catalogue of one provider out of band.
   #
-  # Used by the environment seeder, which must not block on -- or fail because of
-  # -- an LLM server that has not finished starting.
+  # Used when a provider is created, and by the environment seeder, which must not
+  # block on -- or fail because of -- an LLM server that has not finished starting.
   class SyncModelsJob < ApplicationJob
+    include GoodJob::ActiveJobExtensions::Concurrency
+
     class SyncFailed < StandardError; end
     class NoModelsYet < StandardError; end
 
     Failure = Data.define(:error, :reason)
 
+    good_job_control_concurrency_with(enqueue_limit: 1, perform_limit: 1,
+                                      key: -> { "#{self.class.name}-#{arguments.first}" })
+
     # The tenth and last attempt starts roughly 4.5 hours after the first.
     retry_on SyncFailed, wait: :polynomially_longer, attempts: 10
 
-    # An empty sync records last_synced_at like any other, so which connections
+    # An empty sync records last_synced_at like any other, so whether the provider
     # had never synced is taken on the first attempt and carried through the
     # retries.
     def serialize
-      super.merge("never_synced_ids" => @never_synced_ids)
+      super.merge("never_synced" => @never_synced)
     end
 
     def deserialize(job_data)
       super
-      @never_synced_ids = job_data["never_synced_ids"]
+      @never_synced = job_data["never_synced"]
     end
 
-    def perform
-      @never_synced_ids ||= LlmConnection.where(last_synced_at: nil).ids
-      failures = LlmConnection.find_each.filter_map { |connection| failure_for(connection) }
-      return if failures.empty?
+    def perform(inference_provider_id)
+      provider = InferenceProvider.find_by(id: inference_provider_id)
+      return if provider.nil?
 
-      reasons = failures.map(&:reason).join("; ")
-      raise SyncFailed, reasons if failures.any? { |failure| transient?(failure.error) }
+      @never_synced = provider.last_synced_at.nil? if @never_synced.nil?
+      failure = failure_for(provider)
+      return if failure.nil?
 
-      Rails.logger.warn { "LLM model sync failed and will not be retried: #{reasons}" }
+      raise SyncFailed, failure.reason if transient?(failure.error)
+
+      Rails.logger.warn { "LLM model sync failed and will not be retried: #{failure.reason}" }
     end
 
     private
 
-    # Every connection is attempted before anything is raised. One server still
-    # starting, or one row carrying a format no adapter serves, must not leave
-    # the connections after it without a catalogue.
-    def failure_for(connection)
+    def failure_for(provider)
       started_at = Time.current
-      result = LlmConnections::SyncModelsService.new(connection).call
-      return still_loading(connection, since: started_at) if result.success?
+      result = LlmConnections::SyncModelsService.new(provider).call
+      return still_loading(provider, since: started_at) if result.success?
 
       Failure.new(error: result.result, reason: result.errors.to_s)
     rescue StandardError => e
-      Rails.logger.error { "LLM model sync failed for connection #{connection.id}: #{e.class}" }
+      Rails.logger.error { "LLM model sync failed for provider #{provider.id}: #{e.class}" }
       Failure.new(error: e, reason: e.class.to_s)
     end
 
     # An Ollama sidecar answers with an empty list while it still pulls its model.
-    def still_loading(connection, since:)
-      return unless @never_synced_ids.include?(connection.id) && connection.models.where(last_seen_at: since..).none?
+    def still_loading(provider, since:)
+      return unless @never_synced && provider.models.where(last_seen_at: since..).none?
 
       Failure.new(error: NoModelsYet.new, reason: "No models listed yet")
     end

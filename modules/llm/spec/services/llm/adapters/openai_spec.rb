@@ -34,7 +34,7 @@ RSpec.describe Llm::Adapters::Openai, :llm_server_helpers, :webmock do
   subject(:adapter) { described_class.new(connection) }
 
   let(:base_url) { "https://example.com/v1" }
-  let(:connection) { build(:llm_connection, base_url:, api_format: "openai", api_key: "sk-test") }
+  let(:connection) { build(:inference_provider, base_url:, api_format: "openai", api_key: "sk-test") }
 
   describe "#models" do
     it "reads the cards of the catalogue" do
@@ -47,7 +47,7 @@ RSpec.describe Llm::Adapters::Openai, :llm_server_helpers, :webmock do
       mock_llm_models_response(base_url, body: [nil, 5, "grid", ["id"], { id: "bge-m3" }].to_json)
 
       expect(adapter.models.pluck(:id)).to eq(["bge-m3"])
-      expect(adapter.server_flavour).to eq("unknown")
+      expect(adapter.server_flavor).to eq("unknown")
     end
   end
 end

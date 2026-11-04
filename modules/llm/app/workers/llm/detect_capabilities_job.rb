@@ -29,20 +29,32 @@
 
 module Llm
   # Pre-colors the model list after a refresh, out of band so that fetching the
-  # catalogue does not wait on one request per candidate model.
+  # catalogue does not wait on one request per candidate model. The provider's
+  # health check follows either way, since it picks its chat model from what
+  # this finds.
   class DetectCapabilitiesJob < ApplicationJob
     include GoodJob::ActiveJobExtensions::Concurrency
 
-    good_job_control_concurrency_with(enqueue_limit: 1, perform_limit: 1)
+    # The default key is the class name, which would swallow another provider's job.
+    good_job_control_concurrency_with(enqueue_limit: 1, perform_limit: 1,
+                                      key: -> { "#{self.class.name}-#{arguments.first}" })
 
-    def perform
-      LlmConnection.find_each do |connection|
-        LlmConnections::DetectCapabilitiesService.new(connection).detect_likely_embedding_models
-      rescue StandardError => e
-        Rails.logger.error do
-          "LLM capability detection failed for connection #{connection.id}: #{e.class}\n" \
-            "#{Rails.backtrace_cleaner.clean(Array(e.backtrace)).join("\n")}"
-        end
+    def perform(inference_provider_id)
+      provider = InferenceProvider.find_by(id: inference_provider_id)
+      return if provider.nil?
+
+      detect(provider)
+      Llm::CheckProviderHealthJob.perform_later(provider.id)
+    end
+
+    private
+
+    def detect(provider)
+      LlmConnections::DetectCapabilitiesService.new(provider).detect_likely_embedding_models
+    rescue StandardError => e
+      Rails.logger.error do
+        "LLM capability detection failed for provider #{provider.id}: #{e.class}\n" \
+          "#{Rails.backtrace_cleaner.clean(Array(e.backtrace)).join("\n")}"
       end
     end
   end

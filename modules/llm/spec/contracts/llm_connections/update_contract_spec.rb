@@ -36,246 +36,19 @@ RSpec.describe LlmConnections::UpdateContract, :check_errors_i18n, :llm_server_h
 
   let(:current_user) { build_stubbed(:admin) }
   let(:base_url) { "https://example.com/v1" }
-  # Persisted, so that only the attributes an example changes are dirty. A
-  # freshly built record has every factory attribute in changed_attributes,
-  # which the contract would rightly reject as writes to non-writable columns.
-  let(:connection) { create(:llm_connection, base_url: "https://previous.example/v1") }
+  let(:connection) { LlmConnection.current }
   let(:contract) { described_class.new(connection, current_user) }
 
   let!(:models_request) { mock_llm_models_response(base_url) }
 
-  before { connection.base_url = base_url }
-
-  context "when the server answers with a model list" do
-    include_examples "contract is valid"
-
-    it "probes the server exactly once" do
-      contract.validate
-
-      expect(models_request).to have_been_made.once
-    end
-  end
-
-  context "when the server rejects the credentials" do
-    let!(:models_request) { mock_llm_models_response(base_url, response_code: 401) }
-
-    it "logs the failure by connection, without the URL it probed" do
-      logged = []
-      allow(Rails.logger).to receive(:info) { |*args, &block| logged << (block ? block.call : args.first) }
-
-      contract.validate
-
-      expect(logged.join).to include("connection #{connection.id}")
-      expect(logged.join).not_to include("example.com")
-    end
-
-    include_examples "contract is invalid", api_key: :invalid_api_key
-  end
-
-  context "when the server cannot be reached" do
-    let!(:models_request) { mock_llm_models_response(base_url, timeout: true) }
-
-    include_examples "contract is invalid", base_url: :request_timed_out
-  end
-
-  context "when the TLS handshake fails" do
-    let!(:models_request) { mock_llm_models_response(base_url, raise_error: OpenSSL::SSL::SSLError) }
-
-    include_examples "contract is invalid", base_url: :ssl_error
-  end
-
-  # A server can speak the OpenAI API for chat and still not expose a model list:
-  # OpenProject's own hosted gateway does exactly that. Blocking the save would
-  # leave the administrator unable to configure a working connection at all.
-  # Only a server that serves this URL can answer 405 or 501 for it.
-  [405, 501].each do |status|
-    context "when the server answers #{status} for the model list" do
-      let!(:models_request) { mock_llm_models_response(base_url, response_code: status) }
-
-      include_examples "contract is valid"
-    end
-  end
-
-  # 404 is what a mistyped path and a missing version segment both return, so it
-  # cannot stand for "reachable and authenticated": the request never reached
-  # anything that would have judged the API key.
-  context "when the server answers 404 for the model list" do
-    let!(:models_request) { mock_llm_models_response(base_url, response_code: 404) }
-
-    include_examples "contract is invalid", base_url: :models_endpoint_missing
-  end
-
-  # Formats whose model list comes from the registry have nothing to probe here.
-  context "with a format that does not discover models from the server" do
-    let(:connection) { create(:llm_connection, api_format: "anthropic", base_url: "https://previous.example") }
-
-    it "does not contact the base URL" do
-      contract.validate
-
-      expect(models_request).not_to have_been_made
-    end
-
-    # The address is checked whatever dialect the server speaks. RubyLLM carries
-    # inference for these formats over a Faraday stack that is not filtered, so
-    # this save-time check is the only guard they get.
-    context "when the host is blocked by the SSRF policy" do
-      before { allow_llm_host("something.else") }
-
-      include_examples "contract is invalid", base_url: :ssrf_filtered
-    end
-  end
-
-  context "with a gateway that serves the model list in OpenAI shape" do
-    let(:base_url) { "https://openrouter.ai/api/v1" }
-    let(:connection) { create(:llm_connection, api_format: "openrouter", base_url: "https://previous.example/api/v1") }
-
-    before { stub_llm_dns }
+  context "when only the features switch changed" do
+    before { connection.llm_features_enabled = true }
 
     include_examples "contract is valid"
 
-    it "probes the base URL" do
-      contract.validate
-
-      expect(models_request).to have_been_made.once
-    end
-  end
-
-  context "when the endpoint is not OpenAI-compatible" do
-    let!(:models_request) { mock_llm_models_response(base_url, body: "<html>login</html>") }
-
-    include_examples "contract is invalid", base_url: :not_openai_compatible
-  end
-
-  context "when the host does not resolve at all" do
-    before { stub_llm_dns(unresolvable: ["example.com"]) }
-
-    include_examples "contract is invalid", base_url: :cannot_be_connected_to
-
     it "does not contact the server" do
       contract.validate
 
-      expect(models_request).not_to have_been_made
-    end
-  end
-
-  context "when the host is blocked by the SSRF policy" do
-    before { allow_llm_host("something.else") }
-
-    include_examples "contract is invalid", base_url: :ssrf_filtered
-
-    it "does not contact the server" do
-      contract.validate
-
-      expect(models_request).not_to have_been_made
-    end
-  end
-
-  # Inference goes through RubyLLM's unfiltered stack, which may connect to any
-  # of the addresses a name resolves to, so one private address is enough.
-  context "when the host resolves to both a public and a private address" do
-    before { stub_llm_dns(addresses: { "example.com" => ["93.184.216.34", "10.0.0.5"] }) }
-
-    include_examples "contract is invalid", base_url: :ssrf_filtered
-
-    it "does not contact the server" do
-      contract.validate
-
-      expect(models_request).not_to have_been_made
-    end
-  end
-
-  context "when the base URL is a loopback IPv6 literal" do
-    let(:base_url) { "https://[::1]/v1" }
-
-    include_examples "contract is invalid", base_url: :ssrf_filtered
-
-    it "does not contact the server" do
-      contract.validate
-
-      expect(models_request).not_to have_been_made
-    end
-  end
-
-  context "when the host resolves only to an allowlisted private address",
-          with_ssrf_ip_allowlist: ["10.0.0.0/8"] do
-    before { stub_llm_dns(addresses: { "example.com" => ["10.0.0.5"] }) }
-
-    include_examples "contract is valid"
-  end
-
-  context "when the base URL is blank" do
-    let(:base_url) { "" }
-
-    include_examples "contract is invalid", base_url: :blank
-
-    it "does not contact the server" do
-      contract.validate
-
-      expect(models_request).not_to have_been_made
-    end
-  end
-
-  context "with an unknown API format" do
-    before { connection.api_format = "carrier_pigeon" }
-
-    include_examples "contract is invalid", api_format: :inclusion
-  end
-
-  context "when the base URL is not a URL at all" do
-    let(:base_url) { "not a url" }
-
-    include_examples "contract is invalid", base_url: :invalid_url
-
-    it "does not contact the server" do
-      contract.validate
-
-      expect(models_request).not_to have_been_made
-    end
-  end
-
-  # Without the changed-attributes guard every unrelated save -- and every form
-  # render that builds a model through SetAttributesService -- would fire an
-  # outbound request at the LLM server.
-  describe "the changed-attributes guard" do
-    it "probes only when the credentials changed" do
-      contract.validate
-      expect(models_request).to have_been_made.once
-
-      WebMock.reset_executed_requests!
-      connection.save!
-      contract.validate
-
-      expect(models_request).not_to have_been_made
-    end
-
-    it "probes again when only the API key changed" do
-      connection.save!
-      WebMock.reset_executed_requests!
-
-      connection.api_key = "sk-rotated"
-      contract.validate
-
-      expect(models_request).to have_been_made.once
-    end
-
-    # Switching the dialect is switching the server, even at the same URL: a
-    # connection previously talking to a registry-backed provider must be proven
-    # again when it becomes OpenAI-compatible.
-    it "probes when only the API format changed to an OpenAI-compatible one" do
-      connection.update_columns(api_format: "anthropic", base_url: base_url)
-      connection.reload.api_format = "openai"
-
-      expect(contract.validate).to be(true)
-      expect(models_request).to have_been_made.once
-    end
-
-    it "does not probe when only the features switch changed" do
-      connection.save!
-      WebMock.reset_executed_requests!
-
-      connection.llm_features_enabled = true
-
-      expect(contract.validate).to be(true)
       expect(models_request).not_to have_been_made
     end
   end
@@ -288,7 +61,7 @@ RSpec.describe LlmConnections::UpdateContract, :check_errors_i18n, :llm_server_h
     end
 
     context "when the environment has written the connection" do
-      let(:connection) { create(:llm_connection, :provisioned_from_env, base_url: "https://previous.example/v1") }
+      before { connection.update_columns(env_provisioned_at: Time.current) }
 
       include_examples "contract is invalid", base: :configured_via_env
     end
@@ -307,10 +80,10 @@ RSpec.describe LlmConnections::UpdateContract, :check_errors_i18n, :llm_server_h
   end
 
   describe "default model selection" do
-    let(:connection) { create(:llm_connection, :with_models, base_url:) }
+    let(:provider) { create(:inference_provider, :with_models, base_url:) }
 
     context "with a model the server offers" do
-      before { connection.default_chat_model = connection.models.find_by(external_id: "bge-m3") }
+      before { connection.default_chat_model = provider.models.find_by(external_id: "bge-m3") }
 
       include_examples "contract is valid"
     end
@@ -323,9 +96,9 @@ RSpec.describe LlmConnections::UpdateContract, :check_errors_i18n, :llm_server_h
 
     context "with a model the server says is an embedding model" do
       before do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                         state: "supported", source: "probe")
-        connection.default_chat_model = connection.models.find_by(external_id: "bge-m3")
+        connection.default_chat_model = provider.models.find_by(external_id: "bge-m3")
       end
 
       include_examples "contract is invalid", default_chat_model_id: :cannot_chat
@@ -333,23 +106,23 @@ RSpec.describe LlmConnections::UpdateContract, :check_errors_i18n, :llm_server_h
 
     context "with an embedding model the server has ruled out" do
       before do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen3.6-27b", capability: "embeddings",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "qwen3.6-27b", capability: "embeddings",
                                         state: "unsupported", source: "probe")
-        connection.default_embedding_model = connection.models.find_by(external_id: "qwen3.6-27b")
+        connection.default_embedding_model = provider.models.find_by(external_id: "qwen3.6-27b")
       end
 
       include_examples "contract is invalid", default_embedding_model_id: :cannot_embed
     end
 
     context "with an embedding model nothing has ruled out" do
-      before { connection.default_embedding_model = connection.models.find_by(external_id: "qwen3.6-27b") }
+      before { connection.default_embedding_model = provider.models.find_by(external_id: "qwen3.6-27b") }
 
       include_examples "contract is valid"
     end
 
     context "with a stored default the server has since withdrawn" do
       before do
-        withdrawn_model = create(:llm_model, :withdrawn, llm_connection: connection)
+        withdrawn_model = create(:llm_model, :withdrawn, inference_provider: provider)
         connection.update_columns(default_chat_model_id: withdrawn_model.id)
         connection.llm_features_enabled = true
       end

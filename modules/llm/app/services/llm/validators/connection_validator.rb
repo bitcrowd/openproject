@@ -29,7 +29,7 @@
 
 module Llm
   module Validators
-    # The health report for an LLM connection.
+    # The health report for an inference provider.
     #
     # Nothing here reads User.current: the whole report has to be reproducible
     # from a background job, which is what lets the same code answer both the
@@ -38,15 +38,15 @@ module Llm
       register_group ConfigurationValidator
 
       register_group ServerValidator,
-                     precondition: lambda { |connection, report|
-                       Llm::Adapters.live_discovery?(connection.api_format) &&
+                     precondition: lambda { |provider, report|
+                       Llm::Adapters.live_discovery?(provider.api_format) &&
                          report.group(:configuration).non_failure?
                      }
 
       # Costs a real completion, so it is not part of the scheduled run.
       register_group InferenceValidator,
-                     precondition: lambda { |connection, report|
-                       connection.deep_health_check? && report.group(:configuration).non_failure?
+                     precondition: lambda { |provider, report|
+                       provider.deep_health_check? && report.group(:configuration).non_failure?
                      }
 
       register_group ModelValidator

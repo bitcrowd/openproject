@@ -38,12 +38,11 @@ module Llm
       private
 
       def validate
-        register_checks(:catalogue_present, :catalogue_fresh, :default_chat_model, :default_embedding_model)
+        register_checks(:catalogue_present, :catalogue_fresh, *defaults_on_this_provider.keys)
 
         catalogue_present
         catalogue_fresh
-        default_chat_model
-        default_embedding_model
+        defaults_on_this_provider.each { |key, llm_model| check_default(key, llm_model) }
       end
 
       # Never a failure. A gateway may expose chat and no catalogue at all, which
@@ -59,8 +58,6 @@ module Llm
 
         if fetched_at.blank?
           warn_check(:catalogue_fresh, :catalogue_never_fetched)
-        elsif subject.models_stale?
-          warn_check(:catalogue_fresh, :catalogue_stale_settings)
         elsif fetched_at < STALE_AFTER.ago
           # Context is serialized to jsonb, so a Time has to be formatted here.
           warn_check(:catalogue_fresh, :catalogue_stale, context: { fetched_at: I18n.l(fetched_at.to_date) })
@@ -69,26 +66,22 @@ module Llm
         end
       end
 
-      def default_chat_model
-        check_default(:default_chat_model, subject.default_chat_model)
-      end
+      # A default is a single model, so only the report of the provider offering
+      # it can say anything about it.
+      def defaults_on_this_provider
+        @defaults_on_this_provider ||= begin
+          connection = LlmConnection.current
 
-      # Only meaningful once something wants embeddings; otherwise an unset
-      # default is not a defect.
-      def default_embedding_model
-        return pass_check(:default_embedding_model) if OpenProject::Llm::Features.for_kind(:embedding).empty?
-
-        check_default(:default_embedding_model, subject.default_embedding_model)
+          { default_chat_model: connection.default_chat_model,
+            default_embedding_model: connection.default_embedding_model }
+            .select { |_, llm_model| llm_model&.inference_provider_id == subject.id }
+        end
       end
 
       def check_default(key, llm_model)
-        if llm_model.nil?
-          warn_check(key, :default_model_unset)
-        elsif subject.available_model_ids.exclude?(llm_model.external_id)
-          warn_check(key, :default_model_missing, context: { model: llm_model.external_id })
-        else
-          pass_check(key)
-        end
+        return pass_check(key) if llm_model.active?
+
+        warn_check(key, :default_model_missing, context: { model: llm_model.external_id })
       end
     end
   end

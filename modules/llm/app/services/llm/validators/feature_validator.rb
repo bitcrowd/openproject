@@ -65,29 +65,30 @@ module Llm
           fail_check(:bindings_resolvable, :features_model_missing, context: { features: labels(missing) })
         end
 
-        if (unbound = by_status[:unbound]).present?
-          return warn_check(:bindings_resolvable, :features_unbound, context: { features: labels(unbound) })
-        end
-
         pass_check(:bindings_resolvable)
       end
 
       # If the model an index was built with has left the catalogue, queries can
       # no longer be embedded consistently with the stored vectors.
       def active_semantic_index_intact
-        semantic_index = subject.feature_bindings.find_by(feature_key: "semantic_search")&.semantic_index
+        semantic_index = SemanticIndex.active
+        llm_model = semantic_index&.llm_model
 
-        return pass_check(:active_semantic_index_intact) if semantic_index.nil? || semantic_index.llm_model.active?
+        if llm_model.nil? || llm_model.inference_provider_id != subject.id || llm_model.active?
+          return pass_check(:active_semantic_index_intact)
+        end
 
         fail_check(:active_semantic_index_intact, :semantic_index_model_missing,
-                   context: { title: semantic_index.title, model: semantic_index.llm_model.external_id })
+                   context: { title: semantic_index.title, model: llm_model.external_id })
       end
 
+      # Only what uses a model of this provider: a feature with no model chosen
+      # is no statement about any server. Embedding features take their model from
+      # the active Semantic Index.
       def resolutions
-        # Embedding features take their model from the active Semantic Index.
-        @resolutions ||= OpenProject::Llm::Features.available.reject(&:embedding?).map do |feature|
-          Llm::Runtime.for(feature.key)
-        end
+        @resolutions ||= OpenProject::Llm::Features.available.reject(&:embedding?)
+          .map { |feature| Llm::Runtime.for(feature.key) }
+          .select { |resolution| resolution.model&.inference_provider_id == subject.id }
       end
 
       def labels(resolutions) = resolutions.map { |resolution| resolution.feature.label }.join(", ")

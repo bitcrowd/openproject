@@ -31,9 +31,10 @@ require "spec_helper"
 require_module_spec_helper
 
 RSpec.describe LlmFeatureBinding do
-  let(:connection) { create(:llm_connection, :with_models) }
+  let(:provider) { create(:inference_provider, :with_models) }
+  let(:connection) { LlmConnection.current }
 
-  let(:llm_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
+  let(:llm_model) { provider.models.find_by!(external_id: "qwen3.6-27b") }
 
   def bind(llm_model)
     connection.feature_bindings.new(feature_key: "description_assistant", llm_model:)
@@ -49,7 +50,8 @@ RSpec.describe LlmFeatureBinding do
     end
 
     it "must be one the connection offers" do
-      binding = bind(create(:llm_model, llm_connection: create(:llm_connection, active: false)))
+      binding = connection.feature_bindings.new(feature_key: "description_assistant",
+                                                llm_model_id: LlmModel.maximum(:id).to_i + 1)
 
       expect(binding).not_to be_valid
       expect(binding.errors.details[:llm_model_id]).to include(error: :not_available)
@@ -80,8 +82,8 @@ RSpec.describe LlmFeatureBinding do
   end
 
   describe "inheriting the connection default" do
-    let(:connection) do
-      create(:llm_connection, :with_models,
+    let!(:provider) do
+      create(:inference_provider, :with_models,
              default_chat_model_identifier: "qwen3.6-27b",
              default_embedding_model_identifier: "bge-m3")
     end

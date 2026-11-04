@@ -40,6 +40,6 @@
   <% end %>
 
   <% if feature.embedding? %>
-    <%= render(LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.includes(:llm_model).order(:created_at))) %>
+    <%= render(LlmConnections::SemanticIndexes::BoxComponent.new(semantic_indexes: SemanticIndex.includes(llm_model: :inference_provider).order(:created_at))) %>
   <% end %>
 <% end %>

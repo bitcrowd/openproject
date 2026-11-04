@@ -35,6 +35,8 @@ module LlmConnections
 
       alias_method :query, :model
 
+      options :provider
+
       def filter_input_value
         query.find_active_filter(:name)&.values&.first
       end

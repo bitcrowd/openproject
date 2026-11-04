@@ -30,9 +30,9 @@
 require "spec_helper"
 
 RSpec.describe Llm::PruneHealthReportsJob do
-  shared_let(:connection) { create(:llm_connection) }
+  shared_let(:provider) { create(:inference_provider) }
 
-  def report(created_at:, subject: connection)
+  def report(created_at:, subject: provider)
     subject.health_reports.create!(
       results: [HealthReport::ResultGroup.new(key: :configuration, results: [])],
       created_at:
@@ -56,7 +56,7 @@ RSpec.describe Llm::PruneHealthReportsJob do
     expect(HealthReport.exists?(recent.id)).to be(true)
   end
 
-  # Age alone is not enough: a connection checked once a year ago should still
+  # Age alone is not enough: a provider checked once a year ago should still
   # show that check rather than nothing at all.
   it "keeps the newest reports even when they are old" do
     oldest = report(created_at: 200.days.ago)
@@ -64,6 +64,29 @@ RSpec.describe Llm::PruneHealthReportsJob do
     described_class.perform_now
 
     expect(HealthReport.exists?(oldest.id)).to be(true)
+  end
+
+  it "prunes a provider that is not active, keeping its newest reports" do
+    stub_const("#{described_class}::KEEP", 1)
+    inactive = create(:inference_provider)
+    oldest = report(created_at: 300.days.ago, subject: inactive)
+    newest = report(created_at: 200.days.ago, subject: inactive)
+
+    described_class.perform_now
+
+    expect(HealthReport.exists?(oldest.id)).to be(false)
+    expect(HealthReport.exists?(newest.id)).to be(true)
+  end
+
+  it "counts the reports of each provider on their own" do
+    stub_const("#{described_class}::KEEP", 1)
+    active_report = report(created_at: 300.days.ago)
+    newer_elsewhere = report(created_at: 200.days.ago, subject: create(:inference_provider))
+
+    described_class.perform_now
+
+    expect(HealthReport.exists?(active_report.id)).to be(true)
+    expect(HealthReport.exists?(newer_elsewhere.id)).to be(true)
   end
 
   it "leaves other subjects' reports alone" do

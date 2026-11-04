@@ -36,6 +36,6 @@ class Queries::LlmModels::LlmModelQuery
   end
 
   def default_scope
-    LlmModel.where(llm_connection: LlmConnection.active).by_identifier
+    LlmModel.by_identifier
   end
 end

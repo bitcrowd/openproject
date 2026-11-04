@@ -28,7 +28,7 @@
 #++
 
 module LlmConnections
-  # Fills in what a public registry publishes about the models a connection offers.
+  # Fills in what a public registry publishes about the models a provider offers.
   #
   # This is the "the provider tells us" path. A hosted provider's model ids are
   # catalogued, so capabilities arrive without asking the server anything. A
@@ -39,19 +39,19 @@ module LlmConnections
   # An administrator's assertion is never overwritten: they know things about
   # their deployment that no registry can.
   class EnrichCapabilitiesService
-    def initialize(connection)
-      @connection = connection
+    def initialize(provider)
+      @provider = provider
     end
 
     def call
-      connection.models.active.find_each { |llm_model| enrich(llm_model) }
+      provider.models.active.find_each { |llm_model| enrich(llm_model) }
 
-      ServiceResult.success(result: connection)
+      ServiceResult.success(result: provider)
     end
 
     private
 
-    attr_reader :connection
+    attr_reader :provider
 
     def enrich(llm_model)
       published = Llm::Capabilities.published_for(llm_model.external_id)
@@ -94,7 +94,7 @@ module LlmConnections
     end
 
     def record(model_id, capability, state)
-      verdict = connection.capability_verdicts.find_or_initialize_by(model_id:, capability: capability.to_s)
+      verdict = provider.capability_verdicts.find_or_initialize_by(model_id:, capability: capability.to_s)
       # Anything an administrator, a probe or an observed request established
       # beats a published claim: all three looked at this deployment, the
       # registry did not.

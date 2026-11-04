@@ -29,7 +29,7 @@
 
 module Llm
   module Validators
-    # What can be said about the connection without asking the server anything.
+    # What can be said about the provider without asking the server anything.
     class ConfigurationValidator < HealthReports::ValidatorGroup
       def self.key = :configuration
 
@@ -49,8 +49,8 @@ module Llm
         if OpenProject::FeatureDecisions.llm_connection_active?
           pass_check(:feature_flag)
         else
-          # Not a failure: an administrator may reasonably configure and test the
-          # connection before switching the feature on.
+          # Not a failure: an administrator may reasonably configure and test a
+          # provider before switching the feature on.
           warn_check(:feature_flag, :feature_flag_off)
         end
       end

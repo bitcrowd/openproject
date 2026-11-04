@@ -42,7 +42,7 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
 
     before do
       OpenProject::Llm::Features.register(feature_key, kind: :chat, enabled: -> { false })
-      create(:llm_connection, :with_models, default_chat_model_identifier: "qwen3.6-27b")
+      create(:inference_provider, :with_models, default_chat_model_identifier: "qwen3.6-27b")
     end
 
     after { OpenProject::Llm::Features.all.delete(feature_key) }
@@ -50,7 +50,6 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     it "fails closed although a model would resolve" do
       expect(resolution.status).to eq(:feature_disabled)
       expect(resolution.model_id).to be_nil
-      expect(resolution.connection).to be_nil
     end
   end
 
@@ -59,13 +58,14 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
   end
 
   context "with the AI features switched off", with_settings: { llm_features_enabled: false } do
-    before { create(:llm_connection, :with_models) }
+    before { create(:inference_provider, :with_models) }
 
     it { expect(resolution.status).to eq(:no_connection) }
   end
 
   context "with the AI features switched on" do
-    let!(:connection) { create(:llm_connection, :with_models) }
+    let!(:provider) { create(:inference_provider, :with_models) }
+    let(:connection) { LlmConnection.current }
 
     it "is unbound until a model is chosen" do
       expect(resolution.status).to eq(:unbound)
@@ -73,21 +73,21 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     end
 
     it "falls back to the connection default" do
-      connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b"))
+      connection.update!(default_chat_model: provider.models.find_by(external_id: "qwen3.6-27b"))
 
       expect(resolution).to be_ready
       expect(resolution.model_id).to eq("qwen3.6-27b")
     end
 
     it "prefers the feature binding over the connection default" do
-      connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b"))
+      connection.update!(default_chat_model: provider.models.find_by(external_id: "qwen3.6-27b"))
       create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_identifier: "bge-m3")
 
       expect(resolution.model_id).to eq("bge-m3")
     end
 
     context "with a per-item override" do
-      let(:override) { connection.models.find_by!(external_id: "qwen3.6-27b").id }
+      let(:override) { provider.models.find_by!(external_id: "qwen3.6-27b").id }
 
       it "wins over the binding" do
         create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_identifier: "bge-m3")
@@ -101,7 +101,7 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
         semantic_index = create(:semantic_index, state: "ready", model_identifier: "bge-m3", embedding_vector_dimensions: 3)
         create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search",
                                      semantic_index:)
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                         state: "supported", source: "admin")
 
         resolution = described_class.for(:semantic_search, override:)
@@ -113,7 +113,7 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     # The stored vectors were written with the index's model, so anything else
     # bound to the feature must not decide what a query embeds with.
     it "takes the model of the active semantic index" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                       state: "supported", source: "admin")
       create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search",
                                    model_identifier: "qwen3.6-27b",
@@ -127,7 +127,7 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     context "when the chosen model is gone from the catalogue" do
       let(:override) { LlmModel.maximum(:id).to_i + 1 }
 
-      before { connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b")) }
+      before { connection.update!(default_chat_model: provider.models.find_by(external_id: "qwen3.6-27b")) }
 
       it "fails closed rather than falling back" do
         expect(resolution.status).to eq(:model_missing)
@@ -136,7 +136,7 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     end
 
     context "when the chosen model has been withdrawn" do
-      let(:override) { create(:llm_model, :withdrawn, llm_connection: connection, external_id: "vanished-model").id }
+      let(:override) { create(:llm_model, :withdrawn, inference_provider: provider, external_id: "vanished-model").id }
 
       it "fails closed and names it" do
         expect(resolution.status).to eq(:model_missing)
@@ -147,7 +147,8 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
 
   describe "capability gating" do
     let(:feature_key) { :semantic_search }
-    let!(:connection) { create(:llm_connection, :with_models) }
+    let!(:provider) { create(:inference_provider, :with_models) }
+    let(:connection) { LlmConnection.current }
 
     before do
       semantic_index = create(:semantic_index, state: "ready", model_identifier: "qwen3.6-27b",
@@ -156,7 +157,7 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     end
 
     it "blocks on a definite unsupported verdict" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen3.6-27b", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "qwen3.6-27b", capability: "embeddings",
                                       state: "unsupported", source: "probe")
 
       expect(resolution.status).to eq(:incapable)
@@ -166,7 +167,7 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     # Refusing on "we could not tell" would make most self-hosted servers
     # unusable, since the model list carries no capability information at all.
     it "does not block when the verdict is unknown" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen3.6-27b", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "qwen3.6-27b", capability: "embeddings",
                                       state: "unknown", source: "probe")
 
       expect(resolution).to be_ready
@@ -178,7 +179,8 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
   end
 
   describe "running a request", :llm_server_helpers, :webmock do
-    let!(:connection) { create(:llm_connection, :with_models, default_chat_model_identifier: "qwen3.6-27b") }
+    let!(:provider) { create(:inference_provider, :with_models, default_chat_model_identifier: "qwen3.6-27b") }
+    let(:connection) { LlmConnection.current }
 
     it "sends a completion for the resolved model" do
       mock_llm_chat_response("https://example.com/v1", content: "pong")
@@ -204,7 +206,7 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     context "with an embedding feature" do
       let(:feature_key) { :semantic_search }
 
-      before { connection.update!(default_embedding_model: connection.models.find_by(external_id: "bge-m3")) }
+      before { connection.update!(default_embedding_model: provider.models.find_by(external_id: "bge-m3")) }
 
       it "requests a vector for the resolved model" do
         mock_llm_embeddings_response("https://example.com/v1", dimensions: 8)

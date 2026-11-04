@@ -36,12 +36,12 @@ RSpec.describe Llm::HealthCheckJob, :llm_server_helpers, :webmock, with_flag: { 
 
   describe "#perform" do
     context "with the AI features switched on" do
-      let!(:connection) { create(:llm_connection, :with_models, base_url:) }
+      let!(:provider) { create(:inference_provider, :with_models, base_url:) }
 
       before { mock_llm_models_response(base_url) }
 
       it "stores a report" do
-        expect { described_class.perform_now }.to change(connection.health_reports, :count).by(1)
+        expect { described_class.perform_now }.to change(provider.health_reports, :count).by(1)
       end
 
       # The whole reason the inference group is gated: an unattended job must not
@@ -52,44 +52,58 @@ RSpec.describe Llm::HealthCheckJob, :llm_server_helpers, :webmock, with_flag: { 
         described_class.perform_now
 
         expect(WebMock).not_to have_requested(:post, "#{base_url}/chat/completions")
-        expect(connection.latest_health_report.results.map(&:key)).not_to include("inference")
+        expect(provider.latest_health_report.results.map(&:key)).not_to include("inference")
       end
 
       it "still reports what the free checks found" do
         described_class.perform_now
 
-        expect(connection.latest_health_report.group("server").result_for("reachable").state).to eq(:success)
+        expect(provider.latest_health_report.group("server").result_for("reachable").state).to eq(:success)
       end
     end
 
-    context "with an inactive connection stored alongside the active one" do
-      let!(:inactive) { create(:llm_connection, :with_models, base_url:, active: false) }
-      let!(:connection) { create(:llm_connection, :with_models, base_url:) }
+    context "with several providers" do
+      let!(:broken) { create(:inference_provider, :with_models, title: "A broken", base_url: "https://broken.example/v1") }
+      let!(:provider) { create(:inference_provider, :with_models, title: "B healthy", base_url:) }
 
       before { mock_llm_models_response(base_url) }
 
-      it "reports on the active connection only" do
+      it "stores a report for each" do
+        mock_llm_models_response("https://broken.example/v1", response_code: 503)
+
         described_class.perform_now
 
-        expect(connection.health_reports.count).to eq(1)
-        expect(inactive.health_reports).to be_empty
+        expect(broken.health_reports.count).to eq(1)
+        expect(provider.health_reports.count).to eq(1)
+      end
+
+      it "still reports on the others when one raises" do
+        allow(Llm::Validators::ConnectionValidator).to receive(:new).and_call_original
+        allow(Llm::Validators::ConnectionValidator).to receive(:new).with(broken).and_raise("unexpected")
+        logged = []
+        allow(Rails.logger).to receive(:error) { |&message| logged << message.call }
+
+        expect { described_class.perform_now }.not_to raise_error
+
+        expect(provider.health_reports.count).to eq(1)
+        expect(logged).to include(a_string_including("provider #{broken.id}"))
       end
     end
 
-    it "does nothing without a connection" do
+    it "does nothing without a provider" do
       expect { described_class.perform_now }.not_to change(HealthReport, :count)
     end
 
     it "does nothing while the AI features are switched off",
        with_settings: { llm_features_enabled: false } do
-      create(:llm_connection, :with_models, base_url:)
+      create(:inference_provider, :with_models, base_url:)
 
       expect { described_class.perform_now }.not_to change(HealthReport, :count)
     end
 
     context "with the feature flag off", with_flag: { llm_connection: false } do
       it "does nothing" do
-        create(:llm_connection, :with_models, base_url:)
+        create(:inference_provider, :with_models, base_url:)
 
         expect { described_class.perform_now }.not_to change(HealthReport, :count)
       end
@@ -97,8 +111,8 @@ RSpec.describe Llm::HealthCheckJob, :llm_server_helpers, :webmock, with_flag: { 
   end
 
   describe ".toggle_cron_job" do
-    it "enables the cron once a connection is usable" do
-      create(:llm_connection, :with_models, base_url:)
+    it "enables the cron once a provider is stored" do
+      create(:inference_provider, :with_models, base_url:)
 
       described_class.toggle_cron_job
 

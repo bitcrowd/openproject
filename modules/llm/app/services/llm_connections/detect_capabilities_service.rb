@@ -41,8 +41,8 @@ module LlmConnections
     BACKGROUND_LIMIT = 10
     RETRY_INCONCLUSIVE_AFTER = 1.day
 
-    def initialize(connection)
-      @connection = connection
+    def initialize(provider)
+      @provider = provider
     end
 
     # Probes a specific model, synchronously. Used when an administrator binds a
@@ -74,23 +74,23 @@ module LlmConnections
 
     private
 
-    attr_reader :connection
+    attr_reader :provider
 
     def probe
-      @probe ||= Llm::Probes::EmbeddingsProbe.new(connection)
+      @probe ||= Llm::Probes::EmbeddingsProbe.new(provider)
     end
 
     # Narrowed before anything is sent, because a probe is a billed request on
     # some providers: only models whose name suggests they embed at all, never
     # one that is already settled, and never more than the batch limit in one
     # background run. A definite probe verdict can be trusted until a sync
-    # discards it, which it does when the deployment behind the connection
-    # changes or the model disappears from it. A model the probe could not
-    # answer for a reason of its own is not asked again within a day.
+    # discards it, which it does when the model disappears from the server. A
+    # model the probe could not answer for a reason of its own is not asked
+    # again within a day.
     def candidates
       settled = settled_model_ids
 
-      connection.available_model_ids
+      provider.available_model_ids
                 .grep(EMBEDDING_NAME_HINT)
                 .reject { |model_id| settled.include?(model_id) }
                 .first(BACKGROUND_LIMIT)
@@ -136,7 +136,7 @@ module LlmConnections
 
     def record(model_id, result)
       verdicts.transaction do
-        break unless deployment_unchanged?
+        break unless provider_still_stored?
 
         verdict = claim(model_id)
         # A refresh deletes probe verdicts and may have done so right after the
@@ -158,30 +158,29 @@ module LlmConnections
       end
     end
 
-    # A sync for another deployment discards the probe verdicts, and an answer
-    # from the previous one arriving afterwards must not bring one back. The row
-    # lock orders this read against the settings change that starts that sync.
-    def deployment_unchanged?
-      LlmConnection.lock.find_by(id: connection.id)&.settings_fingerprint == connection.settings_fingerprint
+    # The row lock orders this read against the provider being deleted, whose
+    # verdicts an answer arriving afterwards must not bring back.
+    def provider_still_stored?
+      InferenceProvider.lock.exists?(id: provider.id)
     end
 
     # FOR UPDATE has no row to lock before the first probe of a model, and a
     # synchronous detection can run alongside the background pass: inserting
     # through the unique index lands both on the same row.
     def claim(model_id)
-      verdicts.insert_all([{ llm_connection_id: connection.id,
+      verdicts.insert_all([{ inference_provider_id: provider.id,
                              model_id:,
                              capability: "embeddings",
                              state: "unknown",
                              source: "probe",
                              checked_at: Time.current }],
-                          unique_by: %i[llm_connection_id model_id capability])
+                          unique_by: %i[inference_provider_id model_id capability])
 
       verdicts.for_model(model_id).for_capability(:embeddings).lock.first
     end
 
     def verdicts
-      connection.capability_verdicts
+      provider.capability_verdicts
     end
   end
 end

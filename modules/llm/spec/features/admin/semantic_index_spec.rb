@@ -42,7 +42,7 @@ RSpec.describe "Semantic index administration",
 
   shared_let(:admin) { create(:admin) }
 
-  let(:embedding_model) { connection.models.find_by!(external_id: "bge-m3") }
+  let(:embedding_model) { provider.models.find_by!(external_id: "bge-m3") }
 
   current_user { admin }
 

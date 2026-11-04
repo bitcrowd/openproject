@@ -31,22 +31,23 @@ require "spec_helper"
 require_module_spec_helper
 
 RSpec.describe LlmModel do
-  let(:connection) { create(:llm_connection) }
-  let(:llm_model) { create(:llm_model, llm_connection: connection, external_id: "bge-m3") }
+  let(:provider) { create(:inference_provider) }
+  let(:connection) { LlmConnection.current }
+  let(:llm_model) { create(:llm_model, inference_provider: provider, external_id: "bge-m3") }
 
   describe "validations" do
     it "requires an identifier unique within the connection" do
-      create(:llm_model, llm_connection: connection, external_id: "bge-m3")
+      create(:llm_model, inference_provider: provider, external_id: "bge-m3")
 
-      expect(build(:llm_model, llm_connection: connection, external_id: "")).not_to be_valid
-      expect(build(:llm_model, llm_connection: connection, external_id: "bge-m3")).not_to be_valid
+      expect(build(:llm_model, inference_provider: provider, external_id: "")).not_to be_valid
+      expect(build(:llm_model, inference_provider: provider, external_id: "bge-m3")).not_to be_valid
       expect(build(:llm_model, external_id: "bge-m3")).to be_valid
     end
 
     it "bounds the identifier length" do
       too_long = "m" * (described_class::MAX_EXTERNAL_ID_LENGTH + 1)
 
-      expect(build(:llm_model, llm_connection: connection, external_id: too_long)).not_to be_valid
+      expect(build(:llm_model, inference_provider: provider, external_id: too_long)).not_to be_valid
     end
   end
 
@@ -96,9 +97,9 @@ RSpec.describe LlmModel do
 
   describe "capability attributes" do
     it "shows only an administrator's own assertion as the value" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "vision",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "vision",
                                       state: "supported", source: "admin")
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "reasoning",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "reasoning",
                                       state: "supported", source: "metadata")
 
       expect(llm_model.capability_vision).to eq("supported")
@@ -115,11 +116,10 @@ RSpec.describe LlmModel do
   end
 
   describe "#cascade_rename!" do
-    let(:connection) { create(:llm_connection, :provisioned_from_env, env_fingerprint: "seeded") }
-
     before do
+      connection.update_columns(env_provisioned_at: Time.current, env_fingerprint: "seeded")
       llm_model
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3")
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3")
       create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_identifier: "bge-m3")
     end
 
@@ -127,7 +127,7 @@ RSpec.describe LlmModel do
       llm_model.update!(external_id: "bge-m3-v2")
       llm_model.cascade_rename!("bge-m3")
 
-      expect(connection.capability_verdicts.pluck(:model_id)).to eq(["bge-m3-v2"])
+      expect(provider.capability_verdicts.pluck(:model_id)).to eq(["bge-m3-v2"])
       expect(connection.feature_bindings.map { it.llm_model&.external_id }).to eq(["bge-m3-v2"])
     end
 
@@ -151,18 +151,18 @@ RSpec.describe LlmModel do
 
   describe "#cascade_delete!" do
     it "removes the model's verdicts" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3")
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "another")
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3")
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "another")
 
       llm_model.cascade_delete!
 
-      expect(connection.capability_verdicts.pluck(:model_id)).to eq(["another"])
+      expect(provider.capability_verdicts.pluck(:model_id)).to eq(["another"])
     end
   end
 
   describe "#dimensions" do
     def record_measured(dimensions)
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                       state: "supported", source: "probe", detail: { "dimensions" => dimensions })
     end
 
@@ -220,12 +220,12 @@ RSpec.describe LlmModel do
     end
 
     it "is unset on a model being added until one is chosen" do
-      expect(connection.models.new(external_id: "bge-m3").model_type).to be_nil
-      expect(connection.models.new(external_id: "bge-m3", model_type: "chat").model_type).to eq(:chat)
+      expect(provider.models.new(external_id: "bge-m3").model_type).to be_nil
+      expect(provider.models.new(external_id: "bge-m3", model_type: "chat").model_type).to eq(:chat)
     end
 
     it "is embedding once the embeddings verdict says so" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: llm_model.external_id, capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: llm_model.external_id, capability: "embeddings",
                                       state: "supported", source: "admin")
 
       expect(llm_model).to be_embedding
@@ -233,7 +233,7 @@ RSpec.describe LlmModel do
     end
 
     it "is chat when the embeddings verdict is unknown" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: llm_model.external_id, capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: llm_model.external_id, capability: "embeddings",
                                       state: "unknown", source: "metadata")
 
       expect(llm_model.model_type).to eq(:chat)
@@ -242,12 +242,13 @@ RSpec.describe LlmModel do
 
   describe "withdrawal", :llm_server_helpers, :webmock, with_flag: { llm_connection: true } do
     let(:base_url) { "https://example.com/v1" }
-    let!(:connection) { create(:llm_connection, :with_models, base_url:) }
-    let(:model) { connection.models.find_by(external_id: "qwen3.6-27b") }
+    let!(:provider) { create(:inference_provider, :with_models, base_url:) }
+    let(:connection) { LlmConnection.current }
+    let(:model) { provider.models.find_by(external_id: "qwen3.6-27b") }
 
     it "only describes a discovered model the server stopped reporting" do
-      withdrawn = create(:llm_model, :withdrawn, llm_connection: connection, external_id: "gone")
-      typed = create(:llm_model, :manual, :withdrawn, llm_connection: connection, external_id: "hand-typed")
+      withdrawn = create(:llm_model, :withdrawn, inference_provider: provider, external_id: "gone")
+      typed = create(:llm_model, :manual, :withdrawn, inference_provider: provider, external_id: "hand-typed")
 
       expect(withdrawn).to be_withdrawn
       expect(typed).not_to be_withdrawn
@@ -257,7 +258,8 @@ RSpec.describe LlmModel do
 
   describe "a feature binding", :llm_server_helpers, :webmock,
            with_flag: { llm_connection: true }, with_settings: { llm_features_enabled: true } do
-    let!(:connection) { create(:llm_connection, :with_models, base_url: "https://example.com/v1") }
+    let!(:provider) { create(:inference_provider, :with_models, base_url: "https://example.com/v1") }
+    let(:connection) { LlmConnection.current }
 
     it "keeps the bound model available and resolves the feature to it" do
       create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
@@ -265,7 +267,7 @@ RSpec.describe LlmModel do
 
       resolution = Llm::Runtime.for(:description_assistant)
 
-      expect(connection.available_model_ids).to include("qwen3.6-27b")
+      expect(provider.available_model_ids).to include("qwen3.6-27b")
       expect(resolution).to be_ready
       expect(resolution.model_id).to eq("qwen3.6-27b")
     end

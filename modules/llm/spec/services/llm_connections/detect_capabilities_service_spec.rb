@@ -31,10 +31,11 @@ require "spec_helper"
 require_module_spec_helper
 
 RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :webmock do
-  subject(:service) { described_class.new(connection) }
+  subject(:service) { described_class.new(provider) }
 
   let(:base_url) { "https://example.com/v1" }
-  let(:connection) { create(:llm_connection, :with_models, base_url:, api_key: "sk-test") }
+  let(:provider) { create(:inference_provider, :with_models, base_url:, api_key: "sk-test") }
+  let(:connection) { LlmConnection.current }
 
   describe "EMBEDDING_NAME_HINT" do
     %w[intfloat/e5-large-v2 multilingual-e5-small thenlper/gte-base gte-Qwen2-7B-instruct e5:latest
@@ -63,17 +64,18 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
   # Only :unsupported blocks, so downgrading a definite verdict to :unknown on
   # a transient failure would quietly make a rejected model usable again.
   it "does not overwrite a definite verdict with an inconclusive probe" do
-    create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+    create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                     state: "unsupported", source: "probe", checked_at: 1.day.ago)
     mock_llm_embeddings_response(base_url, response_code: 500)
 
     service.detect("bge-m3")
 
-    expect(connection.capability_verdicts.find_by(model_id: "bge-m3")).to be_unsupported
+    expect(provider.capability_verdicts.find_by(model_id: "bge-m3")).to be_unsupported
   end
 
   it "never overwrites an administrator's assertion" do
-    create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings", state: "supported",
+    create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
+                                    state: "supported",
                                     source: "admin", checked_at: 1.day.ago)
     mock_llm_embeddings_response(base_url, response_code: 404)
 
@@ -87,23 +89,24 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
     probe = instance_double(Llm::Probes::EmbeddingsProbe)
     allow(Llm::Probes::EmbeddingsProbe).to receive(:new).and_return(probe)
     allow(probe).to receive(:call) do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings", state: "unknown",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
+                                      state: "unknown",
                                       source: "probe")
       Llm::Probes::EmbeddingsProbe::Result.new(state: :supported, detail: { "dimensions" => 4 })
     end
 
     service.detect("bge-m3")
 
-    expect(connection.capability_verdicts.for_model("bge-m3").count).to eq(1)
-    expect(connection.capability_verdicts.find_by(model_id: "bge-m3")).to be_supported
+    expect(provider.capability_verdicts.for_model("bge-m3").count).to eq(1)
+    expect(provider.capability_verdicts.find_by(model_id: "bge-m3")).to be_supported
   end
 
   context "when a refresh discards the verdict between its claim and its lock" do
     before do
       mock_llm_embeddings_response(base_url)
-      allow(connection.capability_verdicts).to receive(:insert_all).and_wrap_original do |original, rows, **options|
+      allow(provider.capability_verdicts).to receive(:insert_all).and_wrap_original do |original, rows, **options|
         original.call(rows, **options).tap do
-          LlmCapabilityVerdict.where(llm_connection: connection, model_id: "bge-m3").delete_all
+          LlmCapabilityVerdict.where(inference_provider: provider, model_id: "bge-m3").delete_all
         end
       end
     end
@@ -113,11 +116,11 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
 
       expect(result).to be_success
       expect(result.result).to be_nil
-      expect(connection.capability_verdicts.for_model("bge-m3")).to be_empty
+      expect(provider.capability_verdicts.for_model("bge-m3")).to be_empty
     end
 
     it "carries on with the rest of the batch" do
-      create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
+      create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
 
       recorded = service.detect_likely_embedding_models.result
 
@@ -133,7 +136,7 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
         next if deleted || !payload[:sql].start_with?('SELECT "llm_capability_verdicts".*')
 
         deleted = true
-        LlmCapabilityVerdict.where(llm_connection: connection, model_id: "bge-m3").delete_all
+        LlmCapabilityVerdict.where(inference_provider: provider, model_id: "bge-m3").delete_all
       end
 
       ActiveSupport::Notifications.subscribed(delete_once, "sql.active_record", &)
@@ -150,43 +153,43 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
     before { mock_llm_embeddings_response(base_url) }
 
     it "probes only the models whose names suggest they embed" do
-      create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
-      create(:llm_model, llm_connection: connection, external_id: "solar-10.7b-v1.0-4e5f9c")
+      create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
+      create(:llm_model, inference_provider: provider, external_id: "solar-10.7b-v1.0-4e5f9c")
 
       service.detect_likely_embedding_models
 
-      expect(connection.capability_verdicts.pluck(:model_id)).to contain_exactly("bge-m3", "nomic-embed-text")
+      expect(provider.capability_verdicts.pluck(:model_id)).to contain_exactly("bge-m3", "nomic-embed-text")
     end
 
     it "probes only models whose name suggests they embed" do
-      create(:llm_model, llm_connection: connection, external_id: "llama4-70b-instruct")
-      create(:llm_model, llm_connection: connection, external_id: "gte-large")
+      create(:llm_model, inference_provider: provider, external_id: "llama4-70b-instruct")
+      create(:llm_model, inference_provider: provider, external_id: "gte-large")
 
       service.detect_likely_embedding_models
 
-      expect(connection.capability_verdicts.pluck(:model_id)).to contain_exactly("bge-m3", "gte-large")
+      expect(provider.capability_verdicts.pluck(:model_id)).to contain_exactly("bge-m3", "gte-large")
     end
 
     it "spends no probe on a model an administrator ruled on" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", state: "unsupported", source: "admin")
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", state: "unsupported", source: "admin")
 
       service.detect_likely_embedding_models
 
       expect(a_request(:post, "#{base_url}/embeddings").with(body: hash_including("model" => "bge-m3")))
         .not_to have_been_made
-      expect(connection.capability_verdicts.find_by(model_id: "bge-m3")).to have_attributes(source: "admin")
+      expect(provider.capability_verdicts.find_by(model_id: "bge-m3")).to have_attributes(source: "admin")
     end
 
     it "leaves out a model the server has withdrawn" do
-      create(:llm_model, :withdrawn, llm_connection: connection, external_id: "nomic-embed-text")
+      create(:llm_model, :withdrawn, inference_provider: provider, external_id: "nomic-embed-text")
 
       service.detect_likely_embedding_models
 
-      expect(connection.capability_verdicts.pluck(:model_id)).to eq(["bge-m3"])
+      expect(provider.capability_verdicts.pluck(:model_id)).to eq(["bge-m3"])
     end
 
     it "stops the batch when the server has no embeddings route at all" do
-      create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
+      create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
       request = mock_llm_embeddings_response(base_url, response_code: 404)
 
       service.detect_likely_embedding_models
@@ -196,7 +199,7 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
 
     [429, 401, 403, 500, 503].each do |status|
       it "stops the batch when the server answers #{status} for every model" do
-        create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
+        create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
         request = mock_llm_embeddings_response(base_url, response_code: status)
 
         service.detect_likely_embedding_models
@@ -206,7 +209,7 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
     end
 
     it "stops the batch when the server does not answer in time" do
-      create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
+      create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
       request = stub_request(:post, "#{base_url}/embeddings").to_raise(Net::ReadTimeout)
 
       service.detect_likely_embedding_models
@@ -215,7 +218,7 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
     end
 
     it "stops the batch when the server refuses the connection" do
-      create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
+      create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
       request = stub_request(:post, "#{base_url}/embeddings").to_raise(Errno::ECONNREFUSED)
 
       service.detect_likely_embedding_models
@@ -224,7 +227,7 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
     end
 
     it "carries on past a model the server refuses" do
-      create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
+      create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
       request = mock_llm_embeddings_response(base_url, response_code: 400)
 
       service.detect_likely_embedding_models
@@ -234,8 +237,8 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
 
     %w[supported unsupported].each do |state|
       it "skips a model an earlier probe found #{state}" do
-        create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings", state:,
+        create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings", state:,
                                         source: "probe", checked_at: 1.day.ago)
         request = mock_llm_embeddings_response(base_url)
 
@@ -247,68 +250,69 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
     end
 
     it "probes again a model an earlier probe could not answer more than a day ago" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings", state: "unknown",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
+                                      state: "unknown",
                                       source: "probe", checked_at: 2.days.ago, detail: { "reason" => "unexpected_body" })
 
       service.detect_likely_embedding_models
 
-      expect(connection.capability_verdicts.find_by(model_id: "bge-m3")).to be_supported
+      expect(provider.capability_verdicts.find_by(model_id: "bge-m3")).to be_supported
     end
 
     %w[unexpected_body http_422 parse_error].each do |reason|
       it "leaves a model alone for a day after a probe could not answer for it (#{reason})" do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                         state: "unknown", source: "probe", checked_at: 1.hour.ago, detail: { "reason" => reason })
         request = mock_llm_embeddings_response(base_url)
 
         service.detect_likely_embedding_models
 
         expect(request).not_to have_been_made
-        expect(connection.capability_verdicts.find_by(model_id: "bge-m3")).to be_unknown
+        expect(provider.capability_verdicts.find_by(model_id: "bge-m3")).to be_unknown
       end
     end
 
     %w[timeout_error connection_error http_408 http_429 http_503].each do |reason|
       it "probes again on the next run a model the server as a whole could not answer for (#{reason})" do
-        create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+        create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                         state: "unknown", source: "probe", checked_at: 1.hour.ago, detail: { "reason" => reason })
 
         service.detect_likely_embedding_models
 
-        expect(connection.capability_verdicts.find_by(model_id: "bge-m3")).to be_supported
+        expect(provider.capability_verdicts.find_by(model_id: "bge-m3")).to be_supported
       end
     end
 
     it "reaches the models behind a full batch of ones the probe could not answer for" do
       stuck_ids = Array.new(described_class::BACKGROUND_LIMIT) { |index| "embed-#{index}" }
       stuck_ids.each do |external_id|
-        create(:llm_model, llm_connection: connection, external_id:)
-        create(:llm_capability_verdict, llm_connection: connection, model_id: external_id, capability: "embeddings",
+        create(:llm_model, inference_provider: provider, external_id:)
+        create(:llm_capability_verdict, inference_provider: provider, model_id: external_id, capability: "embeddings",
                                         state: "unknown", source: "probe", checked_at: 1.hour.ago,
                                         detail: { "reason" => "unexpected_body" })
       end
-      create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
+      create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
 
       service.detect_likely_embedding_models
 
-      expect(connection.capability_verdicts.find_by(model_id: "nomic-embed-text")).to be_supported
+      expect(provider.capability_verdicts.find_by(model_id: "nomic-embed-text")).to be_supported
     end
 
     it "fills the batch with models that still need an answer" do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                       state: "supported", source: "probe", checked_at: 1.day.ago)
       pending_ids = Array.new(described_class::BACKGROUND_LIMIT) { |index| "embed-#{index}" }
-      pending_ids.each { |external_id| create(:llm_model, llm_connection: connection, external_id:) }
+      pending_ids.each { |external_id| create(:llm_model, inference_provider: provider, external_id:) }
 
       service.detect_likely_embedding_models
 
-      expect(connection.capability_verdicts.for_model(pending_ids).count).to eq(described_class::BACKGROUND_LIMIT)
+      expect(provider.capability_verdicts.for_model(pending_ids).count).to eq(described_class::BACKGROUND_LIMIT)
     end
 
     it "stops the batch even where a verdict settled during the probe survives the 404" do
-      create(:llm_model, llm_connection: connection, external_id: "nomic-embed-text")
+      create(:llm_model, inference_provider: provider, external_id: "nomic-embed-text")
       request = stub_request(:post, "#{base_url}/embeddings").to_return do
-        connection.capability_verdicts.find_or_create_by!(model_id: "bge-m3", capability: "embeddings") do |verdict|
+        provider.capability_verdicts.find_or_create_by!(model_id: "bge-m3", capability: "embeddings") do |verdict|
           verdict.assign_attributes(state: "supported", source: "admin", checked_at: Time.current)
         end
         { status: 404, headers: { "Content-Type" => "application/json" }, body: "{}" }
@@ -317,26 +321,26 @@ RSpec.describe LlmConnections::DetectCapabilitiesService, :llm_server_helpers, :
       service.detect_likely_embedding_models
 
       expect(request).to have_been_made.once
-      expect(connection.capability_verdicts.find_by(model_id: "bge-m3")).to be_supported
+      expect(provider.capability_verdicts.find_by(model_id: "bge-m3")).to be_supported
     end
 
-    it "records nothing from a deployment that was replaced while the probe ran" do
+    it "records nothing for a provider deleted while the probe ran" do
       probe = instance_double(Llm::Probes::EmbeddingsProbe)
       allow(Llm::Probes::EmbeddingsProbe).to receive(:new).and_return(probe)
       allow(probe).to receive(:call) do
-        LlmConnection.where(id: connection.id).update_all(base_url: "https://elsewhere.example/v1")
+        InferenceProvider.find(provider.id).destroy!
         Llm::Probes::EmbeddingsProbe::Result.new(state: :supported, detail: { "dimensions" => 4 })
       end
 
       recorded = service.detect_likely_embedding_models.result
 
       expect(recorded).to be_empty
-      expect(connection.capability_verdicts).to be_empty
+      expect(LlmCapabilityVerdict.count).to eq(0)
     end
 
     it "spends no more than BACKGROUND_LIMIT requests" do
       (described_class::BACKGROUND_LIMIT + 5).times do |index|
-        create(:llm_model, llm_connection: connection, external_id: "embed-#{index}")
+        create(:llm_model, inference_provider: provider, external_id: "embed-#{index}")
       end
       request = mock_llm_embeddings_response(base_url)
 

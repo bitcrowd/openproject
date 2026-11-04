@@ -28,19 +28,33 @@
 #++
 
 module LlmConnections
-  # Confirms removing the stored API key.
-  #
-  # No confirmation checkbox: the key itself can simply be pasted again.
-  class DeleteApiKeyDialogComponent < ApplicationComponent
-    include OpTurbo::Streamable
-    include OpPrimer::ComponentHelpers
+  module InferenceProviders
+    class BoxComponent < ApplicationComponent
+      include OpPrimer::ComponentHelpers
+      include OpTurbo::Streamable
 
-    TEST_SELECTOR = "llm-connection--delete-api-key-dialog"
+      POLL_INTERVAL_MS = 2000
 
-    alias_method :connection, :model
+      options :inference_providers
 
-    def form_arguments
-      { action: url_helpers.api_key_llm_connection_path, method: :delete }
+      def rows = inference_providers
+
+      def activity
+        @activity ||= Llm::ProviderActivity.new(inference_providers)
+      end
+
+      def wrapper_data_attrs
+        data = { test_selector: "llm-inference-provider--box" }
+        return { data: } unless activity.any?
+
+        data.merge!(
+          controller: "poll-for-changes",
+          poll_for_changes_url_value: status_inference_providers_path,
+          poll_for_changes_interval_value: POLL_INTERVAL_MS,
+          poll_for_changes_reference_value: activity.reference
+        )
+        { data: }
+      end
     end
   end
 end

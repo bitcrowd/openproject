@@ -31,12 +31,14 @@ See COPYRIGHT and LICENSE files for more details.
 <%=
   render(Primer::OpenProject::PageHeader.new) do |header|
     header.with_title { t(".title") }
-    if @report.present?
-      header.with_description do
-        [t(".last_check", datetime: format_time(@report.created_at)),
-         t(".summary", **tally_counts(@report)),
-         t(Llm::Validators::ConnectionValidator.report_kind(@report), scope: "llm.health_report_kinds")].join(" ")
+    header.with_description do
+      description = [t(".provider", title: @inference_provider.title)]
+      if @report.present?
+        description += [t(".last_check", datetime: format_time(@report.created_at)),
+                        t(".summary", **tally_counts(@report)),
+                        t(Llm::Validators::ConnectionValidator.report_kind(@report), scope: "llm.health_report_kinds")]
       end
+      description.join(" ")
     end
     header.with_breadcrumbs(
       [{ href: admin_index_path, text: t(:label_administration) },
@@ -49,7 +51,7 @@ See COPYRIGHT and LICENSE files for more details.
 
 <% if @report.present? %>
   <%=
-    primer_form_with(url: llm_connection_health_status_report_path, method: :post) do
+    primer_form_with(url: inference_provider_health_status_report_path(@inference_provider), method: :post) do
       render(Primer::OpenProject::SubHeader.new) do |subheader|
         subheader.with_action_button(
           scheme: :secondary,
@@ -58,7 +60,7 @@ See COPYRIGHT and LICENSE files for more details.
           mobile_icon: :download,
           leading_icon: :download,
           tag: :a,
-          href: llm_connection_health_status_report_path(format: :txt),
+          href: inference_provider_health_status_report_path(@inference_provider, format: :txt),
           data: { turbo: false }
         ) { t(".download") }
 
@@ -95,7 +97,7 @@ See COPYRIGHT and LICENSE files for more details.
       blankslate.with_heading(tag: :h2) { t(".blankslate_heading") }
       blankslate.with_description { t(".blankslate_description") }
       blankslate.with_primary_action(
-        href: llm_connection_health_status_report_path,
+        href: inference_provider_health_status_report_path(@inference_provider),
         data: { turbo_method: :post, turbo_submits_with: t(".running") }
       ) { t(".run_checks") }
     end

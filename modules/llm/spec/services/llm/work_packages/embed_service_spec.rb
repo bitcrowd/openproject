@@ -50,7 +50,7 @@ RSpec.describe Llm::WorkPackages::EmbedService,
   end
 
   before do
-    allow(Llm::Session).to receive(:for).with(connection).and_return(session_double)
+    allow(Llm::Session).to receive(:for).with(provider).and_return(session_double)
     allow(session_double).to receive(:embed).and_return(embedding_double)
   end
 

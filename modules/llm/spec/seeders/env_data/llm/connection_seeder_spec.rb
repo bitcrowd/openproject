@@ -48,12 +48,11 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
       "default_chat_model" => "qwen3.6-35b-a3b"
     }
   } do
-    it "seeds the connection without contacting the server" do
-      expect { seed }.to change(LlmConnection, :count).from(0).to(1)
+    it "seeds the connection and its provider without contacting the server" do
+      expect { seed }.to change(LlmConnection, :count).from(0).to(1).and change(InferenceProvider, :count).from(0).to(1)
 
-      connection = LlmConnection.first
-      expect(connection.default_chat_model.external_id).to eq("qwen3.6-35b-a3b")
-      expect(connection.api_key).to eq("sk-from-env")
+      expect(LlmConnection.first.default_chat_model.external_id).to eq("qwen3.6-35b-a3b")
+      expect(InferenceProvider.sole.api_key).to eq("sk-from-env")
     end
 
     it "enqueues the initial catalogue fill" do
@@ -63,44 +62,36 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
     it "locks the connection to the environment" do
       seed
 
-      expect(LlmConnection.active_connection).to be_configured_from_env
+      expect(LlmConnection.current).to be_configured_from_env
     end
   end
 
-  context "when an administrator saved a connection before the first seed", with_settings: {
+  context "when an administrator stored a provider before the first seed", with_settings: {
     llm_connection: { "base_url" => "https://example.com/v1", "api_key" => "sk-from-env" }
   } do
-    let!(:connection) { create(:llm_connection, base_url: "https://admin.example/v1", api_key: "sk-admin") }
+    let!(:provider) { create(:inference_provider, base_url: "https://admin.example/v1", api_key: "sk-admin") }
+    let(:connection) { LlmConnection.current }
 
-    it "replaces it with the environment's values and locks it" do
+    it "adds one with the environment's values and locks the connection" do
       expect(connection).not_to be_configured_from_env
 
       seed
 
-      connection.reload
-      expect(connection.base_url).to eq("https://example.com/v1")
-      expect(connection.api_key).to eq("sk-from-env")
-      expect(connection).to be_configured_from_env
+      expect(provider.reload.base_url).to eq("https://admin.example/v1")
+      expect(InferenceProvider.find_by(base_url: "https://example.com/v1").api_key).to eq("sk-from-env")
+      expect(connection.reload).to be_configured_from_env
     end
   end
 
   # The seeder runs on every container start, so a refresh here would repeatedly
-  # overwrite a list an administrator has curated. The stale warning on the AI
-  # models tab asks for the refresh instead.
-  context "when the environment moves a stored catalogue to another host", with_settings: {
-    llm_connection: { "base_url" => "https://other.example.com/v1", "api_key" => "sk-from-env" }
+  # overwrite a list an administrator has curated.
+  context "when the provider the environment names has a list", with_settings: {
+    llm_connection: { "base_url" => "https://example.com/v1", "api_key" => "sk-from-env" }
   } do
-    let!(:connection) do
-      create(:llm_connection, :with_models, base_url: "https://example.com/v1", api_key: "sk-from-env")
-        .tap { |record| record.update!(connection_fingerprint: record.settings_fingerprint) }
-    end
+    before { create(:inference_provider, :with_models, base_url: "https://example.com/v1", api_key: "sk-from-env") }
 
-    it "keeps the stored models and flags them as stale" do
+    it "does not refresh it" do
       expect { seed }.not_to have_enqueued_job(Llm::SyncModelsJob)
-
-      expect(connection.reload.base_url).to eq("https://other.example.com/v1")
-      expect(connection.models.count).to eq(2)
-      expect(connection).to be_models_stale
     end
   end
 
@@ -113,7 +104,7 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
       "default_embedding_model" => "bge-m3"
     }
   } do
-    before { create(:llm_connection, :with_models, base_url: "https://example.com/v1") }
+    before { create(:inference_provider, :with_models, base_url: "https://example.com/v1", api_key: nil) }
 
     it "provisions the default" do
       seed
@@ -129,7 +120,7 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
     }
   } do
     before do
-      create(:llm_connection, :with_models, base_url: "https://example.com/v1")
+      create(:inference_provider, :with_models, base_url: "https://example.com/v1", api_key: nil)
         .capability_verdicts
         .create!(model_id: "bge-m3", capability: "embeddings",
                  state: "unsupported", source: "probe", checked_at: Time.current)
@@ -178,7 +169,7 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
     it "stores the header names exactly as given" do
       seed
 
-      expect(LlmConnection.first.custom_headers)
+      expect(InferenceProvider.sole.custom_headers)
         .to eq("api-version" => "2024-02-01", "X-Portkey-Api-Key" => "pk-from-env")
     end
   end
@@ -189,7 +180,7 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
     it "stores the header names exactly as given" do
       seed
 
-      expect(LlmConnection.first.custom_headers).to eq("api-version" => "2024-02-01")
+      expect(InferenceProvider.sole.custom_headers).to eq("api-version" => "2024-02-01")
     end
   end
 
@@ -210,26 +201,28 @@ RSpec.describe EnvData::Llm::ConnectionSeeder do
     end
   end
 
-  # The environment is the source of truth while the form is read-only under it,
-  # so a value removed from the environment must not linger in the database.
+  # The environment is the source of truth at every seed, so a value removed from
+  # it must not stay in use. The provider holding it stays stored for the
+  # administrator to delete.
   context "when a previously set key is removed from the environment", with_settings: {
     llm_connection: { "base_url" => "https://example.com/v1" }
   } do
-    before do
-      connection = create(:llm_connection, base_url: "https://example.com/v1", api_key: "sk-stale",
-                                           custom_headers: { "api-version" => "2024-02-01" })
-      connection.update!(default_chat_model: create(:llm_model, llm_connection: connection,
-                                                                external_id: "old-default"))
+    let!(:stale) do
+      create(:inference_provider, base_url: "https://example.com/v1", api_key: "sk-stale",
+                                  custom_headers: { "api-version" => "2024-02-01" })
     end
 
-    it "clears the values the environment no longer provides" do
-      expect { seed }.not_to change(LlmConnection, :count)
+    before do
+      LlmConnection.current.update!(default_chat_model: create(:llm_model, inference_provider: stale,
+                                                                           external_id: "old-default"))
+    end
 
-      connection = LlmConnection.first
-      expect(connection.api_key).to be_nil
-      expect(connection.default_chat_model_id).to be_nil
-      expect(connection.custom_headers).to eq({})
-      expect(connection.base_url).to eq("https://example.com/v1")
+    it "stops using the values the environment no longer provides" do
+      expect { seed }.to change(InferenceProvider, :count).by(1)
+
+      expect(InferenceProvider.where.not(id: stale.id).sole)
+        .to have_attributes(base_url: "https://example.com/v1", api_key: nil, custom_headers: {})
+      expect(LlmConnection.current.default_chat_model_id).to be_nil
     end
   end
 end

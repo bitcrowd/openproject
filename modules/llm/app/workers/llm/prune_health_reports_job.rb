@@ -34,8 +34,8 @@ module Llm
   # clicked "Run checks", so nothing anywhere pruned the table. A four-times-daily
   # writer changes that, and this is the first pruner it has had.
   #
-  # Only ever prunes reports belonging to an LLM connection: storages and wikis
-  # share the table and still write a row only on demand.
+  # Only ever prunes reports belonging to an inference provider: storages and
+  # wikis share the table and still write a row only on demand.
   class PruneHealthReportsJob < ApplicationJob
     # Enough history to see a pattern in when a flaky server fails, without
     # keeping a year of identical green reports.
@@ -45,13 +45,13 @@ module Llm
     queue_with_priority :low
 
     def perform
-      LlmConnection.find_each do |connection|
-        recent = connection.health_reports.order(created_at: :desc).limit(KEEP).pluck(:id)
+      InferenceProvider.find_each do |provider|
+        recent = provider.health_reports.order(created_at: :desc).limit(KEEP).pluck(:id)
 
-        connection.health_reports
-                  .where.not(id: recent)
-                  .where(created_at: ...MAX_AGE.ago)
-                  .delete_all
+        provider.health_reports
+                .where.not(id: recent)
+                .where(created_at: ...MAX_AGE.ago)
+                .delete_all
       end
     end
   end

@@ -36,7 +36,7 @@ module Admin
     before_action :require_feature
     before_action :require_admin
     before_action :set_connection
-    before_action :require_enabled_connection
+    before_action :require_available
 
     def index
       @features = OpenProject::Llm::Features.enabled
@@ -55,11 +55,11 @@ module Admin
     private
 
     def set_connection
-      @connection = LlmConnection.active_connection
+      @connection = LlmConnection.current
     end
 
-    def require_enabled_connection
-      return if Setting.llm_features_enabled? && @connection.configured?
+    def require_available
+      return if LlmConnection.available?
 
       flash[:notice] = t("admin.llm_connections.disabled_notice")
       redirect_to llm_connection_path, status: :see_other
@@ -118,7 +118,10 @@ module Admin
     def probe_capabilities(feature, binding)
       return if feature.requires.empty? || binding.llm_model.blank?
 
-      LlmConnections::DetectCapabilitiesService.new(@connection).detect(binding.llm_model.external_id).result
+      LlmConnections::DetectCapabilitiesService
+        .new(binding.llm_model.inference_provider)
+        .detect(binding.llm_model.external_id)
+        .result
     end
   end
 end

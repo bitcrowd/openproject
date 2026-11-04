@@ -37,7 +37,7 @@
 # :unknown verdict warns and lets the administrator proceed, because refusing
 # on "we could not tell" would make most self-hosted servers unusable.
 class LlmCapabilityVerdict < ApplicationRecord
-  belongs_to :llm_connection
+  belongs_to :inference_provider, optional: false
 
   enum :state, { supported: "supported", unsupported: "unsupported", unknown: "unknown" }, validate: true
 
@@ -50,7 +50,7 @@ class LlmCapabilityVerdict < ApplicationRecord
        validate: true
 
   validates :model_id, presence: true
-  validates :capability, presence: true, uniqueness: { scope: %i[llm_connection_id model_id] }
+  validates :capability, presence: true, uniqueness: { scope: %i[inference_provider_id model_id] }
 
   scope :for_model, ->(model_id) { where(model_id:) }
   scope :for_capability, ->(capability) { where(capability: capability.to_s) }

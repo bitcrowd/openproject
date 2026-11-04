@@ -50,11 +50,7 @@ module Llm
 
       attr_reader :semantic_index, :work_packages
 
-      def connection
-        @connection ||= LlmConnection.active_connection
-      end
-
-      def session = Llm::Session.for(connection)
+      def session = Llm::Session.for(semantic_index.llm_model.inference_provider)
 
       def dimensions = semantic_index.embedding_vector_dimensions
 

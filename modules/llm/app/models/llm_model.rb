@@ -27,7 +27,7 @@
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-# A model this connection can address.
+# A model an inference provider can address.
 #
 # Rows come from two places: discovered from the server's model list, or entered
 # by an administrator. Both are addressed by +external_id+, which is whatever the
@@ -41,14 +41,14 @@ class LlmModel < ApplicationRecord
   # remote server chose to call its models.
   MAX_EXTERNAL_ID_LENGTH = 512
 
-  belongs_to :llm_connection
+  belongs_to :inference_provider, optional: false
   has_many :feature_bindings, class_name: "LlmFeatureBinding", dependent: :restrict_with_error
   has_many :semantic_indexes, dependent: :restrict_with_error
 
   validates :external_id,
             presence: true,
             length: { maximum: MAX_EXTERNAL_ID_LENGTH },
-            uniqueness: { scope: :llm_connection_id }
+            uniqueness: { scope: :inference_provider_id }
 
   validates :embedding_vector_dimensions,
             numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: WorkPackageEmbedding::DIMENSIONS },
@@ -65,20 +65,22 @@ class LlmModel < ApplicationRecord
   def cascade_rename!(previous_external_id)
     return if previous_external_id.blank? || previous_external_id == external_id
 
-    llm_connection.capability_verdicts.where(model_id: previous_external_id).update_all(model_id: external_id)
-    llm_connection.update_columns(env_provisioned_at: nil, env_fingerprint: nil) if connection_defaults.any?
+    inference_provider.capability_verdicts.where(model_id: previous_external_id).update_all(model_id: external_id)
+    LlmConnection.current.update_columns(env_provisioned_at: nil, env_fingerprint: nil) if connection_defaults.any?
   end
 
   # The counterpart of the rename. Verdicts are keyed by the identifier string,
   # not by foreign key, so leaving them behind would silently apply them to a
   # future model re-added under the same name.
   def cascade_delete!
-    llm_connection.capability_verdicts.where(model_id: external_id).delete_all
+    capability_verdicts.delete_all
   end
 
   # display_name is an administrator's; the name the server or the registry
   # reported is metadata, so a refresh updates one and never the other.
   def name = display_name.presence || raw_metadata["name"].presence || external_id
+
+  def name_with_provider = "#{name} @ #{inference_provider.title}"
 
   def in_use? = uses.any?
 
@@ -92,7 +94,9 @@ class LlmModel < ApplicationRecord
   end
 
   def connection_defaults
-    CONNECTION_DEFAULTS.select { |attribute| llm_connection.public_send(attribute) == id }
+    connection = LlmConnection.current
+
+    CONNECTION_DEFAULTS.select { |attribute| connection.public_send(attribute) == id }
   end
 
   # Precedence: what an administrator set, then what the server reported (vLLM
@@ -164,6 +168,8 @@ class LlmModel < ApplicationRecord
   # chat model otherwise. There is no third kind, and no model is both.
   def embedding? = verdict_for(:embeddings)&.state == "supported"
 
+  def offers_embeddings? = active? && embedding?
+
   # A model being added has no type until an administrator picks one, so the
   # form offers no preselected type to submit as if it had been chosen.
   def model_type
@@ -176,11 +182,10 @@ class LlmModel < ApplicationRecord
     @model_type = value.presence&.to_sym
   end
 
+  def capability_verdicts = inference_provider.capability_verdicts.for_model(external_id)
+
   def verdict_for(capability)
-    llm_connection.capability_verdicts
-                  .for_model(external_id)
-                  .for_capability(capability)
-                  .first
+    capability_verdicts.for_capability(capability).first
   end
 
   # Discovered models the server stopped offering are switched off rather than

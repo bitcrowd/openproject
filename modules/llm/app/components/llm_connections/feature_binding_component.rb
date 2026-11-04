@@ -49,14 +49,14 @@ module LlmConnections
     # Not named +options+: ApplicationComponent already owns that name and
     # initializes it to an empty hash, which silently swallowed the memoisation.
     def model_options
-      @model_options ||= selectable_models.call
+      @model_options ||= selectable_models.flat_map(&:call)
     end
 
-    def models_left_out? = feature.chat? && selectable_models.models_left_out?
+    def models_left_out? = feature.chat? && selectable_models.any?(&:models_left_out?)
 
     def inherit_label
       if default_model
-        I18n.t("admin.llm_feature_bindings.inherit_with_default", model: default_model.name)
+        I18n.t("admin.llm_feature_bindings.inherit_with_default", model: default_model.name_with_provider)
       else
         I18n.t("admin.llm_feature_bindings.inherit_without_default")
       end
@@ -69,7 +69,9 @@ module LlmConnections
     attr_reader :feature, :connection, :binding
 
     def selectable_models
-      @selectable_models ||= SelectableModelsQuery.new(connection, feature, bound_model: binding&.llm_model)
+      @selectable_models ||= InferenceProvider.by_title.map do |provider|
+        SelectableModelsQuery.new(provider, feature, bound_model: binding&.llm_model)
+      end
     end
 
     def default_model

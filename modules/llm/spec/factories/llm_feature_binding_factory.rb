@@ -33,12 +33,14 @@ FactoryBot.define do
       model_identifier { nil }
     end
 
-    llm_connection
+    llm_connection { LlmConnection.current }
     feature_key { "description_assistant" }
     llm_model do
       if model_identifier
-        llm_connection.models.find_by(external_id: model_identifier) ||
-          create(:llm_model, llm_connection:, external_id: model_identifier)
+        provider = InferenceProvider.first || create(:inference_provider)
+
+        provider.models.find_by(external_id: model_identifier) ||
+          create(:llm_model, inference_provider: provider, external_id: model_identifier)
       end
     end
   end

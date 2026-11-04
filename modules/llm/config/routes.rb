@@ -30,15 +30,24 @@
 Rails.application.routes.draw do
   scope "admin" do
     resource :llm_connection, only: %i[show update], controller: "admin/llm_connections" do
+      post :setup
+    end
+
+    resources :inference_providers, only: %i[create update destroy], controller: "admin/inference_providers" do
       collection do
+        get :new_dialog, defaults: { format: :turbo_stream }
+        get :status, defaults: { format: :turbo_stream }
+      end
+
+      member do
+        get :edit_dialog, defaults: { format: :turbo_stream }
+        get :deletion_dialog, defaults: { format: :turbo_stream }
+        get :delete_api_key_dialog, defaults: { format: :turbo_stream }
         delete :api_key, action: :delete_api_key
-        get :delete_api_key_dialog
-        get :disconnect_dialog
-        post :disconnect
       end
 
       resource :health_status_report, only: %i[show create], controller: "admin/llm_health_status" do
-        post :create_health_status_report
+        post :check, defaults: { format: :turbo_stream }
       end
     end
 

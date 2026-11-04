@@ -32,10 +32,11 @@ require_module_spec_helper
 
 RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmock,
                with_flag: { llm_connection: true }, with_settings: { llm_features_enabled: true } do
-  subject(:report) { described_class.new(connection).call }
+  subject(:report) { described_class.new(provider).call }
 
   let(:base_url) { "https://example.com/v1" }
-  let(:connection) { create(:llm_connection, :with_models, base_url:) }
+  let(:provider) { create(:inference_provider, :with_models, base_url:) }
+  let(:connection) { LlmConnection.current }
 
   def result_for(group, key)
     report.group(group)&.result_for(key)
@@ -44,7 +45,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
   # A binding can only be saved to a model the server offers; it dangles once
   # a later refresh withdraws that model.
   def bind_to_withdrawn_model(feature_key, model_id, **)
-    llm_model = create(:llm_model, llm_connection: connection, external_id: model_id)
+    llm_model = create(:llm_model, inference_provider: provider, external_id: model_id)
     create(:llm_feature_binding, llm_connection: connection, feature_key:, llm_model:, **)
     llm_model.update!(active: false)
   end
@@ -52,7 +53,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
   context "with a healthy connection" do
     before do
       mock_llm_models_response(base_url)
-      connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b"))
+      connection.update!(default_chat_model: provider.models.find_by(external_id: "qwen3.6-27b"))
     end
 
     it "passes the configuration and server groups" do
@@ -69,7 +70,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
 
     context "when a deep check is asked for" do
       before do
-        connection.deep_health_check = true
+        provider.deep_health_check = true
         mock_llm_chat_response(base_url, content: "pong")
       end
 
@@ -83,11 +84,11 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
   describe "the inference group" do
     before do
       mock_llm_models_response(base_url)
-      connection.deep_health_check = true
+      provider.deep_health_check = true
     end
 
     it "names a model the server has no route for" do
-      connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b"))
+      connection.update!(default_chat_model: provider.models.find_by(external_id: "qwen3.6-27b"))
       mock_llm_chat_response(base_url, response_code: 404)
 
       result = result_for(:inference, :chat_round_trip)
@@ -98,8 +99,8 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
     end
 
     it "tests a model that can chat when no default is chosen" do
-      create(:llm_model, :withdrawn, llm_connection: connection, external_id: "abandoned-7b")
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+      create(:llm_model, :withdrawn, inference_provider: provider, external_id: "abandoned-7b")
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
                                       state: "supported", source: "probe")
       mock_llm_chat_response(base_url)
 
@@ -120,8 +121,8 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
     end
 
     it "can still prove the connection works through inference" do
-      connection.deep_health_check = true
-      connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b"))
+      provider.deep_health_check = true
+      connection.update!(default_chat_model: provider.models.find_by(external_id: "qwen3.6-27b"))
       mock_llm_chat_response(base_url)
 
       expect(result_for(:inference, :chat_round_trip).state).to eq(:success)
@@ -160,7 +161,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
   end
 
   context "without a base URL" do
-    let(:connection) { create(:llm_connection).tap { |c| c.update_column(:base_url, "") } }
+    let(:provider) { create(:inference_provider).tap { it.update_column(:base_url, "") } }
 
     it "fails and does not ask the server anything" do
       expect(result_for(:configuration, :base_url_present).state).to eq(:failure)
@@ -171,7 +172,8 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
 
   describe "the server group" do
     context "with a format whose catalogue comes from the registry" do
-      let(:connection) { create(:llm_connection, :with_models, base_url:, api_format: "anthropic") }
+      let(:provider) { create(:inference_provider, :with_models, base_url:, api_format: "anthropic") }
+      let(:connection) { LlmConnection.current }
 
       it "omits the group instead of rendering it empty" do
         expect(report.group(:server)).to be_nil
@@ -181,7 +183,8 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
 
     context "with a gateway that serves the model list in OpenAI shape" do
       let(:base_url) { "https://openrouter.ai/api/v1" }
-      let(:connection) { create(:llm_connection, :with_models, base_url:, api_format: "openrouter") }
+      let(:provider) { create(:inference_provider, :with_models, base_url:, api_format: "openrouter") }
+      let(:connection) { LlmConnection.current }
 
       before { mock_llm_models_response(base_url) }
 
@@ -192,20 +195,127 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
     end
   end
 
+  describe "a provider that only serves embeddings" do
+    let(:embeddings_url) { "#{base_url}/embeddings" }
+
+    before do
+      mock_llm_models_response(base_url)
+      provider.models.find_by!(external_id: "qwen3.6-27b").destroy!
+      create(:llm_capability_verdict, inference_provider: provider, model_id: "bge-m3", capability: "embeddings",
+                                      state: "supported", source: "probe")
+      provider.deep_health_check = true
+    end
+
+    it "sends an embedding request instead of finding nothing to test" do
+      request = mock_llm_embeddings_response(base_url)
+
+      expect(result_for(:inference, :embedding_round_trip).state).to eq(:success)
+      expect(result_for(:inference, :chat_round_trip)).to be_nil
+      expect(request).to have_been_made.once
+    end
+
+    it "is left out of the scheduled check, because it is billed" do
+      provider.deep_health_check = false
+
+      expect(report.group(:inference)).to be_nil
+      expect(a_request(:post, embeddings_url)).not_to have_been_made
+    end
+
+    {
+      "rejects the key" => [{ status: 401 }, :invalid_api_key],
+      "has no route for the model" => [{ status: 404 }, :model_not_served],
+      "refuses the request" => [{ status: 400 }, :chat_failed],
+      "fails" => [{ status: 500 }, :chat_failed]
+    }.each do |situation, (response, code)|
+      it "fails with #{code} when the server #{situation}" do
+        stub_request(:post, embeddings_url).to_return(body: "{}", **response)
+
+        result = result_for(:inference, :embedding_round_trip)
+
+        expect(result.state).to eq(:failure)
+        expect(result.code).to eq(code)
+      end
+    end
+
+    it "fails when the request times out" do
+      stub_request(:post, embeddings_url).to_raise(Net::ReadTimeout)
+
+      expect(result_for(:inference, :embedding_round_trip).code).to eq(:request_timed_out)
+    end
+
+    it "fails when the server cannot be reached" do
+      stub_request(:post, embeddings_url).to_timeout
+
+      expect(result_for(:inference, :embedding_round_trip).code).to eq(:connection_error)
+    end
+
+    it "warns when the answer is not an embedding" do
+      stub_request(:post, embeddings_url).to_return(status: 200, body: { data: [] }.to_json,
+                                                    headers: { "Content-Type" => "application/json" })
+
+      result = result_for(:inference, :embedding_round_trip)
+
+      expect(result.state).to eq(:warning)
+      expect(result.code).to eq(:empty_completion)
+    end
+
+    it "still prefers a chat model when there is one" do
+      create(:llm_model, inference_provider: provider, external_id: "a-chat-model")
+      mock_llm_chat_response(base_url, content: "pong")
+
+      expect(result_for(:inference, :chat_round_trip).state).to eq(:success)
+      expect(result_for(:inference, :embedding_round_trip)).to be_nil
+    end
+  end
+
+  describe "what the models of another provider are used for" do
+    let(:other) { create(:inference_provider, :with_models, base_url: "https://other.example/v1") }
+    let(:other_model) { other.models.find_by!(external_id: "qwen3.6-27b") }
+
+    before do
+      provider
+      mock_llm_models_response(base_url)
+    end
+
+    it "leaves a default model off this report" do
+      connection.update!(default_chat_model: other_model)
+
+      expect(result_for(:models, :default_chat_model)).to be_nil
+    end
+
+    it "does not blame this provider for a binding dangling elsewhere" do
+      create(:llm_feature_binding, llm_model: other_model)
+      other_model.update!(active: false)
+
+      expect(result_for(:features, :bindings_resolvable).state).to eq(:success)
+    end
+
+    it "does not blame this provider for a Semantic Index whose model is gone elsewhere" do
+      create(:llm_capability_verdict, inference_provider: other, model_id: other_model.external_id,
+                                      capability: "embeddings", state: "supported", source: "probe")
+      semantic_index = create(:semantic_index, state: "ready", llm_model: other_model)
+      connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:)
+      other_model.update!(active: false)
+
+      expect(result_for(:features, :active_semantic_index_intact).state).to eq(:success)
+    end
+
+    it "tests a chat model of its own instead of a default elsewhere" do
+      connection.update!(default_chat_model: other_model)
+      provider.deep_health_check = true
+      mock_llm_chat_response(base_url, content: "pong")
+
+      expect(result_for(:inference, :chat_round_trip).state).to eq(:success)
+      expect(WebMock).to have_requested(:post, "#{base_url}/chat/completions")
+        .with(body: hash_including("model" => "bge-m3"))
+    end
+  end
+
   describe "the models group" do
     before { mock_llm_models_response(base_url) }
 
-    it "asks for a refresh when the settings changed after the last one" do
-      connection.update!(connection_fingerprint: "a-different-deployment")
-
-      result = result_for(:models, :catalogue_fresh)
-
-      expect(result.state).to eq(:warning)
-      expect(result.code).to eq(:catalogue_stale_settings)
-    end
-
     it "warns when the model list was never retrieved" do
-      connection.update_column(:last_synced_at, nil)
+      provider.update_column(:last_synced_at, nil)
 
       result = result_for(:models, :catalogue_fresh)
 
@@ -215,7 +325,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
 
     it "names the date of a model list retrieved too long ago" do
       synced_at = (Llm::Validators::ModelValidator::STALE_AFTER + 1.day).ago
-      connection.update_column(:last_synced_at, synced_at)
+      provider.update_column(:last_synced_at, synced_at)
 
       result = result_for(:models, :catalogue_fresh)
 
@@ -225,13 +335,13 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
     end
 
     it "passes a default chat model the server offers" do
-      connection.update!(default_chat_model: connection.models.find_by!(external_id: "qwen3.6-27b"))
+      connection.update!(default_chat_model: provider.models.find_by!(external_id: "qwen3.6-27b"))
 
       expect(result_for(:models, :default_chat_model).state).to eq(:success)
     end
 
     it "names a default chat model the server no longer offers" do
-      default = connection.models.find_by!(external_id: "qwen3.6-27b")
+      default = provider.models.find_by!(external_id: "qwen3.6-27b")
       connection.update!(default_chat_model: default)
       default.update!(active: false)
 
@@ -244,9 +354,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
 
     context "with an embedding feature available", with_flag: { llm_connection: true, semantic_search: true } do
       it "leaves it to the active Semantic Index instead of asking for a model" do
-        result = result_for(:features, :bindings_resolvable)
-
-        expect(result.context[:features]).to eq("Description assistant")
+        expect(result_for(:features, :bindings_resolvable).state).to eq(:success)
       end
     end
 
@@ -254,8 +362,8 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
       let(:semantic_index) { create(:semantic_index, state: "ready") }
 
       before do
-        connection.capability_verdicts.create!(model_id: "bge-m3", capability: "embeddings",
-                                               state: "supported", source: "probe", checked_at: Time.current)
+        provider.capability_verdicts.create!(model_id: "bge-m3", capability: "embeddings",
+                                             state: "supported", source: "probe", checked_at: Time.current)
         connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:)
       end
 
@@ -264,7 +372,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
       end
 
       it "fails once its model has left the catalogue" do
-        connection.models.find_by!(external_id: "bge-m3").update!(active: false)
+        provider.models.find_by!(external_id: "bge-m3").update!(active: false)
 
         result = result_for(:features, :active_semantic_index_intact)
 
@@ -293,7 +401,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
     end
 
     def deep_check
-      connection.deep_health_check = true
+      provider.deep_health_check = true
       mock_llm_models_response(base_url)
       yield
     end
@@ -306,7 +414,7 @@ RSpec.describe Llm::Validators::ConnectionValidator, :llm_server_helpers, :webmo
         WebMock.reset!
         setup.call
 
-        described_class.new(connection).call.results.each do |group|
+        described_class.new(provider).call.results.each do |group|
           expect(I18n.t("#{group.key}.header", scope: "llm.health_checks", raise: true)).to be_present
 
           group.results.each do |result|

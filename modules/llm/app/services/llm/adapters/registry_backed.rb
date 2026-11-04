@@ -64,7 +64,7 @@ module Llm
       end
 
       # Nothing is queried, so there is no server to characterize.
-      def server_flavour = connection.api_format
+      def server_flavor = connection.api_format
 
       private
 

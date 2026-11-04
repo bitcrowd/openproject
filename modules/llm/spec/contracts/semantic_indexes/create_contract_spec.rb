@@ -47,7 +47,7 @@ RSpec.describe SemanticIndexes::CreateContract do
   context "with a chat model" do
     let(:current_user) { build_stubbed(:admin) }
 
-    before { semantic_index.llm_model = connection.models.find_by!(external_id: "qwen3.6-27b") }
+    before { semantic_index.llm_model = provider.models.find_by!(external_id: "qwen3.6-27b") }
 
     it "is invalid" do
       expect(contract.validate).to be(false)

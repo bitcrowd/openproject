@@ -38,8 +38,8 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
   shared_let(:admin) { create(:admin) }
 
   let(:turbo_headers) { { "Accept" => "text/vnd.turbo-stream.html" } }
-  let(:embedding_model) { connection.models.find_by!(external_id: "bge-m3") }
-  let(:chat_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
+  let(:embedding_model) { provider.models.find_by!(external_id: "bge-m3") }
+  let(:chat_model) { provider.models.find_by!(external_id: "qwen3.6-27b") }
   let(:valid_params) do
     { semantic_index: { title: "Nomic small", description: "Trial", llm_model_id: embedding_model.id,
                         embedding_vector_dimensions: 768, context_token_length: 2048 } }
@@ -155,7 +155,7 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(response.body).to include(I18n.t("admin.semantic_indexes.dialog.new_title"))
 
       items = Nokogiri::HTML(response.parsed_body).at_css("opce-autocompleter")["data-items"]
-      expect(JSON.parse(items).pluck("name")).to contain_exactly("bge-m3")
+      expect(JSON.parse(items).pluck("name")).to contain_exactly("bge-m3 @ #{provider.title}")
     end
   end
 
@@ -254,9 +254,9 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
     end
 
     it "moves an indexed semantic index to another embedding model, keeping its state" do
-      other_model = create(:llm_model, llm_connection: connection, external_id: "bge-m3-elsewhere")
-      connection.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
-                                             state: "supported", source: "probe", checked_at: Time.current)
+      other_model = create(:llm_model, inference_provider: provider, external_id: "bge-m3-elsewhere")
+      provider.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
+                                           state: "supported", source: "probe", checked_at: Time.current)
       semantic_index.update!(state: "ready")
 
       patch semantic_index_path(semantic_index), params: { semantic_index: { llm_model_id: other_model.id } }
@@ -346,6 +346,18 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
         expect(flash[:error]).to eq(I18n.t("admin.semantic_indexes.stop_indexing.not_indexing"))
         expect(semantic_index.reload).to be_not_indexed
       end
+    end
+  end
+
+  describe "the list on the feature configuration page" do
+    let!(:semantic_index) { create(:semantic_index, title: "Docs") }
+
+    it "names the inference provider of each semantic index next to its model" do
+      get llm_feature_bindings_path
+
+      row = page.find("[data-test-selector='llm-semantic-index--row-#{semantic_index.id}']")
+      expect(row).to have_text(semantic_index.llm_model.inference_provider.title)
+      expect(row).to have_text(semantic_index.llm_model.external_id)
     end
   end
 

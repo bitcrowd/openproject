@@ -37,36 +37,39 @@ module LlmConnections
 
     alias_method :connection, :model
 
+    # A new provider while none exists: that form also creates it.
+    options inference_provider: nil, features_enabled: false
+
     private
 
-    def configured_from_env_text
-      safe_join([t("admin.banners.environment_configured_readonly"),
-                 t("admin.llm_connections.form.env_applied", time: applied_at)], " ")
-    end
-
-    def env_changed_text
-      safe_join([t("admin.banners.environment_configured_readonly"),
-                 t("admin.llm_connections.form.env_changed", time: applied_at)], " ")
-    end
+    def setup? = inference_provider.present?
 
     def applied_at = format_time(connection.env_provisioned_at_in_database)
 
     def wrapper_options
-      {
-        data: {
-          controller: "llm--connection-form show-when-checked show-when-value-selected",
-          test_selector: "llm-connection--form"
-        }
-      }
+      data = { test_selector: "llm-connection--form" }
+      data[:controller] = "llm--connection-form show-when-checked show-when-value-selected" if setup?
+
+      { data: }
     end
 
-    # The save can turn the connection on, which adds the tabs to the page
-    # header outside this frame, so the response replaces the whole page.
+    # The save can turn the features on, which adds the tabs to the page header
+    # outside this frame, so the response replaces the whole page.
     def form_options
       {
         model: connection,
         url: llm_connection_path,
         method: :patch,
+        data: { turbo_frame: "_top" }
+      }
+    end
+
+    def setup_form_options
+      {
+        model: inference_provider,
+        scope: :inference_provider,
+        url: setup_llm_connection_path,
+        method: :post,
         data: { turbo_frame: "_top" }
       }
     end
