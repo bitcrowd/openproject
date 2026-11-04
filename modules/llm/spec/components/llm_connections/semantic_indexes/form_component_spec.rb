@@ -54,13 +54,21 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       rendered_component
 
       autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
-      expect(autocompleter[:"data-input-name"]).to include("semantic_index[model_id]")
+      expect(autocompleter[:"data-input-name"]).to include("semantic_index[llm_model_id]")
       expect(autocompleter[:"data-items"]).to include("bge-m3")
+    end
+
+    it "refreshes through the collection route" do
+      rendered_component
+
+      expect(page).to have_css("[data-controller='refresh-on-form-changes']" \
+                               "[data-refresh-on-form-changes-turbo-stream-url-value='#{refresh_form_semantic_indexes_path}']")
+      expect(page).to have_css("form[data-refresh-on-form-changes-target='form']")
     end
   end
 
   context "for a persisted semantic index" do
-    let(:semantic_index) { create(:semantic_index, title: "Qwen3 baseline", model_id: "bge-m3") }
+    let(:semantic_index) { create(:semantic_index, title: "Qwen3 baseline", model_identifier: "bge-m3") }
 
     it "patches the semantic index's own route" do
       rendered_component
@@ -73,26 +81,54 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       rendered_component
 
       autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
-      expect(autocompleter[:"data-input-value"]).to include("bge-m3")
+      expect(autocompleter[:"data-input-value"]).to include(semantic_index.llm_model_id.to_s)
+    end
+
+    it "remembers which model the values may have come from" do
+      rendered_component
+
+      expect(page).to have_field("semantic_index[prefilled_from_model_id]", type: :hidden,
+                                                                            with: semantic_index.llm_model_id.to_s)
     end
   end
 
   context "when the parameters are locked" do
     let(:semantic_index) { create(:semantic_index, state: :ready) }
 
-    it "warns that the parameters cannot be changed" do
+    it "warns to only use a compatible model" do
       rendered_component
 
-      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_once_indexed"))
+      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_once_indexed",
+                                       model: "bge-m3", context_token_length: 8192, embedding_vector_dimensions: 1024))
     end
 
-    it "renders the parameter fields disabled" do
+    it "renders the numbers disabled and keeps the model choosable" do
       rendered_component
 
-      expect(page).to have_field(SemanticIndex.human_attribute_name(:model_id), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:context_token_length), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:embedding_vector_dimensions), disabled: true)
-      expect(page).to have_no_css("[data-test-selector='llm-semantic-index--model']")
+
+      autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
+      expect(autocompleter[:"data-disabled"]).to eq("false")
+    end
+
+    it "does not refresh, because there is nothing to fill in" do
+      rendered_component
+
+      expect(page).to have_no_css("[data-controller='refresh-on-form-changes']")
+    end
+  end
+
+  context "when it is being indexed" do
+    let(:semantic_index) { create(:semantic_index, state: :indexing) }
+
+    it "says that the model can't be changed either" do
+      rendered_component
+
+      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_while_indexing"))
+
+      autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
+      expect(autocompleter[:"data-disabled"]).to eq("true")
     end
   end
 

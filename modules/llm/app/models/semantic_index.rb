@@ -31,8 +31,9 @@ class SemanticIndex < ApplicationRecord
   class InvalidTransitionError < StandardError; end
 
   INDEXABLE_STATES = %w[not_indexed failed ready].freeze
-  PARAMETERS = %w[model_id embedding_vector_dimensions context_token_length].freeze
+  PARAMETERS = %w[embedding_vector_dimensions context_token_length].freeze
 
+  belongs_to :llm_model
   has_many :llm_feature_bindings, dependent: :restrict_with_error
 
   enum :state, {
@@ -43,7 +44,7 @@ class SemanticIndex < ApplicationRecord
   }
 
   validates :title, presence: true
-  validates :model_id, presence: true, length: { maximum: LlmModel::MAX_EXTERNAL_ID_LENGTH }
+  validates :llm_model_id, presence: true
   validates :embedding_vector_dimensions,
             numericality: { only_integer: true, greater_than: 0,
                             less_than_or_equal_to: WorkPackageEmbedding::DIMENSIONS }
@@ -73,6 +74,15 @@ class SemanticIndex < ApplicationRecord
     GoodJob::BatchRecord.find_by(id: indexing_batch_id)
   end
 
+  # An administrator's value stays: only a blank field, or what the previous
+  # model filled in, takes the value of the model chosen now.
+  def prefill_from_model(previous_model)
+    self.context_token_length = prefilled(context_token_length, llm_model&.context_window,
+                                          previous_model&.context_window)
+    self.embedding_vector_dimensions = prefilled(embedding_vector_dimensions, llm_model&.dimensions,
+                                                 previous_model&.dimensions)
+  end
+
   def indexable? = INDEXABLE_STATES.include?(state)
 
   def parameters_locked? = !not_indexed?
@@ -98,6 +108,10 @@ class SemanticIndex < ApplicationRecord
   end
 
   private
+
+  def prefilled(current, from_model, from_previous_model)
+    current.blank? || current == from_previous_model.to_i ? from_model : current
+  end
 
   def transition_from_indexing!(**attributes)
     with_lock do

@@ -34,11 +34,12 @@
 # does not lose the administrator's choice.
 class LlmFeatureBinding < ApplicationRecord
   belongs_to :llm_connection, optional: false
+  belongs_to :llm_model, optional: true
   belongs_to :semantic_index, optional: true
 
   validates :feature_key, presence: true, uniqueness: { scope: :llm_connection_id }
   validate :feature_registered
-  validate :model_offered_by_connection, if: :model_id_changed?
+  validate :model_offered_by_connection, if: :llm_model_id_changed?
   validate :semantic_index_only_for_embedding, if: :semantic_index_id_changed?
 
   def feature
@@ -48,26 +49,24 @@ class LlmFeatureBinding < ApplicationRecord
   end
 
   # NULL means "use the connection default for this kind of model".
-  def resolved_model_id
-    model_id.presence || default_model_id
+  def resolved_model
+    llm_model || default_model
   end
-
-  def inherits_default? = model_id.blank?
 
   # Derived, never stored. A status column would be a cache with no invalidation
   # trigger, and would be stale exactly when it matters -- right after the remote
   # catalogue changed.
   def dangling?
-    resolved = resolved_model_id
-    resolved.present? && llm_connection.available_model_ids.exclude?(resolved)
+    resolved = resolved_model
+    resolved.present? && !resolved.active?
   end
 
   private
 
-  def default_model_id
+  def default_model
     return if feature.nil?
 
-    llm_connection.default_model_for(feature)&.external_id
+    llm_connection.default_model_for(feature)
   end
 
   def feature_registered
@@ -79,10 +78,10 @@ class LlmFeatureBinding < ApplicationRecord
   # Only checked when it changes, so a catalogue that shrinks underneath a stored
   # binding does not block unrelated saves; #dangling? reports that state.
   def model_offered_by_connection
-    return if model_id.blank? || llm_connection.nil?
-    return if llm_connection.models.active.exists?(external_id: model_id)
+    return if llm_model_id.blank? || llm_connection.nil?
+    return if llm_connection.models.active.exists?(id: llm_model_id)
 
-    errors.add(:model_id, :not_available)
+    errors.add(:llm_model_id, :not_available)
   end
 
   def semantic_index_only_for_embedding

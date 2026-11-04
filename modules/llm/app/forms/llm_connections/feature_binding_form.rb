@@ -43,8 +43,8 @@ module LlmConnections
 
     form do |f|
       f.autocompleter(
-        name: :model_id,
-        label: LlmFeatureBinding.human_attribute_name(:model_id),
+        name: :llm_model_id,
+        label: LlmFeatureBinding.human_attribute_name(:llm_model_id),
         caption: model_caption,
         autocomplete_options: {
           decorated: true,
@@ -57,8 +57,8 @@ module LlmConnections
 
         model_options.each do |option|
           list.option(label: option_label(option),
-                      value: option.model_id,
-                      selected: selected_model_id == option.model_id)
+                      value: option.model.id,
+                      selected: selected_model_id == option.model.id)
         end
       end
 
@@ -82,9 +82,9 @@ module LlmConnections
     # The bound model stays choosable once it no longer qualifies, so that saving
     # the form again does not blank the binding. The label says what changed.
     def option_label(option)
-      return option.model_id if option.qualifies
+      return option.model.external_id if option.qualifies
 
-      I18n.t("admin.llm_feature_bindings.option_unqualified", model: option.model_id)
+      I18n.t("admin.llm_feature_bindings.option_unqualified", model: option.model.external_id)
     end
   end
 end

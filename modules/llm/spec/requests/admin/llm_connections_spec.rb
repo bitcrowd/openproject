@@ -735,7 +735,8 @@ RSpec.describe "Admin LLM connection", :llm_server_helpers, :skip_csrf, :webmock
     end
 
     it "offers the confirmation, naming what is kept" do
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "qwen3.6-27b")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                   model_identifier: "qwen3.6-27b")
 
       get disconnect_dialog_llm_connection_path,
           headers: { "Accept" => "text/vnd.turbo-stream.html" }
@@ -746,7 +747,8 @@ RSpec.describe "Admin LLM connection", :llm_server_helpers, :skip_csrf, :webmock
     end
 
     it "clears the credential and switches the connection off, keeping everything else" do
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "qwen3.6-27b")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                   model_identifier: "qwen3.6-27b")
 
       post disconnect_llm_connection_path
 
@@ -755,7 +757,7 @@ RSpec.describe "Admin LLM connection", :llm_server_helpers, :skip_csrf, :webmock
       expect(Setting.llm_features_enabled?).to be(false)
       expect(connection.base_url).to eq("https://example.com/v1")
       expect(connection.models.count).to eq(2)
-      expect(connection.feature_bindings.first.model_id).to eq("qwen3.6-27b")
+      expect(connection.feature_bindings.first.llm_model&.external_id).to eq("qwen3.6-27b")
     end
 
     it "refuses when the connection comes from the environment" do

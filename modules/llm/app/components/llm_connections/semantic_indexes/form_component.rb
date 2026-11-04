@@ -35,11 +35,30 @@ module LlmConnections
 
       FORM_ID = "llm-semantic-index-form"
 
-      options :connection
+      options connection: nil, refreshed: false
 
       private
 
       def locked? = model.parameters_locked?
+
+      def wrapper_data
+        return {} if locked?
+
+        { controller: "refresh-on-form-changes", "refresh-on-form-changes-turbo-stream-url-value": refresh_url }
+      end
+
+      def refresh_url
+        model.persisted? ? refresh_form_semantic_index_path(model) : refresh_form_semantic_indexes_path
+      end
+
+      def banner_text
+        return t("admin.semantic_indexes.form.locked_while_indexing") if model.indexing?
+
+        t("admin.semantic_indexes.form.locked_once_indexed",
+          model: LlmModel.find(model.llm_model_id_in_database).external_id,
+          context_token_length: model.context_token_length_in_database,
+          embedding_vector_dimensions: model.embedding_vector_dimensions_in_database)
+      end
 
       def http_method
         model.persisted? ? :patch : :post
@@ -51,7 +70,8 @@ module LlmConnections
 
       def model_options
         LlmConnections::SelectableModelsQuery
-          .new(connection, OpenProject::Llm::Features[:semantic_search], bound_model_id: model.model_id_in_database)
+          .new(connection, OpenProject::Llm::Features[:semantic_search],
+               bound_model: LlmModel.find_by(id: model.llm_model_id_in_database))
           .call
       end
     end

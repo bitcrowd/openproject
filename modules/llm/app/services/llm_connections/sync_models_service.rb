@@ -168,25 +168,30 @@ module LlmConnections
     #
     # The two default_*_model_id columns reference llm_models with
     # on_delete: :nullify, so the database clears them as the rows go. A feature
-    # bound to one is released here, because the binding names a string and
-    # would otherwise silently re-attach to whatever the new server happens to
-    # call by the same name. A locked binding stays, because it records what an
-    # existing index was written with. Administrator assertions survive, as they
-    # do on an ordinary refresh: they are statements about a model, not about a
-    # server.
+    # bound to one is released here. A model a semantic index was written with
+    # stays as a withdrawn row, so the index still names it. Administrator
+    # assertions survive, as they do on an ordinary refresh: they are statements
+    # about a model, not about a server.
     def forget_the_previous_deployment
-      ActiveRecord::Base.transaction do
-        discard_discovered_models(connection.models.discovered.pluck(:external_id))
-      end
+      ActiveRecord::Base.transaction { discard_discovered_models }
 
       connection.reload
     end
 
-    def discard_discovered_models(discarded)
-      connection.models.discovered.delete_all
+    def discard_discovered_models
+      release_discovered_models
+      discovered_models.where(id: indexed_model_ids).update_all(active: false)
+      discovered_models.where.not(id: indexed_model_ids).delete_all
       connection.capability_verdicts.where.not(source: "admin").delete_all
-      connection.feature_bindings.where(model_id: discarded, semantic_index_id: nil).delete_all
     end
+
+    def release_discovered_models
+      connection.feature_bindings.where(llm_model_id: discovered_models.select(:id), semantic_index_id: nil).delete_all
+    end
+
+    def discovered_models = connection.models.discovered
+
+    def indexed_model_ids = SemanticIndex.select(:llm_model_id)
 
     # The administrator's context-window override is theirs, and a routine
     # refresh must not silently discard it.

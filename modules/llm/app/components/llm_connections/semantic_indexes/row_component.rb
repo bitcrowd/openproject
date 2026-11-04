@@ -32,7 +32,9 @@ module LlmConnections
     class RowComponent < OpPrimer::BorderBoxRowComponent
       alias_method :semantic_index, :model
 
-      delegate :model_id, :context_token_length, :embedding_vector_dimensions, to: :semantic_index
+      delegate :context_token_length, :embedding_vector_dimensions, to: :semantic_index
+
+      def llm_model = semantic_index.llm_model.external_id
 
       STATE_LABEL_SCHEMES = {
         "not_indexed" => :secondary,

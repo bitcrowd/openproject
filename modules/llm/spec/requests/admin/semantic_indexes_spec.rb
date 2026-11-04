@@ -38,8 +38,10 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
   shared_let(:admin) { create(:admin) }
 
   let(:turbo_headers) { { "Accept" => "text/vnd.turbo-stream.html" } }
+  let(:embedding_model) { connection.models.find_by!(external_id: "bge-m3") }
+  let(:chat_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
   let(:valid_params) do
-    { semantic_index: { title: "Nomic small", description: "Trial", model_id: "bge-m3",
+    { semantic_index: { title: "Nomic small", description: "Trial", llm_model_id: embedding_model.id,
                         embedding_vector_dimensions: 768, context_token_length: 2048 } }
   end
 
@@ -153,7 +155,59 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(response.body).to include(I18n.t("admin.semantic_indexes.dialog.new_title"))
 
       items = Nokogiri::HTML(response.parsed_body).at_css("opce-autocompleter")["data-items"]
-      expect(JSON.parse(items).pluck("id")).to contain_exactly("bge-m3")
+      expect(JSON.parse(items).pluck("name")).to contain_exactly("bge-m3")
+    end
+  end
+
+  describe "POST refresh_form" do
+    let(:refreshed) { Nokogiri::HTML(response.parsed_body) }
+
+    def field_value(attribute)
+      refreshed.at_css("input[name='semantic_index[#{attribute}]']")["value"]
+    end
+
+    before { embedding_model.update!(embedding_vector_dimensions: 1024) }
+
+    it "fills in what the chosen model knows, without saving" do
+      post refresh_form_semantic_indexes_path,
+           params: { semantic_index: { title: "Docs", llm_model_id: embedding_model.id, prefilled_from_model_id: "",
+                                       context_token_length: "", embedding_vector_dimensions: "" } },
+           headers: turbo_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(field_value(:title)).to eq("Docs")
+      expect(field_value(:context_token_length)).to eq("8192")
+      expect(field_value(:embedding_vector_dimensions)).to eq("1024")
+      expect(field_value(:prefilled_from_model_id)).to eq(embedding_model.id.to_s)
+      expect(SemanticIndex.count).to eq(0)
+    end
+
+    it "keeps a typed value" do
+      post refresh_form_semantic_indexes_path,
+           params: { semantic_index: { llm_model_id: embedding_model.id, prefilled_from_model_id: "",
+                                       context_token_length: "", embedding_vector_dimensions: "512" } },
+           headers: turbo_headers
+
+      expect(field_value(:embedding_vector_dimensions)).to eq("512")
+    end
+
+    it "does not save an existing semantic index" do
+      semantic_index = create(:semantic_index, title: "Qwen3 baseline")
+
+      post refresh_form_semantic_index_path(semantic_index),
+           params: { semantic_index: { title: "Changed", llm_model_id: embedding_model.id } },
+           headers: turbo_headers
+
+      expect(field_value(:title)).to eq("Changed")
+      expect(semantic_index.reload.title).to eq("Qwen3 baseline")
+    end
+
+    it "is refused for a non-admin" do
+      login_as create(:user)
+
+      post refresh_form_semantic_indexes_path, params: valid_params, headers: turbo_headers
+
+      expect(response).to have_http_status(:forbidden)
     end
   end
 
@@ -162,17 +216,17 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       post semantic_indexes_path, params: valid_params
 
       expect(response).to redirect_to(llm_feature_bindings_path)
-      expect(SemanticIndex.sole).to have_attributes(title: "Nomic small", model_id: "bge-m3",
+      expect(SemanticIndex.sole).to have_attributes(title: "Nomic small", llm_model: embedding_model,
                                                     embedding_vector_dimensions: 768,
                                                     context_token_length: 2048, state: "not_indexed")
     end
 
     it "re-renders the form with errors" do
-      post semantic_indexes_path, params: { semantic_index: valid_params[:semantic_index].merge(model_id: "qwen3.6-27b") },
+      post semantic_indexes_path, params: { semantic_index: valid_params[:semantic_index].merge(llm_model_id: chat_model.id) },
                                   headers: turbo_headers
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.body).to include(I18n.t("activerecord.errors.models.semantic_index.attributes.model_id.not_offered"))
+      expect(response.body).to include(I18n.t("activerecord.errors.models.semantic_index.attributes.llm_model_id.not_offered"))
       expect(SemanticIndex.count).to eq(0)
     end
   end
@@ -193,7 +247,22 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
 
       get edit_dialog_semantic_index_path(semantic_index), headers: turbo_headers
 
-      expect(response.body).to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.locked_once_indexed")))
+      expect(response.body).to include(
+        CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.locked_once_indexed",
+                              model: "bge-m3", context_token_length: 8192, embedding_vector_dimensions: 1024))
+      )
+    end
+
+    it "moves an indexed semantic index to another embedding model, keeping its state" do
+      other_model = create(:llm_model, llm_connection: connection, external_id: "bge-m3-elsewhere")
+      connection.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
+                                             state: "supported", source: "probe", checked_at: Time.current)
+      semantic_index.update!(state: "ready")
+
+      patch semantic_index_path(semantic_index), params: { semantic_index: { llm_model_id: other_model.id } }
+
+      expect(response).to redirect_to(llm_feature_bindings_path)
+      expect(semantic_index.reload).to have_attributes(llm_model: other_model, state: "ready")
     end
 
     it "updates the semantic index" do

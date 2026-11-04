@@ -29,18 +29,21 @@
 
 module SemanticIndexes
   class Form < ApplicationForm
-    def initialize(model_options:, locked: false)
+    def initialize(model_options:, locked: false, refreshed: false)
       super()
       @model_options = model_options
       @locked = locked
+      @refreshed = refreshed
     end
 
     form do |f|
+      # Turbo moves focus to an autofocus field after a stream replaced the
+      # focused one, which would pull the administrator away from the model select.
       f.text_field(
         name: :title,
         label: SemanticIndex.human_attribute_name(:title),
         required: true,
-        autofocus: true
+        autofocus: !refreshed
       )
 
       f.text_area(
@@ -49,15 +52,8 @@ module SemanticIndexes
         rows: 3
       )
 
-      if locked
-        f.text_field(
-          name: :model_id,
-          label: SemanticIndex.human_attribute_name(:model_id),
-          disabled: true
-        )
-      else
-        model_autocompleter(f)
-      end
+      f.hidden(name: :prefilled_from_model_id, value: selected_model_id) unless locked
+      model_autocompleter(f)
 
       f.text_field(
         name: :context_token_length,
@@ -84,35 +80,43 @@ module SemanticIndexes
 
     private
 
-    attr_reader :model_options, :locked
+    attr_reader :model_options, :locked, :refreshed
 
     def model_autocompleter(form)
       form.autocompleter(
-        name: :model_id,
-        label: SemanticIndex.human_attribute_name(:model_id),
+        name: :llm_model_id,
+        label: SemanticIndex.human_attribute_name(:llm_model_id),
         caption: I18n.t("admin.semantic_indexes.form.model_caption"),
         required: true,
         autocomplete_options: {
           decorated: true,
+          disabled: model.indexing?,
           inputValue: selected_model_id,
           append_to: "##{LlmConnections::SemanticIndexes::DialogComponent::DIALOG_ID}",
-          data: { test_selector: "llm-semantic-index--model" }
+          data: { test_selector: "llm-semantic-index--model" },
+          **refresh_on_change
         }
       ) do |list|
         model_options.each do |option|
           list.option(label: option_label(option),
-                      value: option.model_id,
-                      selected: selected_model_id == option.model_id)
+                      value: option.model.id,
+                      selected: selected_model_id == option.model.id)
         end
       end
     end
 
-    def selected_model_id = model.model_id
+    # An indexed Semantic Index keeps its numbers, so picking another model has
+    # nothing to fill in.
+    def refresh_on_change
+      locked ? {} : { hiddenFieldAction: "change->refresh-on-form-changes#triggerTurboStream" }
+    end
+
+    def selected_model_id = model.llm_model_id
 
     def option_label(option)
-      return option.model_id if option.qualifies
+      return option.model.external_id if option.qualifies
 
-      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model_id)
+      I18n.t("admin.semantic_indexes.form.option_unqualified", model: option.model.external_id)
     end
   end
 end

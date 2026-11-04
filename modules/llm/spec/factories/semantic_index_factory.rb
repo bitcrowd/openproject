@@ -29,9 +29,18 @@
 
 FactoryBot.define do
   factory :semantic_index do
+    transient do
+      model_identifier { "bge-m3" }
+    end
+
     sequence(:title) { |n| "Semantic index #{n}" }
     description { nil }
-    model_id { "bge-m3" }
+    llm_model do
+      connection = LlmConnection.active.first || create(:llm_connection)
+
+      connection.models.find_by(external_id: model_identifier) ||
+        create(:llm_model, llm_connection: connection, external_id: model_identifier)
+    end
     embedding_vector_dimensions { 1024 }
     context_token_length { 8192 }
   end

@@ -29,8 +29,17 @@
 
 FactoryBot.define do
   factory :llm_feature_binding do
+    transient do
+      model_identifier { nil }
+    end
+
     llm_connection
     feature_key { "description_assistant" }
-    model_id { nil }
+    llm_model do
+      if model_identifier
+        llm_connection.models.find_by(external_id: model_identifier) ||
+          create(:llm_model, llm_connection:, external_id: model_identifier)
+      end
+    end
   end
 end

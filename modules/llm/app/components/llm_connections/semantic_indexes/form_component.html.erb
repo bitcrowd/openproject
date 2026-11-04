@@ -26,9 +26,9 @@ See COPYRIGHT and LICENSE files for more details.
 
 ++#%>
 
-<%= component_wrapper do %>
+<%= component_wrapper(data: wrapper_data) do %>
   <% if locked? %>
-    <%= render(Primer::Alpha::Banner.new(scheme: :warning, icon: :lock, mb: 3)) { t("admin.semantic_indexes.form.locked_once_indexed") } %>
+    <%= render(Primer::Alpha::Banner.new(scheme: :warning, icon: :alert, mb: 3)) { banner_text } %>
   <% end %>
 
   <%=
@@ -38,9 +38,9 @@ See COPYRIGHT and LICENSE files for more details.
       scope: :semantic_index,
       url: form_url,
       method: http_method,
-      data: { turbo: true }
+      data: { turbo: true, refresh_on_form_changes_target: "form" }
     ) do |f|
-      render(::SemanticIndexes::Form.new(f, model_options:, locked: locked?))
+      render(::SemanticIndexes::Form.new(f, model_options:, locked: locked?, refreshed:))
     end
   %>
 <% end %>

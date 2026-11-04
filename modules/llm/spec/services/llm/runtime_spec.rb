@@ -81,16 +81,16 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
 
     it "prefers the feature binding over the connection default" do
       connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b"))
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "bge-m3")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_identifier: "bge-m3")
 
       expect(resolution.model_id).to eq("bge-m3")
     end
 
     context "with a per-item override" do
-      let(:override) { "qwen3.6-27b" }
+      let(:override) { connection.models.find_by!(external_id: "qwen3.6-27b").id }
 
       it "wins over the binding" do
-        create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "bge-m3")
+        create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_identifier: "bge-m3")
 
         expect(resolution.model_id).to eq("qwen3.6-27b")
       end
@@ -98,26 +98,47 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
       # semantic_search's vectors were written with the index's model; a different
       # one at query time is silently wrong answers, not a preference.
       it "is ignored by a feature that is not overridable" do
-        semantic_index = create(:semantic_index, state: "ready", model_id: "bge-m3", embedding_vector_dimensions: 3)
+        semantic_index = create(:semantic_index, state: "ready", model_identifier: "bge-m3", embedding_vector_dimensions: 3)
         create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search",
                                      semantic_index:)
         create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
                                         state: "supported", source: "admin")
 
-        resolution = described_class.for(:semantic_search, override: "qwen3.6-27b")
+        resolution = described_class.for(:semantic_search, override:)
 
         expect(resolution.model_id).to eq("bge-m3")
       end
     end
 
+    # The stored vectors were written with the index's model, so anything else
+    # bound to the feature must not decide what a query embeds with.
+    it "takes the model of the active semantic index" do
+      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3", capability: "embeddings",
+                                      state: "supported", source: "admin")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search",
+                                   model_identifier: "qwen3.6-27b",
+                                   semantic_index: create(:semantic_index, model_identifier: "bge-m3"))
+
+      expect(described_class.for(:semantic_search).model_id).to eq("bge-m3")
+    end
+
     # Substituting the default here would silently change the output of a
     # transform an administrator configured deliberately.
     context "when the chosen model is gone from the catalogue" do
-      let(:override) { "vanished-model" }
+      let(:override) { LlmModel.maximum(:id).to_i + 1 }
 
       before { connection.update!(default_chat_model: connection.models.find_by(external_id: "qwen3.6-27b")) }
 
       it "fails closed rather than falling back" do
+        expect(resolution.status).to eq(:model_missing)
+        expect(resolution.model_id).to be_nil
+      end
+    end
+
+    context "when the chosen model has been withdrawn" do
+      let(:override) { create(:llm_model, :withdrawn, llm_connection: connection, external_id: "vanished-model").id }
+
+      it "fails closed and names it" do
         expect(resolution.status).to eq(:model_missing)
         expect(resolution.model_id).to eq("vanished-model")
       end
@@ -129,7 +150,8 @@ RSpec.describe Llm::Runtime, with_flag: { llm_connection: true, semantic_search:
     let!(:connection) { create(:llm_connection, :with_models) }
 
     before do
-      semantic_index = create(:semantic_index, state: "ready", model_id: "qwen3.6-27b", embedding_vector_dimensions: 3)
+      semantic_index = create(:semantic_index, state: "ready", model_identifier: "qwen3.6-27b",
+                                               embedding_vector_dimensions: 3)
       create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search", semantic_index:)
     end
 

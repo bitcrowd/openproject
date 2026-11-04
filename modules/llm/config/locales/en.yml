@@ -20,11 +20,12 @@ en:
       llm_feature_binding:
         feature_key: "Feature"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
-        model: "Model"
+        llm_model: "Model"
         semantic_index: "Semantic Index"
       llm_model:
         admin_context_window: "Context window"
         display_name: "Display name"
+        embedding_vector_dimensions: "Dimensions"
         # human_attribute_name strips the _id suffix, so the key omits it.
         external: "Model name"
       semantic_index:
@@ -33,7 +34,7 @@ en:
         embedding_vector_dimensions: "Dimensions"
         llm_feature_bindings: "Feature configuration"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
-        model: "Model"
+        llm_model: "Model"
         state: "Status"
         title: "Display name"
     errors:
@@ -69,7 +70,7 @@ en:
           attributes:
             feature_key:
               not_registered: "does not belong to a known AI feature."
-            model_id:
+            llm_model_id:
               not_available: "is not offered by the configured LLM server."
             semantic_index:
               not_for_chat_feature: "only applies to features that create embeddings."
@@ -82,7 +83,8 @@ en:
             base:
               active: "The semantic index is active. Activate another semantic index first."
               locked_while_indexing: "cannot be changed while it is being indexed."
-            model_id:
+            llm_model_id:
+              locked_while_indexing: "cannot be changed while the semantic index is being indexed."
               not_offered: "is not an embedding model offered by the configured LLM server."
           locked_once_indexed: "cannot be changed once the semantic index has been indexed."
   admin:
@@ -110,7 +112,8 @@ en:
       form:
         context_token_length_caption: "Maximum number of tokens embedded per work package."
         embedding_vector_dimensions_caption: "How many numbers each vector has."
-        locked_once_indexed: "This semantic index has been indexed. Model, context length and dimensions can't be changed. Create a new semantic index to use different parameters."
+        locked_once_indexed: "This semantic index has been indexed, so its context length and dimensions can't be changed. Only use a model compatible with %{model}, context length %{context_token_length} and dimensions %{embedding_vector_dimensions}."
+        locked_while_indexing: "This semantic index is being indexed, so its model, context length and dimensions can't be changed."
         model_caption: "Only models known to create embeddings are offered."
         option_unqualified: "%{model} (no longer eligible)"
       indexing:
@@ -122,6 +125,7 @@ en:
           no_connection: "No active LLM connection is configured."
           pgvector_missing: "The pgvector extension is not installed. Install it and run the migrations again to start indexing."
         progress: "%{percentage}% done"
+        unexpected_dimensions: "The server returned vectors with %{returned} dimensions instead of the %{expected} this semantic index asks for."
       menu:
         delete: "Delete"
         locked_while_active: "Activate another semantic index first"
@@ -227,8 +231,8 @@ en:
         success: "The default models have been saved."
       destroy:
         description: "The model will no longer be offered to AI features."
-        description_bound: "This model is currently used by %{features}. Those features will stop working until another model is selected."
         heading: "Remove %{model}?"
+        in_use: "This model can't be deleted while it's in use: %{uses}"
         success: "%{model} has been removed."
         title: "Remove model"
       edit:
@@ -237,6 +241,8 @@ en:
         context_window: "Context window"
         context_window_caption: "How many tokens this model accepts. Leave blank if you do not know."
         context_window_known: "Leave blank to use %{value}, %{source}."
+        dimensions_caption: "How many numbers each vector has. Leave blank if you do not know."
+        dimensions_known: "Leave blank to use %{value}, measured when the model's capabilities were checked."
         display_name_caption: "An optional friendly name shown instead of the model id."
         external_id_caption: "The model name exactly as the server expects it."
         model_type: "Model type"
@@ -254,6 +260,7 @@ en:
         context_window: "Context window"
         description: "Reported by the server on %{fetched_at}."
         description_unfetched: "The server has not returned a model list yet. Refresh the models once it is reachable."
+        dimensions: "Dimensions"
         filter_label: "Filter models"
         identifier: "Model"
         kind: "Type"
@@ -274,6 +281,8 @@ en:
         success: "The model list has been refreshed."
       update:
         success: "%{model} has been updated."
+      uses:
+        semantic_index: "Semantic index \"%{title}\""
   attributes:
     semantic_similarity: "Similarity"
   label_search_by_meaning: "Search by meaning"

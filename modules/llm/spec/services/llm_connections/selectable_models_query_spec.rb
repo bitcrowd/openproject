@@ -30,12 +30,12 @@
 require "spec_helper"
 
 RSpec.describe LlmConnections::SelectableModelsQuery do
-  subject(:options) { described_class.new(connection, feature, bound_model_id:).call }
+  subject(:options) { described_class.new(connection, feature, bound_model:).call }
 
   let(:connection) { create(:llm_connection, :with_models) }
   let(:feature) { OpenProject::Llm::Features[feature_key] }
   let(:feature_key) { :spec_only_vision_feature }
-  let(:bound_model_id) { nil }
+  let(:bound_model) { nil }
 
   before { OpenProject::Llm::Features.register(feature_key, kind: :chat, requires: %i[vision]) }
 
@@ -46,7 +46,7 @@ RSpec.describe LlmConnections::SelectableModelsQuery do
   end
 
   it "offers every chat model while nothing rules one out" do
-    expect(options.map(&:model_id)).to contain_exactly("qwen3.6-27b", "bge-m3")
+    expect(options.map { it.model.external_id }).to contain_exactly("qwen3.6-27b", "bge-m3")
   end
 
   # Llm::Runtime resolves such a model as :incapable, so picking it could
@@ -54,17 +54,17 @@ RSpec.describe LlmConnections::SelectableModelsQuery do
   it "leaves out a model known to lack a required capability" do
     record_verdict("qwen3.6-27b", "unsupported")
 
-    expect(options.map(&:model_id)).to contain_exactly("bge-m3")
+    expect(options.map { it.model.external_id }).to contain_exactly("bge-m3")
   end
 
   it "keeps offering a model whose capability could not be determined" do
     record_verdict("qwen3.6-27b", "unknown")
 
-    expect(options.map(&:model_id)).to contain_exactly("qwen3.6-27b", "bge-m3")
+    expect(options.map { it.model.external_id }).to contain_exactly("qwen3.6-27b", "bge-m3")
   end
 
   describe "#models_left_out?" do
-    subject(:query) { described_class.new(connection, feature, bound_model_id:) }
+    subject(:query) { described_class.new(connection, feature, bound_model:) }
 
     it "is false while nothing rules a model out" do
       expect(query).not_to be_models_left_out
@@ -77,7 +77,7 @@ RSpec.describe LlmConnections::SelectableModelsQuery do
     end
 
     context "when the only ruled out model is the one the feature is bound to" do
-      let(:bound_model_id) { "qwen3.6-27b" }
+      let(:bound_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
 
       it "is false, because that model stays listed" do
         record_verdict("qwen3.6-27b", "unsupported")
@@ -94,14 +94,14 @@ RSpec.describe LlmConnections::SelectableModelsQuery do
   end
 
   context "when the feature is bound to the ruled out model" do
-    let(:bound_model_id) { "qwen3.6-27b" }
+    let(:bound_model) { connection.models.find_by!(external_id: "qwen3.6-27b") }
 
     it "keeps it listed, marked as no longer qualifying" do
       record_verdict("qwen3.6-27b", "unsupported")
 
       expect(options).to contain_exactly(
-        described_class::Option.new(model_id: "bge-m3", qualifies: true),
-        described_class::Option.new(model_id: "qwen3.6-27b", qualifies: false)
+        described_class::Option.new(model: connection.models.find_by!(external_id: "bge-m3"), qualifies: true),
+        described_class::Option.new(model: bound_model, qualifies: false)
       )
     end
   end

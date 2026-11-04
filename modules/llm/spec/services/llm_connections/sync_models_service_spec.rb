@@ -92,7 +92,8 @@ RSpec.describe LlmConnections::SyncModelsService, :llm_server_helpers, :webmock 
     end
 
     it "lets go of a feature bound to a model the previous server offered" do
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "qwen3.6-27b")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                   model_identifier: "qwen3.6-27b")
       mock_llm_models_response("https://elsewhere.example/v1", response_code: 405)
 
       service.call
@@ -101,16 +102,23 @@ RSpec.describe LlmConnections::SyncModelsService, :llm_server_helpers, :webmock 
     end
 
     it "keeps the binding that points at the active Semantic Index" do
-      semantic_index = SemanticIndex.new(title: "Index", model_id: "bge-m3", embedding_vector_dimensions: 1024,
-                                         context_token_length: 8192, state: :ready)
-      semantic_index.save!(validate: false)
-      binding = connection.feature_bindings.create!(feature_key: "semantic_search", model_id: "qwen3.6-27b",
-                                                    semantic_index:)
+      semantic_index = create(:semantic_index, state: :ready)
+      binding = connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:)
       mock_llm_models_response("https://elsewhere.example/v1", response_code: 405)
 
       service.call
 
       expect(binding.reload.semantic_index).to eq(semantic_index)
+    end
+
+    it "withdraws a model a semantic index uses instead of deleting it" do
+      semantic_index = create(:semantic_index, state: :ready)
+      mock_llm_models_response("https://elsewhere.example/v1", response_code: 405)
+
+      service.call
+
+      expect(semantic_index.reload.llm_model).to have_attributes(external_id: "bge-m3", active: false)
+      expect(connection.models.discovered.pluck(:external_id)).to eq(["bge-m3"])
     end
 
     # on_delete: :nullify on the two default_*_model_id foreign keys.
