@@ -32,6 +32,7 @@ class SemanticIndex < ApplicationRecord
 
   INDEXABLE_STATES = %w[not_indexed failed ready].freeze
 
+  belongs_to :llm_model
   has_many :llm_feature_bindings, dependent: :restrict_with_error
 
   enum :state, {
@@ -42,7 +43,7 @@ class SemanticIndex < ApplicationRecord
   }
 
   validates :title, presence: true
-  validates :model_id, presence: true, length: { maximum: LlmModel::MAX_EXTERNAL_ID_LENGTH }
+  validates :llm_model_id, presence: true
   validates :embedding_vector_dimensions,
             numericality: { only_integer: true, greater_than: 0,
                             less_than_or_equal_to: WorkPackageEmbedding::DIMENSIONS }

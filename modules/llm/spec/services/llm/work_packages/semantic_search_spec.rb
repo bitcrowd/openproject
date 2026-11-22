@@ -33,14 +33,14 @@ require_module_spec_helper
 RSpec.describe Llm::WorkPackages::SemanticSearch,
                with_flag: { llm_connection: true, semantic_search: true },
                with_settings: { llm_features_enabled: true } do
-  let(:connection) { create(:llm_connection, :with_models) }
+  let!(:connection) { create(:llm_connection, :with_models) }
   let(:session_double) { instance_double(Llm::Session) }
   let(:embedding_double) { instance_double(RubyLLM::Embedding, vectors: [0.1, 0.2, 0.3]) }
 
   # A binding may only point at a ready index, so later state changes have to
   # happen behind the model's back.
   def activate_semantic_index
-    semantic_index = create(:semantic_index, state: "ready", model_id: "bge-m3",
+    semantic_index = create(:semantic_index, state: "ready", model_identifier: "bge-m3",
                                              embedding_vector_dimensions: 3)
     create(:llm_feature_binding, llm_connection: connection, feature_key: "semantic_search",
                                  semantic_index:)

@@ -42,6 +42,7 @@ class LlmModel < ApplicationRecord
   MAX_EXTERNAL_ID_LENGTH = 512
 
   belongs_to :llm_connection
+  has_many :semantic_indexes, dependent: :restrict_with_error
 
   validates :external_id,
             presence: true,
@@ -56,6 +57,12 @@ class LlmModel < ApplicationRecord
   # display_name is an administrator's; the name the server or the registry
   # reported is metadata, so a refresh updates one and never the other.
   def name = display_name.presence || raw_metadata["name"].presence || external_id
+
+  def in_use? = uses.any?
+
+  def uses
+    semantic_indexes.pluck(:title).map { |title| I18n.t("admin.llm_models.uses.semantic_index", title:) }
+  end
 
   def connection_defaults
     CONNECTION_DEFAULTS.select { |attribute| llm_connection.public_send(attribute) == id }

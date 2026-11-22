@@ -39,7 +39,7 @@ en:
         embedding_vector_dimensions: "Dimensions"
         llm_feature_bindings: "Feature configuration"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
-        model: "Model"
+        llm_model: "Model"
         state: "Status"
         title: "Display name"
     errors:
@@ -84,6 +84,7 @@ en:
             base:
               configured_from_env: "The environment configures this model as a default, so it cannot be removed or renamed here."
               discovered: "Only models entered by hand can be removed. The LLM server manages the models it reports."
+              in_use: "%{model} cannot be removed while it is in use: %{uses}."
             external_id:
               conflicting_capabilities: "has capability assertions stored under it that conflict with those of this model."
         semantic_index:
@@ -91,7 +92,7 @@ en:
             base:
               active: "The semantic index is active. Activate another semantic index first."
               locked_while_indexing: "cannot be changed while it is being indexed."
-            model_id:
+            llm_model_id:
               not_offered: "is not an embedding model offered by the configured LLM server."
   admin:
     semantic_indexes:
@@ -232,6 +233,8 @@ en:
         description: "The model will no longer be offered to AI features."
         description_bound: "This model is currently used by %{features}. Those features will stop working until another model is selected."
         heading: "Remove %{model}?"
+        in_use: "%{model} cannot be removed while it is in use: %{uses}."
+        in_use_heading: "Model in use"
         success: "%{model} has been removed."
         title: "Remove model"
       edit:
@@ -275,6 +278,8 @@ en:
         success: "The model list has been refreshed."
       update:
         success: "%{model} has been updated."
+      uses:
+        semantic_index: "Semantic index \"%{title}\""
   attributes:
     semantic_similarity: "Similarity"
   label_search_by_meaning: "Search by meaning"

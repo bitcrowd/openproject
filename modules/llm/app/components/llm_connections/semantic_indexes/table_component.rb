@@ -32,7 +32,7 @@ module LlmConnections
     class TableComponent < OpPrimer::BorderBoxTableComponent
       options :active_semantic_index_id
 
-      columns :title, :model_id, :context_token_length, :embedding_vector_dimensions, :status
+      columns :title, :llm_model, :context_token_length, :embedding_vector_dimensions, :status
 
       main_column :title
 
@@ -55,7 +55,7 @@ module LlmConnections
       def headers
         [
           [:title, { caption: SemanticIndex.human_attribute_name(:title) }],
-          [:model_id, { caption: SemanticIndex.human_attribute_name(:model_id) }],
+          [:llm_model, { caption: SemanticIndex.human_attribute_name(:llm_model_id) }],
           [:context_token_length, { caption: SemanticIndex.human_attribute_name(:context_token_length) }],
           [:embedding_vector_dimensions, { caption: SemanticIndex.human_attribute_name(:embedding_vector_dimensions) }],
           [:status, { caption: SemanticIndex.human_attribute_name(:state) }]

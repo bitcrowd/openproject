@@ -36,7 +36,7 @@ module LlmConnections
       POLL_INTERVAL_MS = 2000
 
       def semantic_indexes
-        @semantic_indexes ||= options.fetch(:semantic_indexes) { SemanticIndex.order(:created_at) }
+        @semantic_indexes ||= options.fetch(:semantic_indexes) { SemanticIndex.includes(:llm_model).order(:created_at) }
       end
 
       def rows

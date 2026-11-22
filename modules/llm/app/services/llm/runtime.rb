@@ -145,8 +145,10 @@ module Llm
     def binding_model_id
       return binding&.model_id.presence unless feature.embedding?
 
-      binding&.semantic_index&.model_id
+      active_index_model&.external_id
     end
+
+    def active_index_model = binding&.semantic_index&.llm_model
 
     def connection_default
       connection.default_model_for(feature)&.external_id

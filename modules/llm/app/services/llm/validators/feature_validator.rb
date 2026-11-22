@@ -77,12 +77,10 @@ module Llm
       def active_semantic_index_intact
         semantic_index = subject.feature_bindings.find_by(feature_key: "semantic_search")&.semantic_index
 
-        if semantic_index.nil? || subject.available_model_ids.include?(semantic_index.model_id)
-          return pass_check(:active_semantic_index_intact)
-        end
+        return pass_check(:active_semantic_index_intact) if semantic_index.nil? || semantic_index.llm_model.active?
 
         fail_check(:active_semantic_index_intact, :semantic_index_model_missing,
-                   context: { title: semantic_index.title, model: semantic_index.model_id })
+                   context: { title: semantic_index.title, model: semantic_index.llm_model.external_id })
       end
 
       def resolutions

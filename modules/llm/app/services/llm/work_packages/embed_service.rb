@@ -41,7 +41,7 @@ module Llm
         raise Llm::Errors::NotReady, :no_connection unless LlmConnection.available?
 
         vectors = session.embed(texts,
-                                model: semantic_index.model_id,
+                                model: semantic_index.llm_model.external_id,
                                 dimensions: semantic_index.embedding_vector_dimensions).vectors
 
         store(vectors)

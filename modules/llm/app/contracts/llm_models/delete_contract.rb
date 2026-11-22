@@ -34,6 +34,7 @@ module LlmModels
 
     validate :manual_only
     validate :not_configured_from_env
+    validate :not_in_use
 
     private
 
@@ -43,6 +44,10 @@ module LlmModels
 
     def not_configured_from_env
       errors.add :base, :configured_from_env if env_named_default?
+    end
+
+    def not_in_use
+      errors.add :base, :in_use, model: model.external_id, uses: model.uses.to_sentence if model.in_use?
     end
   end
 end

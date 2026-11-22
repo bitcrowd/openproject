@@ -37,7 +37,7 @@ RSpec.describe Llm::WorkPackages::EmbedService,
 
   let(:work_package) { create(:work_package, subject: "Fix bug") }
   let(:semantic_index) do
-    create(:semantic_index, model_id: "bge-m3", embedding_vector_dimensions: 3, context_token_length: 512)
+    create(:semantic_index, model_identifier: "bge-m3", embedding_vector_dimensions: 3, context_token_length: 512)
   end
   let(:session_double) { instance_double(Llm::Session) }
   let(:embedding_double) { instance_double(RubyLLM::Embedding, vectors: [[1.0, 2.0, 3.0]]) }
@@ -55,9 +55,7 @@ RSpec.describe Llm::WorkPackages::EmbedService,
   end
 
   context "when no connection is configured" do
-    before do
-      connection.destroy!
-    end
+    before { allow(LlmConnection).to receive(:available?).and_return(false) }
 
     it "raises NotReady" do
       expect { service.call }.to raise_error(Llm::Errors::NotReady, /no_connection/)

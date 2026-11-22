@@ -667,6 +667,16 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(connection.reload.default_chat_model).to be_nil
       end
 
+      it "refuses while a semantic index uses it" do
+        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        create(:semantic_index, title: "Docs", llm_model:)
+
+        delete llm_model_path(llm_model)
+
+        expect(flash[:error]).to include("Docs")
+        expect(LlmModel.where(id: llm_model.id)).to exist
+      end
+
       # Discovered models are the server's to add and remove, not the administrator's.
       it "refuses to remove a discovered model" do
         llm_model = create(:llm_model, llm_connection: connection, external_id: "from-server")
@@ -769,6 +779,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         expect(response.body).to include("no longer be offered to AI features")
         expect(response.body).not_to include("stop working until another model is selected")
+        expect(response.body).to include(%(action="#{llm_model_path(llm_model)}"))
       end
 
       it "labels the confirm button Remove model rather than Delete" do
@@ -785,6 +796,17 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         expect(response).to have_http_status(:ok)
         expect(response.body).to include("Text assistant")
+      end
+
+      it "names a semantic index that keeps the model from being deleted" do
+        create(:semantic_index, title: "Docs", llm_model:)
+
+        get delete_dialog_llm_model_path(llm_model), headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+        expect(response).to have_http_status(:ok)
+        expect(CGI.unescapeHTML(response.body))
+          .to include("Model in use", "hand-typed cannot be removed while it is in use: Semantic index \"Docs\".")
+        expect(response.body).not_to include(%(action="#{llm_model_path(llm_model)}"))
       end
     end
 

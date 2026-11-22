@@ -82,7 +82,8 @@ module LlmConnections
     attr_reader :feature, :connection, :binding
 
     def selectable_models
-      @selectable_models ||= SelectableModelsQuery.new(connection, feature, bound_model_id: binding&.model_id)
+      @selectable_models ||= SelectableModelsQuery.new(connection, feature,
+                                                       bound_model: connection.models.find_by(external_id: binding&.model_id))
     end
 
     def default_model

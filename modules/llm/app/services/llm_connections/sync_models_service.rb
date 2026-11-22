@@ -156,37 +156,26 @@ module LlmConnections
       forget_the_previous_deployment
     end
 
-    # Only a successful fetch records the fingerprint (see
-    # +connection_attributes+), so a failed refresh leaves the list stale.
-    #
-    # Discovered rows are deleted rather than switched off. Withdrawal is for a
-    # model the same server stopped offering, where a verdict pointing at it
-    # still names something real; here the server itself is gone, and a list of
-    # another deployment's models is not a catalogue but a leftover. Manual
-    # entries stay: an administrator typed those, and a server change does not
-    # un-type them.
-    #
-    # The two default_*_model_id columns reference llm_models with
-    # on_delete: :nullify, so the database clears them as the rows go. A feature
-    # bound to one is released here, because the binding names a string and
-    # would otherwise silently re-attach to whatever the new server happens to
-    # call by the same name. A locked binding stays, because it records what an
-    # existing index was written with. Administrator assertions survive, as they
-    # do on an ordinary refresh: they are statements about a model, not about a
-    # server.
     def forget_the_previous_deployment
-      ActiveRecord::Base.transaction do
-        discard_discovered_models(connection.models.discovered.pluck(:external_id))
-      end
+      ActiveRecord::Base.transaction { discard_discovered_models }
 
       connection.reload
     end
 
-    def discard_discovered_models(discarded)
-      connection.models.discovered.delete_all
+    def discard_discovered_models
+      release_discovered_models
+      discovered_models.where(id: indexed_model_ids).update_all(active: false)
+      discovered_models.where.not(id: indexed_model_ids).delete_all
       connection.capability_verdicts.where.not(source: "admin").delete_all
-      connection.feature_bindings.where(model_id: discarded, semantic_index_id: nil).delete_all
     end
+
+    def release_discovered_models
+      connection.feature_bindings.where(model_id: discovered_models.select(:external_id), semantic_index_id: nil).delete_all
+    end
+
+    def discovered_models = connection.models.discovered
+
+    def indexed_model_ids = SemanticIndex.select(:llm_model_id)
 
     # The administrator's context-window override is theirs, and a routine
     # refresh must not silently discard it.

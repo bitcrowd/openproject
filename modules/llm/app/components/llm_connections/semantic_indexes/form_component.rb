@@ -53,7 +53,8 @@ module LlmConnections
         return if locked?
 
         LlmConnections::SelectableModelsQuery
-          .new(connection, OpenProject::Llm::Features[:semantic_search], bound_model_id: model.model_id_in_database)
+          .new(connection, OpenProject::Llm::Features[:semantic_search],
+               bound_model: LlmModel.find_by(id: model.llm_model_id_in_database))
           .call
       end
     end

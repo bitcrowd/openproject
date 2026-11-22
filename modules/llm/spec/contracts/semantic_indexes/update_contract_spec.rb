@@ -61,10 +61,13 @@ RSpec.describe SemanticIndexes::UpdateContract do
     it_behaves_like "contract is valid"
   end
 
-  context "when changing the model_id" do
-    before { semantic_index.model_id = "other-model" }
+  context "when changing the llm_model_id" do
+    before do
+      semantic_index.llm_model_id =
+        create(:llm_model, llm_connection: semantic_index.llm_model.llm_connection, external_id: "other-model").id
+    end
 
-    it_behaves_like "contract is invalid", model_id: :error_readonly
+    it_behaves_like "contract is invalid", llm_model_id: :error_readonly
   end
 
   context "when changing the embedding_vector_dimensions" do

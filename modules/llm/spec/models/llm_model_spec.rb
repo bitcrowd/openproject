@@ -114,6 +114,20 @@ RSpec.describe LlmModel do
     end
   end
 
+  describe "#uses" do
+    it "is empty while nothing uses the model" do
+      expect(llm_model.uses).to be_empty
+      expect(llm_model).not_to be_in_use
+    end
+
+    it "names a semantic index" do
+      create(:semantic_index, title: "Docs", llm_model:)
+
+      expect(llm_model.reload).to be_in_use
+      expect(llm_model.uses).to eq(["Semantic index \"Docs\""])
+    end
+  end
+
   describe "#model_type" do
     it "is chat while nothing says the model embeds" do
       expect(llm_model).not_to be_embedding
