@@ -42,6 +42,7 @@ class LlmModel < ApplicationRecord
   MAX_EXTERNAL_ID_LENGTH = 512
 
   belongs_to :llm_connection
+  has_many :feature_bindings, class_name: "LlmFeatureBinding", dependent: :restrict_with_error
   has_many :semantic_indexes, dependent: :restrict_with_error
 
   validates :external_id,
@@ -61,7 +62,10 @@ class LlmModel < ApplicationRecord
   def in_use? = uses.any?
 
   def uses
-    semantic_indexes.pluck(:title).map { |title| I18n.t("admin.llm_models.uses.semantic_index", title:) }
+    indexes = semantic_indexes.pluck(:title).map { |title| I18n.t("admin.llm_models.uses.semantic_index", title:) }
+    features = feature_bindings.map { |binding| binding.feature&.label || binding.feature_key }
+
+    indexes + features
   end
 
   def connection_defaults

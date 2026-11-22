@@ -51,16 +51,13 @@ module LlmModels
       super
     end
 
-    # Everything that points at a model does so by its identifier string, so a
-    # rename has to carry them along or it silently orphans them. A locked
-    # binding follows too: renaming corrects the name, it does not change the
-    # model. The connection defaults reference the row and follow on their own.
+    # Verdicts point at a model by its identifier string, so a rename has to
+    # carry them along or it silently orphans them.
     def cascade_rename(llm_model)
       previous, current = llm_model.saved_change_to_external_id
       return if previous.blank?
 
       connection.capability_verdicts.where(model_id: previous).update_all(model_id: current)
-      connection.feature_bindings.where(model_id: previous).update_all(model_id: current)
       connection.update_columns(env_provisioned_at: nil, env_fingerprint: nil) if llm_model.connection_defaults.any?
     end
   end

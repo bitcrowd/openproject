@@ -43,8 +43,8 @@ module LlmConnections
 
     form do |f|
       f.autocompleter(
-        name: :model_id,
-        label: LlmFeatureBinding.human_attribute_name(:model_id),
+        name: :llm_model_id,
+        label: LlmFeatureBinding.human_attribute_name(:llm_model_id),
         caption: model_caption,
         autocomplete_options: {
           decorated: true,
@@ -57,8 +57,8 @@ module LlmConnections
 
         model_options.each do |option|
           list.option(label: option_label(option),
-                      value: option.model.external_id,
-                      selected: selected_model_id == option.model.external_id)
+                      value: option.model.id,
+                      selected: selected_model_id == option.model.id)
         end
       end
 

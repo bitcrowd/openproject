@@ -47,7 +47,7 @@ module LlmConnections
     end
 
     def bound_features
-      connection.feature_bindings.filter_map { |binding| binding.feature&.label if binding.model_id.present? }
+      connection.feature_bindings.filter_map { |binding| binding.feature&.label if binding.llm_model_id.present? }
     end
   end
 end

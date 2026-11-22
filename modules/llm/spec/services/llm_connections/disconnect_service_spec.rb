@@ -36,7 +36,8 @@ RSpec.describe LlmConnections::DisconnectService do
   let_it_be(:connection, reload: true) { create(:llm_connection, :with_models, api_key: "sk-test") }
 
   before do
-    create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "qwen3.6-27b")
+    create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                 model_identifier: "qwen3.6-27b")
     Setting.llm_features_enabled = true
     allow(Llm::HealthCheckJob).to receive(:toggle_cron_job)
   end
@@ -48,7 +49,7 @@ RSpec.describe LlmConnections::DisconnectService do
     expect(connection.api_key).to be_blank
     expect(connection.base_url).to eq("https://example.com/v1")
     expect(connection.models.count).to eq(2)
-    expect(connection.feature_bindings.pluck(:model_id)).to eq(["qwen3.6-27b"])
+    expect(connection.feature_bindings.map { it.llm_model.external_id }).to eq(["qwen3.6-27b"])
     expect(Setting.llm_features_enabled?).to be(false)
   end
 

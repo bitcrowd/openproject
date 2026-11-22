@@ -92,7 +92,8 @@ RSpec.describe LlmConnections::SyncModelsService, :llm_server_helpers, :webmock 
     end
 
     it "lets go of a feature bound to a model the previous server offered" do
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "qwen3.6-27b")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                   model_identifier: "qwen3.6-27b")
       mock_llm_models_response("https://elsewhere.example/v1", response_code: 405)
 
       service.call
@@ -100,15 +101,15 @@ RSpec.describe LlmConnections::SyncModelsService, :llm_server_helpers, :webmock 
       expect(connection.feature_bindings).to be_empty
     end
 
-    it "keeps the binding that points at the active Semantic Index" do
+    it "keeps the binding that points at the active Semantic Index and lets go of its model" do
       semantic_index = create(:semantic_index, state: :ready)
-      binding = connection.feature_bindings.create!(feature_key: "semantic_search", model_id: "qwen3.6-27b",
-                                                    semantic_index:)
+      llm_model = connection.models.find_by!(external_id: "qwen3.6-27b")
+      binding = connection.feature_bindings.create!(feature_key: "semantic_search", semantic_index:, llm_model:)
       mock_llm_models_response("https://elsewhere.example/v1", response_code: 405)
 
       service.call
 
-      expect(binding.reload.semantic_index).to eq(semantic_index)
+      expect(binding.reload).to have_attributes(semantic_index:, llm_model: nil)
     end
 
     it "withdraws a model a semantic index uses instead of deleting it" do

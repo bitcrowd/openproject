@@ -21,7 +21,7 @@
   <% unless feature.embedding? %>
     <% if dangling? %>
       <%= render(Primer::Alpha::Banner.new(scheme: :warning, mb: 2, icon: :alert)) do %>
-        <%= t("admin.llm_feature_bindings.dangling", model: binding.resolved_model_id) %>
+        <%= t("admin.llm_feature_bindings.dangling", model: binding.resolved_model.external_id) %>
       <% end %>
     <% end %>
 
@@ -33,7 +33,7 @@
               inherit_label:,
               feature_key: feature.key,
               models_left_out: models_left_out?,
-              selected_model_id: binding&.model_id
+              selected_model_id: binding&.llm_model_id
             )
           ) %>
     <% end %>

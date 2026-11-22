@@ -20,7 +20,7 @@ en:
       llm_feature_binding:
         feature_key: "Feature"
         # ActiveRecord::Base.human_attribute_name strips the _id suffix.
-        model: "Model"
+        llm_model: "Model"
         semantic_index: "Semantic Index"
       llm_model:
         admin_context_window: "Context window"
@@ -75,7 +75,7 @@ en:
           attributes:
             feature_key:
               not_registered: "does not belong to a known AI feature."
-            model_id:
+            llm_model_id:
               not_available: "is not offered by the configured LLM server."
             semantic_index:
               not_for_chat_feature: "only applies to features that create embeddings."

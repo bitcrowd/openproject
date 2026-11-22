@@ -170,7 +170,9 @@ module LlmConnections
     end
 
     def release_discovered_models
-      connection.feature_bindings.where(model_id: discovered_models.select(:external_id), semantic_index_id: nil).delete_all
+      bindings = connection.feature_bindings.where(llm_model_id: discovered_models.select(:id))
+      bindings.where(semantic_index_id: nil).delete_all
+      bindings.update_all(llm_model_id: nil)
     end
 
     def discovered_models = connection.models.discovered

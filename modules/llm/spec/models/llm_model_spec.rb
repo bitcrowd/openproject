@@ -120,11 +120,19 @@ RSpec.describe LlmModel do
       expect(llm_model).not_to be_in_use
     end
 
-    it "names a semantic index" do
+    it "names a semantic index and a feature" do
       create(:semantic_index, title: "Docs", llm_model:)
+      create(:llm_feature_binding, llm_connection: connection, llm_model:)
 
       expect(llm_model.reload).to be_in_use
-      expect(llm_model.uses).to eq(["Semantic index \"Docs\""])
+      expect(llm_model.uses).to eq(["Semantic index \"Docs\"", "Text assistant"])
+    end
+
+    it "names a feature that is no longer registered by its key" do
+      binding = create(:llm_feature_binding, llm_connection: connection, llm_model:)
+      binding.update_columns(feature_key: "retired_feature")
+
+      expect(llm_model.reload.uses).to eq(["retired_feature"])
     end
   end
 
@@ -175,7 +183,8 @@ RSpec.describe LlmModel do
     let!(:connection) { create(:llm_connection, :with_models, base_url: "https://example.com/v1") }
 
     it "keeps the bound model available and resolves the feature to it" do
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "qwen3.6-27b")
+      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                   model_identifier: "qwen3.6-27b")
 
       resolution = Llm::Runtime.for(:description_assistant)
 

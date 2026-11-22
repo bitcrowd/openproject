@@ -38,15 +38,11 @@ RSpec.describe LlmModels::UpdateService do
   subject(:result) { described_class.new(user: admin, model: llm_model).call(**params) }
 
   describe "renaming" do
-    before do
-      create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3")
-      create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "bge-m3")
-    end
+    before { create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3") }
 
-    it "carries verdicts and bindings over to the new identifier" do
+    it "carries verdicts over to the new identifier" do
       expect(result).to be_success
       expect(connection.capability_verdicts.pluck(:model_id)).to eq(["bge-m3-v2"])
-      expect(connection.feature_bindings.pluck(:model_id)).to eq(["bge-m3-v2"])
     end
 
     it "judges the rename under the connection's advisory lock" do

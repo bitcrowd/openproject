@@ -415,9 +415,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         post llm_models_path, params: { llm_model: { external_id: "qwen3.6-35b-a3b" } }
 
         patch llm_feature_binding_path("description_assistant"),
-              params: { llm_feature_binding: { model_id: "qwen3.6-35b-a3b" } }
+              params: { llm_feature_binding: { llm_model_id: connection.models.find_by!(external_id: "qwen3.6-35b-a3b").id } }
 
-        expect(connection.feature_bindings.find_by(feature_key: "description_assistant").model_id)
+        expect(connection.feature_bindings.find_by(feature_key: "description_assistant").llm_model&.external_id)
           .to eq("qwen3.6-35b-a3b")
       end
     end
@@ -494,9 +494,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         patch llm_model_path(llm_model), params: { llm_model: { model_type: "embedding" } }
 
         patch llm_feature_binding_path("semantic_search"),
-              params: { llm_feature_binding: { model_id: "hand-typed" } }
+              params: { llm_feature_binding: { llm_model_id: connection.models.find_by!(external_id: "hand-typed").id } }
 
-        expect(connection.feature_bindings.find_by(feature_key: "semantic_search").model_id).to eq("hand-typed")
+        expect(connection.feature_bindings.find_by(feature_key: "semantic_search").llm_model&.external_id).to eq("hand-typed")
       end
 
       # Clearing an assertion records nothing rather than recording ignorance as
@@ -667,6 +667,16 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(connection.reload.default_chat_model).to be_nil
       end
 
+      it "refuses while a feature binding uses it" do
+        llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
+        create(:llm_feature_binding, llm_connection: connection, llm_model:)
+
+        delete llm_model_path(llm_model)
+
+        expect(flash[:error]).to include("Text assistant")
+        expect(LlmModel.where(id: llm_model.id)).to exist
+      end
+
       it "refuses while a semantic index uses it" do
         llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
         create(:semantic_index, title: "Docs", llm_model:)
@@ -789,8 +799,9 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(response.body).not_to include('<span class="Button-label">Delete</span>')
       end
 
-      it "offers a confirmation naming the features that would break" do
-        create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant", model_id: "hand-typed")
+      it "names a feature that keeps the model from being deleted" do
+        create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
+                                     model_identifier: "hand-typed")
 
         get delete_dialog_llm_model_path(llm_model), headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
@@ -818,7 +829,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       before do
         connection.update!(default_chat_model: llm_model)
         create(:llm_feature_binding, llm_connection: connection, feature_key: "description_assistant",
-                                     model_id: "qwen/qwen3.6-35b-a3b")
+                                     model_identifier: "qwen/qwen3.6-35b-a3b")
         create(:llm_capability_verdict, llm_connection: connection, model_id: "qwen/qwen3.6-35b-a3b", capability: "embeddings",
                                         state: "unsupported", source: "probe")
       end
@@ -846,7 +857,7 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
         expect(llm_model.reload.external_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
         expect(connection.reload.default_chat_model).to eq(llm_model)
-        expect(connection.feature_bindings.first.model_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
+        expect(connection.feature_bindings.first.llm_model&.external_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
         expect(connection.capability_verdicts.first.model_id).to eq("qwen/qwen3.6-35b-a3b:bf16")
       end
 
