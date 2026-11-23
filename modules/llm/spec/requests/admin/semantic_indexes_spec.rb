@@ -231,10 +231,10 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
         .to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.dialog.edit_title", title: semantic_index.title)))
     end
 
-    it "locks the parameters in the edit dialog" do
+    it "says in the edit dialog that the numbers are fixed" do
       get edit_dialog_semantic_index_path(semantic_index), headers: turbo_headers
 
-      expect(response.body).to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.immutable")))
+      expect(response.body).to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.fixed_parameters")))
     end
 
     it "updates the semantic index" do
@@ -245,13 +245,25 @@ RSpec.describe "Admin semantic indexes", :skip_csrf,
       expect(semantic_index.reload).to have_attributes(title: "Qwen3 production", description: "Production index")
     end
 
+    it "moves the semantic index to another embedding model, keeping its state" do
+      other_model = create(:llm_model, llm_connection: connection, external_id: "bge-m3-elsewhere")
+      connection.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
+                                             state: "supported", source: "probe", checked_at: Time.current)
+      semantic_index.update!(state: "ready")
+
+      patch semantic_index_path(semantic_index), params: { semantic_index: { llm_model_id: other_model.id } }
+
+      expect(response).to redirect_to(llm_feature_bindings_path)
+      expect(semantic_index.reload).to have_attributes(llm_model: other_model, state: "ready")
+    end
+
     it "refuses to change the parameters" do
       patch semantic_index_path(semantic_index),
             params: { semantic_index: { context_token_length: 4096 } },
             headers: turbo_headers
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.body).to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.immutable")))
+      expect(response.body).to include(CGI.escapeHTML(I18n.t("admin.semantic_indexes.form.fixed_parameters")))
       expect(semantic_index.reload.context_token_length).to eq(8192)
     end
 

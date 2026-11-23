@@ -61,13 +61,35 @@ RSpec.describe SemanticIndexes::UpdateContract do
     it_behaves_like "contract is valid"
   end
 
-  context "when changing the llm_model_id" do
+  context "when moving the semantic index to another embedding model" do
+    let(:other_model) { create(:llm_model, llm_connection: connection, external_id: "bge-m3-elsewhere") }
+
     before do
-      semantic_index.llm_model_id =
-        create(:llm_model, llm_connection: semantic_index.llm_model.llm_connection, external_id: "other-model").id
+      connection.capability_verdicts.create!(model_id: other_model.external_id, capability: "embeddings",
+                                             state: "supported", source: "probe", checked_at: Time.current)
+      semantic_index.update!(state:)
+      semantic_index.llm_model_id = other_model.id
     end
 
-    it_behaves_like "contract is invalid", llm_model_id: :error_readonly
+    %w[not_indexed ready failed].each do |allowed_state|
+      context "when it is #{allowed_state}" do
+        let(:state) { allowed_state }
+
+        it_behaves_like "contract is valid"
+      end
+    end
+
+    context "when it is indexing" do
+      let(:state) { "indexing" }
+
+      it_behaves_like "contract is invalid", llm_model_id: :locked_while_indexing
+    end
+  end
+
+  context "when moving the semantic index to a chat model" do
+    before { semantic_index.llm_model_id = connection.models.find_by!(external_id: "qwen3.6-27b").id }
+
+    it_behaves_like "contract is invalid", llm_model_id: :not_offered
   end
 
   context "when changing the embedding_vector_dimensions" do

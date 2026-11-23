@@ -94,6 +94,7 @@ en:
               active: "The semantic index is active. Activate another semantic index first."
               locked_while_indexing: "cannot be changed while it is being indexed."
             llm_model_id:
+              locked_while_indexing: "cannot be changed while the semantic index is being indexed."
               not_offered: "is not an embedding model offered by the configured LLM server."
   admin:
     semantic_indexes:
@@ -120,7 +121,8 @@ en:
       form:
         context_token_length_caption: "Maximum number of tokens embedded per work package."
         embedding_vector_dimensions_caption: "Must match the selected model."
-        immutable: "Model, context length and dimensions can't be changed after creation. Create a new semantic index to use different parameters."
+        fixed_parameters: "Context length and dimensions can't be changed after creation. Only use a model compatible with these parameters."
+        locked_while_indexing: "Model, context length and dimensions can't be changed while the semantic index is being indexed."
         model_caption: "Only models known to create embeddings are offered."
         option_unqualified: "%{model} (no longer eligible)"
       indexing:
