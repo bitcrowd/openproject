@@ -120,12 +120,13 @@ RSpec.describe LlmModel do
       expect(llm_model).not_to be_in_use
     end
 
-    it "names a semantic index and a feature" do
+    it "names a semantic index, a feature and a default" do
       create(:semantic_index, title: "Docs", llm_model:)
       create(:llm_feature_binding, llm_connection: connection, llm_model:)
+      connection.update_columns(default_embedding_model_id: llm_model.id)
 
       expect(llm_model.reload).to be_in_use
-      expect(llm_model.uses).to eq(["Semantic index \"Docs\"", "Text assistant"])
+      expect(llm_model.uses).to eq(["Semantic index \"Docs\"", "Text assistant", "Default embedding model"])
     end
 
     it "names a feature that is no longer registered by its key" do

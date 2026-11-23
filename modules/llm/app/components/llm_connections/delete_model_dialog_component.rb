@@ -39,11 +39,5 @@ module LlmConnections
     def form_arguments
       { action: url_helpers.llm_model_path(llm_model), method: :delete }
     end
-
-    def affected_defaults
-      LlmModel::CONNECTION_DEFAULTS
-        .select { |attribute| llm_model.llm_connection.public_send(attribute) == llm_model.id }
-        .map { |attribute| LlmConnection.human_attribute_name(attribute) }
-    end
   end
 end

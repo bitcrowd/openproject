@@ -36,21 +36,20 @@ RSpec.describe LlmModels::DeleteService do
 
   subject(:result) { described_class.new(user: admin, model: llm_model).call }
 
-  it "removes the model, its verdicts and the defaults that named it" do
+  it "removes the model and its verdicts" do
     create(:llm_capability_verdict, llm_connection: connection, model_id: "bge-m3")
     create(:llm_capability_verdict, llm_connection: connection, model_id: "another")
-    connection.update_columns(default_embedding_model_id: llm_model.id)
 
     expect(result).to be_success
     expect(LlmModel.where(id: llm_model.id)).to be_empty
     expect(connection.capability_verdicts.pluck(:model_id)).to eq(["another"])
-    expect(connection.reload).to have_attributes(default_embedding_model_id: nil, env_provisioned_at: nil)
   end
 
-  it "leaves the environment's claim alone when the model is no default" do
-    result
+  it "refuses while it is a connection default" do
+    connection.update_columns(default_embedding_model_id: llm_model.id)
 
-    expect(connection.reload.env_provisioned_at).to be_present
+    expect(result.errors.symbols_for(:base)).to eq([:in_use])
+    expect(connection.reload.default_embedding_model_id).to eq(llm_model.id)
   end
 
   context "when the model was deleted after it was loaded" do
@@ -86,7 +85,7 @@ RSpec.describe LlmModels::DeleteService do
     end
 
     it "refuses and keeps the default" do
-      expect(result.errors.symbols_for(:base)).to eq([:configured_from_env])
+      expect(result.errors.symbols_for(:base)).to eq(%i[configured_from_env in_use])
       expect(connection.reload.default_chat_model_id).to eq(llm_model.id)
     end
   end

@@ -99,8 +99,6 @@ module LlmConnections
                    data: { test_selector: "llm-model--edit-#{llm_model.id}" })
     end
 
-    # Opens a DangerDialog rather than a browser confirm, so the message can say
-    # which features are bound to the model.
     def delete_link
       icon_link_to(url_helpers.delete_dialog_llm_model_path(llm_model),
                    icon: "icon-delete",

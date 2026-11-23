@@ -231,7 +231,6 @@ en:
         success: "The default models have been saved."
       destroy:
         description: "The model will no longer be offered to AI features."
-        description_bound: "This model is currently used by %{features}. Those features will stop working until another model is selected."
         heading: "Remove %{model}?"
         in_use: "%{model} cannot be removed while it is in use: %{uses}."
         in_use_heading: "Model in use"

@@ -46,12 +46,18 @@ RSpec.describe LlmModels::DeleteContract, :check_errors_i18n do
     include_examples "contract is invalid", base: :discovered
   end
 
+  context "when it is a connection default" do
+    before { connection.update_columns(default_chat_model_id: llm_model.id) }
+
+    include_examples "contract is invalid", base: :in_use
+  end
+
   context "when the environment names the model as a default" do
     before do
       connection.update_columns(default_chat_model_id: llm_model.id, env_provisioned_at: Time.current)
       allow(Setting).to receive(:llm_connection).and_return({ "default_chat_model" => "hand-typed" })
     end
 
-    include_examples "contract is invalid", base: :configured_from_env
+    include_examples "contract is invalid", base: %i[configured_from_env in_use]
   end
 end

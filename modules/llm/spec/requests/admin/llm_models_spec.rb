@@ -656,15 +656,15 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
         expect(LlmModel.where(id: llm_model.id)).to be_empty
       end
 
-      # A rename keeps the defaults pointing at the model; deleting one has
-      # to let go of it, or the connection keeps a default no model answers to.
-      it "lets go of a connection default that named the deleted model" do
+      it "refuses while a connection default uses it" do
         llm_model = create(:llm_model, :manual, llm_connection: connection, external_id: "hand-typed")
         connection.update!(default_chat_model: llm_model)
 
         delete llm_model_path(llm_model)
 
-        expect(connection.reload.default_chat_model).to be_nil
+        expect(flash[:error]).to include("Default chat model")
+        expect(LlmModel.where(id: llm_model.id)).to exist
+        expect(connection.reload.default_chat_model).to eq(llm_model)
       end
 
       it "refuses while a feature binding uses it" do
@@ -774,21 +774,21 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
 
       # Requested by the async-dialog Stimulus controller, which asks for a turbo
       # stream rather than HTML.
-      it "names a connection default as something that would break" do
+      it "names a connection default that keeps the model from being deleted" do
         connection.update!(default_chat_model: llm_model)
 
         get delete_dialog_llm_model_path(llm_model), headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
         expect(response).to have_http_status(:ok)
-        expect(response.body).to include("stop working until another model is selected")
-        expect(response.body).to include(LlmConnection.human_attribute_name(:default_chat_model_id))
+        expect(response.body)
+          .to include("Model in use", "hand-typed cannot be removed while it is in use: Default chat model.")
+        expect(response.body).not_to include(%(action="#{llm_model_path(llm_model)}"))
       end
 
-      it "says only that the model goes when nothing depends on it" do
+      it "offers the deletion when nothing depends on the model" do
         get delete_dialog_llm_model_path(llm_model), headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
         expect(response.body).to include("no longer be offered to AI features")
-        expect(response.body).not_to include("stop working until another model is selected")
         expect(response.body).to include(%(action="#{llm_model_path(llm_model)}"))
       end
 
@@ -974,10 +974,11 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       context "when the environment no longer configures the connection" do
         before { allow(Setting).to receive(:llm_connection).and_return({}) }
 
-        it "ends the environment's hold on the connection when the former default is deleted" do
+        it "refuses to delete the former default while it is in use" do
           delete llm_model_path(env_default)
 
-          expect(connection.reload.env_provisioned_at).to be_nil
+          expect(flash[:error]).to include("Default chat model")
+          expect(LlmModel.where(id: env_default.id)).to exist
         end
 
         it "ends the environment's hold on the connection when the former default is renamed" do
@@ -1008,11 +1009,12 @@ RSpec.describe "Admin LLM models", :llm_server_helpers, :skip_csrf, :webmock,
       context "when the environment has not applied its values yet" do
         before { connection.update_columns(env_provisioned_at: nil) }
 
-        it "deletes it like any other model entered by hand" do
+        it "refuses to delete it like any other default" do
           delete llm_model_path(env_default)
 
-          expect(LlmModel.where(id: env_default.id)).to be_empty
-          expect(connection.reload.default_chat_model_id).to be_nil
+          expect(flash[:error]).to include("Default chat model")
+          expect(LlmModel.where(id: env_default.id)).to exist
+          expect(connection.reload.default_chat_model_id).to eq(env_default.id)
         end
       end
     end

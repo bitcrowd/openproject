@@ -33,22 +33,9 @@ module LlmModels
     # Verdicts are keyed by the identifier string, not by foreign key, and
     # must not carry over to a model re-added under the same name.
     def persist(service_result)
-      defaults = model.connection_defaults
-
       super.tap do |call|
-        next unless call.success?
-
-        connection.capability_verdicts.where(model_id: model.external_id).delete_all
-        clear_connection_defaults(defaults)
+        connection.capability_verdicts.where(model_id: model.external_id).delete_all if call.success?
       end
-    end
-
-    private
-
-    def clear_connection_defaults(defaults)
-      return if defaults.empty?
-
-      connection.update_columns(defaults.index_with(nil).merge(env_provisioned_at: nil, env_fingerprint: nil))
     end
   end
 end

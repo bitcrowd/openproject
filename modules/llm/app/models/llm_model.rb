@@ -64,8 +64,9 @@ class LlmModel < ApplicationRecord
   def uses
     indexes = semantic_indexes.pluck(:title).map { |title| I18n.t("admin.llm_models.uses.semantic_index", title:) }
     features = feature_bindings.map { |binding| binding.feature&.label || binding.feature_key }
+    defaults = connection_defaults.map { |attribute| LlmConnection.human_attribute_name(attribute) }
 
-    indexes + features
+    indexes + features + defaults
   end
 
   def connection_defaults
