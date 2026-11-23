@@ -57,6 +57,14 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       expect(autocompleter[:"data-input-name"]).to include("semantic_index[llm_model_id]")
       expect(autocompleter[:"data-items"]).to include("bge-m3")
     end
+
+    it "refreshes through the collection route" do
+      rendered_component
+
+      expect(page).to have_css("[data-controller='refresh-on-form-changes']" \
+                               "[data-refresh-on-form-changes-turbo-stream-url-value='#{refresh_form_semantic_indexes_path}']")
+      expect(page).to have_css("form[data-refresh-on-form-changes-target='form']")
+    end
   end
 
   context "for a persisted semantic index" do
@@ -100,6 +108,12 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       rendered_component
 
       expect(LlmConnections::SelectableModelsQuery).not_to have_received(:new)
+    end
+
+    it "does not refresh" do
+      rendered_component
+
+      expect(page).to have_no_css("[data-controller='refresh-on-form-changes']")
     end
   end
 

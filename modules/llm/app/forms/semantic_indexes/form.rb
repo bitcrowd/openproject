@@ -29,10 +29,11 @@
 
 module SemanticIndexes
   class Form < ApplicationForm
-    def initialize(model_options:, locked: false)
+    def initialize(model_options:, locked: false, autofocus: true)
       super()
       @model_options = model_options
       @locked = locked
+      @autofocus = autofocus
     end
 
     form do |f|
@@ -40,7 +41,7 @@ module SemanticIndexes
         name: :title,
         label: SemanticIndex.human_attribute_name(:title),
         required: true,
-        autofocus: true
+        autofocus:
       )
 
       f.text_area(
@@ -57,6 +58,7 @@ module SemanticIndexes
           disabled: true
         )
       else
+        f.hidden(name: :prefilled_from_model_id, value: selected_model_id)
         model_autocompleter(f)
       end
 
@@ -85,7 +87,7 @@ module SemanticIndexes
 
     private
 
-    attr_reader :model_options, :locked
+    attr_reader :model_options, :locked, :autofocus
 
     def model_autocompleter(form)
       form.autocompleter(
@@ -97,6 +99,7 @@ module SemanticIndexes
           decorated: true,
           inputValue: selected_model_id,
           append_to: "##{LlmConnections::SemanticIndexes::DialogComponent::DIALOG_ID}",
+          hiddenFieldAction: "change->refresh-on-form-changes#triggerTurboStream",
           data: { test_selector: "llm-semantic-index--model" }
         }
       ) do |list|

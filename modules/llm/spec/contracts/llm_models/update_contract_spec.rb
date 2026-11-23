@@ -65,6 +65,12 @@ RSpec.describe LlmModels::UpdateContract, :check_errors_i18n do
     include_examples "contract is valid"
   end
 
+  context "when setting the dimensions" do
+    before { llm_model.embedding_vector_dimensions = 1024 }
+
+    include_examples "contract is valid"
+  end
+
   context "when writing other metadata" do
     before { llm_model.raw_metadata = llm_model.raw_metadata.merge("max_model_len" => 1) }
 

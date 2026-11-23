@@ -32,6 +32,7 @@ module LlmModels
     include EnvNamedDefault
 
     attribute :display_name
+    attribute :embedding_vector_dimensions
     attribute :external_id, writable: -> { model.new_record? || model.manual? }
     attribute :raw_metadata, writable: -> { only_admin_context_window_changed? }
 

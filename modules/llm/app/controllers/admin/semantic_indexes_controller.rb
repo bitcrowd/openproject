@@ -66,6 +66,19 @@ module Admin
       respond_to_save(result, notice: t(:notice_successful_update))
     end
 
+    def refresh_form
+      semantic_index = SemanticIndex.new(semantic_index_params)
+      previous_model = LlmModel.find_by(id: params.dig(:semantic_index, :prefilled_from_model_id))
+      semantic_index.prefill_from_model(previous: previous_model)
+
+      # Turbo moves focus to an autofocus field after a stream replaced the
+      # focused one, which would pull the administrator away from the model select.
+      update_via_turbo_stream(
+        component: LlmConnections::SemanticIndexes::FormComponent.new(semantic_index, connection: @connection, autofocus: false)
+      )
+      respond_with_turbo_streams
+    end
+
     def deletion_dialog
       respond_with_dialog LlmConnections::SemanticIndexes::DeleteDialogComponent.new(@semantic_index)
     end

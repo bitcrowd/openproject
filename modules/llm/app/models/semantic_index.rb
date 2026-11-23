@@ -73,6 +73,13 @@ class SemanticIndex < ApplicationRecord
     GoodJob::BatchRecord.find_by(id: indexing_batch_id)
   end
 
+  def prefill_from_model(previous:)
+    self.context_token_length = prefilled(context_token_length, llm_model&.context_window,
+                                          previous&.context_window)
+    self.embedding_vector_dimensions = prefilled(embedding_vector_dimensions, llm_model&.dimensions,
+                                                 previous&.dimensions)
+  end
+
   def indexable? = INDEXABLE_STATES.include?(state)
 
   def searchable? = !not_indexed?
@@ -98,6 +105,10 @@ class SemanticIndex < ApplicationRecord
   end
 
   private
+
+  def prefilled(current, from_model, from_previous_model)
+    current.blank? || current == from_previous_model.to_i ? from_model : current
+  end
 
   def transition_from_indexing!(**attributes)
     with_lock do
