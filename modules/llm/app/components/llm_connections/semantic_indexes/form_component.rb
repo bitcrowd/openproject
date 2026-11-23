@@ -41,6 +41,14 @@ module LlmConnections
 
       def locked? = model.persisted?
 
+      def banner_text
+        if model.indexing?
+          t("admin.semantic_indexes.form.locked_while_indexing")
+        else
+          t("admin.semantic_indexes.form.fixed_parameters")
+        end
+      end
+
       def wrapper_data
         return {} if locked?
 
@@ -57,8 +65,6 @@ module LlmConnections
       end
 
       def model_options
-        return if locked?
-
         LlmConnections::SelectableModelsQuery
           .new(connection, OpenProject::Llm::Features[:semantic_search],
                bound_model: LlmModel.find_by(id: model.llm_model_id_in_database))

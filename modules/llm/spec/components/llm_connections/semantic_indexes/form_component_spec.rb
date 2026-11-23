@@ -77,43 +77,48 @@ RSpec.describe LlmConnections::SemanticIndexes::FormComponent, type: :component 
       expect(page).to have_css("input[name='_method'][value='patch']", visible: :all)
     end
 
-    it "shows the model as a disabled field" do
+    it "keeps the model choosable" do
       rendered_component
 
-      expect(page).to have_field(SemanticIndex.human_attribute_name(:llm_model_id), disabled: true, with: "bge-m3")
+      autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
+      expect(autocompleter[:"data-disabled"]).to eq("false")
+      expect(autocompleter[:"data-items"]).to include("bge-m3")
     end
   end
 
   context "when the parameters are locked" do
     let(:semantic_index) { create(:semantic_index) }
 
-    it "warns that the parameters cannot be changed" do
+    it "warns to only use a compatible model" do
       rendered_component
 
-      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.immutable"))
+      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.fixed_parameters"))
     end
 
-    it "renders the parameter fields disabled" do
+    it "renders the numbers disabled" do
       rendered_component
 
-      expect(page).to have_field(SemanticIndex.human_attribute_name(:llm_model_id), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:context_token_length), disabled: true)
       expect(page).to have_field(SemanticIndex.human_attribute_name(:embedding_vector_dimensions), disabled: true)
-      expect(page).to have_no_css("[data-test-selector='llm-semantic-index--model']")
-    end
-
-    it "does not query the selectable models" do
-      allow(LlmConnections::SelectableModelsQuery).to receive(:new).and_call_original
-
-      rendered_component
-
-      expect(LlmConnections::SelectableModelsQuery).not_to have_received(:new)
     end
 
     it "does not refresh" do
       rendered_component
 
       expect(page).to have_no_css("[data-controller='refresh-on-form-changes']")
+    end
+  end
+
+  context "when it is being indexed" do
+    let(:semantic_index) { create(:semantic_index, state: :indexing) }
+
+    it "says that the model can't be changed either" do
+      rendered_component
+
+      expect(page).to have_text(I18n.t("admin.semantic_indexes.form.locked_while_indexing"))
+
+      autocompleter = page.find("[data-test-selector='llm-semantic-index--model']")
+      expect(autocompleter[:"data-disabled"]).to eq("true")
     end
   end
 
