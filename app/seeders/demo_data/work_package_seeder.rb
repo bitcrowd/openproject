@@ -22,10 +22,11 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
+#++
+
 module DemoData
   class WorkPackageSeeder < Seeder
     include CreateAttachments
@@ -92,6 +93,7 @@ module DemoData
       set_observed_in_versions! wp_attr, attributes
       set_time_tracking_attributes! wp_attr, attributes
       set_backlogs_attributes! wp_attr, attributes
+      set_labels! wp_attr, attributes
 
       work_package = WorkPackage.create! wp_attr
 
@@ -187,6 +189,12 @@ module DemoData
 
     def version_ids_for(attributes, key)
       seed_data.find_references(attributes[key]).filter_map { it&.id }
+    end
+
+    def set_labels!(wp_attr, attributes)
+      label_ids = seed_data.find_references(attributes["labels"]).map(&:id)
+
+      wp_attr[:label_id_replacements] = label_ids if label_ids.any?
     end
 
     def set_time_tracking_attributes!(wp_attr, attributes)

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# -- copyright
+#-- copyright
 # OpenProject is an open source project management software.
 # Copyright (C) the OpenProject GmbH
 #
@@ -22,12 +22,10 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
-# ++
-#
+#++
 
 require "spec_helper"
 
@@ -236,6 +234,25 @@ RSpec.describe WorkPackageTypes::PdfExportTemplateController do
         patch :update_settings, params: { type_id: wp_type.id, id: "bogus" }
 
         expect(response).to have_http_status(:not_found)
+      end
+
+      it "stores the artefact template's wiki pages in the submitted order" do
+        artefact_template = variant.pdf_export_templates.find("artefact")
+
+        patch :update_settings,
+              params: { type_id: wp_type.id, id: artefact_template.id, wiki_pages: ["", "1:7", "1:3"] }
+
+        expect(variant.reload.pdf_export_templates.settings_for("artefact")).to eq(wiki_pages: ["1:7", "1:3"])
+      end
+
+      it "clears the stored wiki pages when only the blank sentinel is submitted" do
+        artefact_template = variant.pdf_export_templates.find("artefact")
+        variant.pdf_export_templates.update_settings("artefact", "wiki_pages" => ["1:7"])
+        variant.save!
+
+        patch :update_settings, params: { type_id: wp_type.id, id: artefact_template.id, wiki_pages: [""] }
+
+        expect(variant.reload.pdf_export_templates.settings_for("artefact")).to eq({})
       end
 
       it "stores the artefact template's lifecycle/budget defaults and resets them" do

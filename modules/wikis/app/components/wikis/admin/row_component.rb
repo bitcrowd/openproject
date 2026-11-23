@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,13 +40,11 @@ module Wikis::Admin
     end
 
     def provider_type
-      render(Primer::Beta::Text.new(color: :subtle)) { I18n.t("wikis.provider_types.#{wiki_provider}.name") }
+      I18n.t("wikis.provider_types.#{wiki_provider}.name")
     end
 
     def created_at
-      render(Primer::Beta::Text.new(color: :subtle)) do
-        I18n.t("activity.item.created_on", datetime: helpers.format_time(wiki_provider.created_at)).capitalize
-      end
+      I18n.t("activity.item.created_on", datetime: helpers.format_time(wiki_provider.created_at)).capitalize
     end
 
     private

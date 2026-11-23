@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -47,10 +46,6 @@ module Settings
         description: "Override URL to which logged in users are redirected instead of the Home page",
         format: :string,
         default: nil
-      },
-      ai_text_transform_actions_enabled: {
-        description: "Enable AI text transform actions in the rich text editor",
-        default: false
       },
       ai_text_transform_run_retention_seconds: {
         description: "How long AI text transform runs and their events are kept before a cron job removes them. " \
@@ -125,6 +120,10 @@ module Settings
         description: "Time in minutes to wait before uploaded files not attached to any container are removed",
         default: 180
       },
+      attachments_cleanup_period_hours: {
+        description: "Time in hours to wait before deleting up uploaded files that were not cleaned up before",
+        default: 2
+      },
       antivirus_scan_available: {
         description: "Virus scanning option selectable in the UI",
         default: true
@@ -179,7 +178,7 @@ module Settings
       autologin: {
         format: :integer,
         default: 0,
-        allowed: [1, 7, 14, 30, 60, 90, 365]
+        allowed: [0, 1, 7, 14, 30, 60, 90, 365]
       },
       autologin_cookie_name: {
         description: "Cookie name for autologin cookie",
@@ -340,6 +339,20 @@ module Settings
       },
       database_cipher_key: {
         description: "Encryption key for repository credentials",
+        format: :string,
+        default: nil,
+        writable: false,
+        secret: true
+      },
+      database_encryption_key: {
+        description: "Secret for data that OpenProject encrypts in the database. Defaults to SECRET_KEY_BASE. The encryption key is derived from this value",
+        format: :string,
+        default: nil,
+        writable: false,
+        secret: true
+      },
+      database_encryption_previous_key: {
+        description: "Old value of SECRET_KEY_BASE or of the database encryption key, used to decrypt data while you rotate that key",
         format: :string,
         default: nil,
         writable: false,
@@ -608,6 +621,13 @@ module Settings
         writable: false,
         default: true
       },
+      good_job_shutdown_timeout: {
+        description: "Seconds that the worker waits for running jobs to finish before it stops them. " \
+                     "Set it to less than the time the container platform waits before it kills the worker.",
+        format: :integer,
+        writable: false,
+        default: 30
+      },
       good_job_cleanup_preserved_jobs_before_seconds_ago: {
         description: "",
         format: :integer,
@@ -626,6 +646,23 @@ module Settings
                      "Changing this invalidates all existing hashed tokens.",
         format: :string,
         default: -> { SecureRandom.hex(32) },
+        persist_on_first_read: true,
+        secret: true
+      },
+      web_push_enabled: {
+        format: :boolean,
+        default: true
+      },
+      web_push_vapid_private_key: {
+        description: "The VAPID private key used to sign browser notification pushes, given as the " \
+                     "base64 DER (PKCS#8) encoding of a prime256v1 key. If you leave this unset, OpenProject " \
+                     "generates a key the first time it is needed, stores it in the database and lets " \
+                     "administrators renew it from the administration page. If you set it through this " \
+                     "environment variable, the key is managed by you: the administration page can no longer " \
+                     "renew it, and you rotate it by changing the variable. Whichever way the key changes, " \
+                     "every existing browser notification subscription becomes invalid.",
+        format: :string,
+        default: -> { OpenProject::WebPush.generate_private_key },
         persist_on_first_read: true,
         secret: true
       },
@@ -753,18 +790,6 @@ module Settings
       },
       ldap_users_sync_status: {
         description: "Enable user status (locked/unlocked) synchronization from LDAP",
-        format: :boolean,
-        default: false
-      },
-      llm_connection: {
-        description: "Configure the connection to an OpenAI-API-compatible LLM server through environment variables",
-        writable: false,
-        default: {},
-        format: :hash,
-        string_values: true
-      },
-      llm_features_enabled: {
-        description: "Enable the AI features backed by the configured LLM connection",
         format: :boolean,
         default: false
       },
@@ -1470,6 +1495,11 @@ module Settings
         format: :integer,
         writable: false,
         default: 5_000
+      },
+      work_package_multiple_categories: {
+        description: "Enable multiple category assignments on work packages.",
+        format: :boolean,
+        default: false
       },
       work_package_multiple_versions: {
         description: "Enable multiple version assignments on work packages.",

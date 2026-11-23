@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -192,11 +191,7 @@ class TypeVariant
     private
 
     def custom_field_ids_among(elements)
-      elements.filter_map do |element|
-        next unless CustomField.custom_field_attribute?(element)
-
-        element.delete_prefix(CUSTOM_FIELD_ELEMENT_PREFIX).to_i
-      end
+      elements.filter_map { CustomField.id_from_attribute_name(it) }
     end
 
     def linked_aspects_are_valid

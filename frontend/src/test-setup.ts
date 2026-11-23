@@ -25,6 +25,10 @@
 // See COPYRIGHT and LICENSE files for more details.
 //++
 
+// Keeps the NgModule graph in the spec program: @angular/build >= 22.2.0
+// ignores the non-declaration `files`/`include` roots of tsconfig.spec.json.
+// https://github.com/angular/angular-cli/issues/34231
+import type {} from './main';
 import { I18n } from 'i18n-js';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, vi } from 'vitest';
@@ -37,6 +41,13 @@ import { installElements } from '@openproject/stimulus-elements';
 installElements();
 
 registerDialogStreamAction();
+
+// Spec files share one browser page, so a pointer left over a later spec's link
+// would otherwise start a Turbo hover prefetch through that spec's fetch spy.
+const turboPrefetch = document.createElement('meta');
+turboPrefetch.name = 'turbo-prefetch';
+turboPrefetch.content = 'false';
+document.head.append(turboPrefetch);
 
 afterEach(() => {
   vi.useRealTimers();

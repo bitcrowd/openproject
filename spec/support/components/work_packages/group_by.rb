@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -40,7 +39,7 @@ module Components
         open_table_column_context_menu(name)
 
         within_column_context_menu do
-          click_button("Group by")
+          find(:role, "menuitemcheckbox", text: "Group by", aria: { checked: "false" }).click
         end
       end
 
@@ -74,7 +73,7 @@ module Components
         open_table_column_context_menu(name)
 
         within_column_context_menu do
-          expect(page).to have_content("Group by")
+          expect(page).to have_selector(:role, "menuitemcheckbox", text: "Group by", aria: { checked: "false" })
         end
       end
 
@@ -96,11 +95,11 @@ module Components
       end
 
       def open_table_column_context_menu(name)
-        page.find(".generic-table--sort-header ##{name.downcase}").click
+        page.find(:columnheader, name).click_button(name)
       end
 
       def within_column_context_menu(&)
-        page.within("#column-context-menu", &)
+        page.within(:menu, &)
       end
     end
   end

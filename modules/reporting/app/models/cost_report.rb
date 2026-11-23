@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -79,6 +78,14 @@ class CostReport < PersistedView
     compact_filters.to_params.reverse_merge(filters: "").merge(unit: unit_id).compact
   end
 
+  def filter_errors
+    filters.flat_map do |filter|
+      filter.errors.flat_map do |kind, values|
+        values.map { |value| filter_error_message(filter.class.label, kind, value) }
+      end
+    end
+  end
+
   def uses_dimension?(attribute)
     pivot_rows.include?(attribute) || pivot_columns.include?(attribute)
   end
@@ -111,6 +118,14 @@ class CostReport < PersistedView
   end
 
   private
+
+  def filter_error_message(filter, kind, value)
+    case kind
+    when :missing_values then I18n.t(:filter_error_missing_values, filter:, count: value)
+    when :date then I18n.t(:filter_error_invalid_date, filter:, value:)
+    when :int then I18n.t(:filter_error_invalid_integer, filter:, value:)
+    end
+  end
 
   def compact_filters
     ::CostReports::CompactFilters.new(operators: query.filters.to_h { |f| [f.name.to_s, f.operator] },

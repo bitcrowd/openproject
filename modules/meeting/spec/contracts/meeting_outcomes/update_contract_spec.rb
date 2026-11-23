@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -37,7 +36,7 @@ RSpec.describe MeetingOutcomes::UpdateContract do
   shared_let(:project) { create(:project) }
   let(:meeting) { create(:meeting, project:) }
   let(:meeting_agenda_item) { create(:meeting_agenda_item, meeting:) }
-  let(:outcome) { build(:meeting_outcome, meeting_agenda_item:) }
+  let(:outcome) { create(:meeting_outcome, meeting_agenda_item:) }
   let(:contract) { described_class.new(outcome, user) }
 
   context "with permission" do
@@ -71,6 +70,7 @@ RSpec.describe MeetingOutcomes::UpdateContract do
 
     context "when :meeting_agenda_item is not present anymore" do
       before do
+        outcome
         meeting_agenda_item.destroy
       end
 

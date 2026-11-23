@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -54,7 +53,7 @@ RSpec.describe CostReports::XLS::ExportJob do
   #
   # @param extra_filters [Hash] A hash of attribute names and operator/value
   # pairs to add to the filter.
-  # Example: `{ custom_field_17: ["=", "value"], user_id: ["=", "me"]}`
+  # Example: `{ cf_17: ["=", "value"], user_id: ["=", "me"]}`
   def perform_cost_export(extra_filters: {})
     query = initial_filter_params.deep_dup
     extra_filters.each do |attribute_name, operator_and_value|
@@ -100,7 +99,7 @@ RSpec.describe CostReports::XLS::ExportJob do
   context "when filtering with a work package custom field" do
     it "generates an XLS report successfully" do
       custom_field = create(:string_wp_custom_field)
-      job = perform_cost_export(extra_filters: { custom_field.attribute_name => ["=", ""] })
+      job = perform_cost_export(extra_filters: { custom_field.column_name => ["=", ""] })
 
       expect(job.job_status).to be_success, job.job_status.message
       expect(job).to have_one_attachment_with_content_type("application/vnd.ms-excel")
@@ -116,7 +115,7 @@ RSpec.describe CostReports::XLS::ExportJob do
       # where the filter for the custom field is not found because they have
       # already been built up and cached.
       custom_field = create(:string_wp_custom_field)
-      second_job = perform_cost_export(extra_filters: { custom_field.attribute_name => ["=", ""] })
+      second_job = perform_cost_export(extra_filters: { custom_field.column_name => ["=", ""] })
 
       expect(second_job.job_status).to be_success, second_job.job_status.message
       expect(second_job).to have_one_attachment_with_content_type("application/vnd.ms-excel")

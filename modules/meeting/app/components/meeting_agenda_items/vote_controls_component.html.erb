@@ -20,8 +20,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 See COPYRIGHT and LICENSE files for more details.
 
@@ -37,7 +36,7 @@ See COPYRIGHT and LICENSE files for more details.
       end
 
       if @voting_enabled
-        score.with_column(ml: 1, classes: "op-meeting-agenda-item-vote-score--actions hide-when-print") do
+        score.with_column(ml: 3, classes: "op-meeting-agenda-item-vote-score--actions hide-when-print") do
           flex_layout do |actions|
             MeetingAgendaItem.allowed_emoji_reactions.each do |reaction|
               actions.with_column(mr: 1) do

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -43,15 +42,6 @@ module WorkPackageTypes
           @model_class = model_class
         end
 
-        def filters_form_attributes
-          {
-            controller: "filter--filters-form",
-            "filter--filters-form-turbo-stream-request-value": true,
-            "filter--filters-form-clear-button-id-value": clear_button_id,
-            "filter--filters-form-current-filters-value": serialized_filters
-          }
-        end
-
         def wrapper_key = "#{dom_class(model_class)}s-index-sub-header-component"
 
         def name_filter_attributes
@@ -67,8 +57,6 @@ module WorkPackageTypes
 
         def name_filter_value = query.find_active_filter(name_filter_key.to_sym)&.values&.first
 
-        def serialized_filters = OpPrimer::QuickFilter.serialize(query.filters).to_json
-
         def clear_button_id = "#{dom_class(model_class)}s-filters-clear-button"
 
         def type_filter_component
@@ -77,6 +65,14 @@ module WorkPackageTypes
 
         def projects_filter_component
           ProjectsFilterComponent.new(query:, model_class:)
+        end
+
+        def filter_button_component
+          Filter::FilterButtonComponent.new(query:)
+        end
+
+        def filter_panel_component
+          FiltersComponent.new(query:)
         end
 
         private

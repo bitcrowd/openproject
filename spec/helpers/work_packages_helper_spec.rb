@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -35,12 +34,12 @@ RSpec.describe WorkPackagesHelper do
   let(:stub_project) { build_stubbed(:project) }
   let(:stub_type) { build_stubbed(:type) }
   let(:stub_user) { build_stubbed(:user) }
-  let(:open_status) { build_stubbed(:status, is_closed: false) }
-  let(:closed_status) { build_stubbed(:status, is_closed: true) }
+  let(:to_do_status) { build_stubbed(:status, category: "to_do") }
+  let(:closed_status) { build_stubbed(:status, category: "closed") }
 
   describe "#link_to_work_package" do
     before do
-      stub_work_package.status = open_status
+      stub_work_package.status = to_do_status
     end
 
     describe "without parameters" do

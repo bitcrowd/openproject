@@ -20,8 +20,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -113,9 +112,9 @@ RSpec.describe "My page",
 
     # The widgets load their respective contents
     expect(page)
-      .to have_content(created_work_package.subject)
+      .to have_text(created_work_package.subject)
     expect(page)
-      .to have_content(assigned_work_package.subject)
+      .to have_text(assigned_work_package.subject)
 
     # add widget above to right area
     my_page.add_widget(1, 1, :row, "Calendar")

@@ -20,8 +20,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 See COPYRIGHT and LICENSE files for more details.
 
@@ -29,9 +28,11 @@ See COPYRIGHT and LICENSE files for more details.
 
 <%= component_wrapper do %>
   <%= render(
-        Primer::OpenProject::SubHeader.new(
+        OpPrimer::QuickFilter::SubHeader.new(
           test_selector: "#{dom_class(model_class)}s-sub-header",
-          data: filters_form_attributes
+          query:,
+          clear_button_id:,
+          turbo_stream_request: true
         )
       ) do |sub_header| %>
     <%
@@ -50,5 +51,8 @@ See COPYRIGHT and LICENSE files for more details.
       <%= render(type_filter_component) %>
       <%= render(projects_filter_component) %>
     <% end %>
+
+    <% sub_header.with_filter_component { render(filter_button_component) } %>
+    <% sub_header.with_bottom_pane_component { render(filter_panel_component) } %>
   <% end %>
 <% end %>

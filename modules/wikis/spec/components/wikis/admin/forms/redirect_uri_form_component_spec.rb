@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -34,7 +33,7 @@ require_module_spec_helper
 RSpec.describe Wikis::Admin::Forms::RedirectUriFormComponent, type: :component do
   let(:wiki_provider) { create(:xwiki_provider, :with_oauth_client) }
 
-  subject { render_inline(described_class.new(wiki_provider)) && page }
+  subject { render_inline(described_class.new(model: wiki_provider)) && page }
 
   it "renders the redirect uri as a read only field" do
     expect(subject).to have_field(type: "text", with: wiki_provider.oauth_client.redirect_uri, readonly: true)
@@ -54,7 +53,7 @@ RSpec.describe Wikis::Admin::Forms::RedirectUriFormComponent, type: :component d
   end
 
   context "when rendered read only" do
-    subject { render_inline(described_class.new(wiki_provider, read_only: true)) && page }
+    subject { render_inline(described_class.new(model: wiki_provider, read_only: true)) && page }
 
     it "renders a close button instead of the submit buttons" do
       expect(subject).to have_css("a[href$='wiki_providers/#{wiki_provider.id}/edit']", text: I18n.t(:button_close))

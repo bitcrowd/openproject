@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -87,10 +86,14 @@ module Redmine::MenuManager::TopMenu::ModuleMenu
           item.caption
         end
 
+      content_arguments = {}
+      content_arguments[:data] = item.html_options[:data] if item.html_options[:data].present?
+
       list.with_item(
         href: url_for(item.url),
         label:,
-        test_selector: "op-menu--item-action"
+        test_selector: "op-menu--item-action",
+        content_arguments:
       ) do |menu_item|
         menu_item.with_leading_visual_icon(icon: item.icon) if item.icon
       end

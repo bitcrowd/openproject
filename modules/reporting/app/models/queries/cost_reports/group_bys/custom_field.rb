@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,10 +30,8 @@
 # Replaces the runtime generated CostQuery::GroupBy::CustomField<id> classes
 # with a single group by parameterized by the custom field id.
 class Queries::CostReports::GroupBys::CustomField < Queries::CostReports::GroupBys::Base
-  KEY = /\Acf_(\d+)\z/
-
   def self.key
-    KEY
+    ::CustomField::COLUMN_NAME_PATTERN
   end
 
   def custom_field
@@ -44,7 +41,7 @@ class Queries::CostReports::GroupBys::CustomField < Queries::CostReports::GroupB
   end
 
   def custom_field_id
-    name.to_s[KEY, 1]
+    ::CustomField.id_from_column_name(name)
   end
 
   def available?

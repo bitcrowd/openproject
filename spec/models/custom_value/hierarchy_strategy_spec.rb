@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -183,17 +182,10 @@ RSpec.describe CustomValue::HierarchyStrategy do
           .with(id: hierarchy_item.id.to_s)
           .and_return(hierarchy_item)
 
-        hierarchical_item_service = instance_double(CustomFields::Hierarchy::HierarchicalItemService)
-        service_result = (is_descendant ? Dry::Monads::Success : Dry::Monads::Failure).new(nil)
-
-        allow(CustomFields::Hierarchy::HierarchicalItemService)
-          .to receive(:new)
-          .and_return(hierarchical_item_service)
-
-        allow(hierarchical_item_service)
+        allow(hierarchy_item)
           .to receive(:descendant_of?)
-          .with(item: hierarchy_item, parent: hierarchy_root)
-          .and_return(service_result)
+          .with(hierarchy_root)
+          .and_return(is_descendant)
       end
 
       context "when item is not a descendant of custom_field hierarchy root" do

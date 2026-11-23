@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -35,7 +34,7 @@ module Pages
     class Hierarchy < Page
       def path
         case @tab
-        when "items"
+        when "values"
           "/admin/settings/work_package_custom_fields/#{@custom_field.id}/items"
         when "projects"
           "/admin/settings/work_package_custom_fields/#{@custom_field.id}/projects"
@@ -52,7 +51,7 @@ module Pages
         @tab = tab.downcase
 
         within_test_selector("custom_field_detail_header") do
-          click_on "Items"
+          click_on tab
         end
       end
 

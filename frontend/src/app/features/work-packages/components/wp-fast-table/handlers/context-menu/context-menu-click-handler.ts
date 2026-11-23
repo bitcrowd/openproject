@@ -32,6 +32,7 @@ import { TableEventComponent } from 'core-app/features/work-packages/components/
 import { uiStateLinkClass } from '../../builders/ui-state-link-builder';
 import { ContextMenuHandler } from './context-menu-handler';
 import { EventType } from 'core-app/features/work-packages/routing/wp-view-base/event-handling/event-handler-registry';
+import { hideTooltip } from 'core-app/shared/helpers/tooltip-helper';
 
 export class ContextMenuClickHandler extends ContextMenuHandler {
   constructor(public readonly injector:Injector) {
@@ -62,8 +63,10 @@ export class ContextMenuClickHandler extends ContextMenuHandler {
     // Locate the row from event
     const element = target.closest<HTMLTableRowElement>(this.rowSelector);
 
-    if (element?.dataset.workPackageId) {
-      this.openContextMenu(view.workPackageTable, evt, element);
+    if (element?.dataset.workPackageId && !this.isUnsavedRow(element)) {
+      const button = target.closest<HTMLElement>(`.${contextMenuLinkClassName}`)!;
+      hideTooltip(button);
+      this.openContextMenu(view.workPackageTable, evt, element, {}, { anchor: button, align: 'end' });
     }
 
     return false;

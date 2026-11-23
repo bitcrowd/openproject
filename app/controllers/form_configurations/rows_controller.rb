@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,18 +31,12 @@ module FormConfigurations
   class RowsController < ApplicationController
     include TypesHelper
     include OpTurbo::ComponentStream
+    include FormConfigurations::EditorRecords
     include WorkPackageTypes::FormConfigurationComponentStreams
 
     before_action :require_admin
     before_action :load_form_configuration
-
-    def move
-      respond_to_row_update(row_update_service.call(move_to: params[:move_to]))
-    end
-
-    def drop
-      respond_to_row_update(row_update_service.call(target_id: params[:target_id], position: params[:position]))
-    end
+    before_action :reconcile_editor_records
 
     def destroy
       call = ::WorkPackageTypes::FormConfigurationRows::DeleteService
@@ -54,11 +47,6 @@ module FormConfigurations
     end
 
     private
-
-    def row_update_service
-      ::WorkPackageTypes::FormConfigurationRows::UpdateService
-        .new(user: current_user, form_configuration: @form_configuration, row_key: params[:row_key])
-    end
 
     def respond_to_row_update(call)
       if call.success?

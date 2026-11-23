@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# -- copyright
+#-- copyright
 # OpenProject is an open source project management software.
 # Copyright (C) the OpenProject GmbH
 #
@@ -22,11 +22,10 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
-# ++
+#++
 
 RSpec.shared_examples_for "list custom fields" do |type|
   let(:cf_page) { Pages::CustomFields::Index.new }
@@ -52,7 +51,7 @@ RSpec.shared_examples_for "list custom fields" do |type|
     cf_page.expect_flash(message: "Successful creation.")
     expect(page).to have_field("multi_value", checked: true)
 
-    click_link "Items"
+    click_link "Values"
     wait_for_network_idle
 
     expect(page).to have_css(".custom-option-row", count: 1)
@@ -158,7 +157,7 @@ RSpec.shared_examples_for "expected fields for the custom field's format", :aggr
   let(:label_content_right_to_left) do # Right-to-Left content
     I18n.t("activerecord.attributes.custom_field.content_right_to_left")
   end
-  let(:label_editable) { I18n.t("activerecord.attributes.custom_field.editable") } # Editable
+  let(:label_editable) { I18n.t("activerecord.attributes.custom_field.user_self_editable") } # Editable
   let(:label_min_length) { I18n.t("activerecord.attributes.custom_field.min_length") } # Minimum length
   let(:label_max_length) { I18n.t("activerecord.attributes.custom_field.max_length") } # Maximum length
   let(:label_min_value) { I18n.t("activerecord.attributes.custom_field.min_value") } # Minimum value

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,15 +30,97 @@
 module Admin
   module Settings
     class WorkPackageCustomFieldsController < CustomFieldsBaseController
+      include PaginationHelper
+
       menu_item :work_package_custom_fields
+
+      # Redeclaring :find_custom_field by name would drop the base controller's callback for its own actions.
+      before_action(only: %i[projects forms types_and_variants]) { find_custom_field }
 
       def index
         super
 
         @project_counts = WorkPackageCustomField.project_counts
+        @form_counts = WorkPackageCustomField.form_counts
+      end
+
+      def projects
+        @query = projects_query
+        @filtered = @query.find_active_filter(:name_and_identifier).present? ||
+                    @query.find_active_filter(:project_specific_values).present?
+        @type_ids_by_project_id = @custom_field.type_ids_by_project_id
+        @projects = @query.results.paginate(page: page_param, per_page: per_page_param)
+
+        render layout: false if turbo_frame_request?
+      end
+
+      def forms
+        @query = forms_query
+        @forms = @query.results.page(page_param).per_page(per_page_param)
+
+        respond_to do |format|
+          format.html
+          format.turbo_stream do
+            update_via_turbo_stream(component: forms_results_component)
+            respond_with_turbo_streams
+          end
+        end
+      end
+
+      def types_and_variants
+        @query = types_and_variants_query
+        @variants = @query.results
+                          .includes(:type, :form_configuration, :project)
+                          .page(page_param)
+                          .per_page(per_page_param)
+
+        respond_to do |format|
+          format.html
+          format.turbo_stream do
+            update_via_turbo_stream(component: types_and_variants_results_component)
+            respond_with_turbo_streams
+          end
+        end
       end
 
       protected
+
+      def projects_query
+        ParamsToQueryService
+          .new(Project, current_user, query_class: ProjectQuery)
+          .call(params)
+          .where(:active, "=", OpenProject::Database::DB_VALUE_TRUE)
+          .where(:available_custom_fields_projects, "=", [@custom_field.id.to_s])
+          .order(name: :asc)
+      end
+
+      def forms_query
+        ParamsToQueryService
+          .new(FormConfiguration, current_user, query_class: ::Queries::FormConfigurations::FormConfigurationQuery)
+          .call(params)
+          .where(:custom_field_id, "=", [@custom_field.id])
+      end
+
+      def forms_results_component
+        Admin::CustomFields::Forms::ListComponent.new(forms: @forms, filtered: name_filtered?)
+      end
+      helper_method :forms_results_component
+
+      def types_and_variants_query
+        ParamsToQueryService
+          .new(TypeVariant, current_user, query_class: ::Queries::TypeVariants::TypeVariantQuery)
+          .call(params)
+          .where(:custom_field_id, "=", [@custom_field.id])
+      end
+
+      def types_and_variants_results_component
+        Admin::CustomFields::TypesAndVariants::TableComponent.new(rows: @variants, filtered: name_filtered?)
+      end
+      helper_method :types_and_variants_results_component
+
+      def name_filtered?
+        @query.find_active_filter(:name).present?
+      end
 
       def custom_field_class
         WorkPackageCustomField

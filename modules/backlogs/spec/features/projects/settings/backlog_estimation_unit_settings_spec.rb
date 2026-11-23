@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,7 +31,7 @@ require "rails_helper"
 
 RSpec.describe "Backlogs project settings estimation unit", :js do
   let(:project) { create(:project) }
-  let(:permissions) { %i[create_sprints share_sprint select_backlog_types_and_statuses] }
+  let(:permissions) { %i[create_sprints share_sprint manage_backlogs_configuration] }
 
   let(:user) do
     create(:user, member_with_permissions: { project => permissions })
@@ -88,7 +87,7 @@ RSpec.describe "Backlogs project settings estimation unit", :js do
       expect(project.reload.estimation_unit).to eq("story_points")
     end
 
-    context "without select_backlog_types_and_statuses permission" do
+    context "without manage_backlogs_configuration permission" do
       let(:permissions) { %i[create_sprints share_sprint] }
 
       it "forbids direct route access" do

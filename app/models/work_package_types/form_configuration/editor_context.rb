@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -75,6 +74,20 @@ module WorkPackageTypes
 
       def toggle_required_path(row_key)
         toggle_required_variant_form_configuration_row_path(scope_project, variant, row_key)
+      end
+
+      def move_url_templates
+        id_placeholder = "__id__"
+        {
+          SortableTypes::GROUP =>
+            routes.move_form_configuration_group_path(form_configuration, id_placeholder).sub(id_placeholder, "{id}"),
+          SortableTypes::ATTRIBUTE =>
+            routes.move_form_configuration_attribute_path(form_configuration, id_placeholder).sub(id_placeholder, "{id}")
+        }
+      end
+
+      def record_ids_by_key
+        @record_ids_by_key ||= readonly? ? {} : form_configuration.form_attributes.to_h { [it.key, it.id] }
       end
 
       private

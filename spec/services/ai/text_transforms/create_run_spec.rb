@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,10 +30,9 @@
 require "spec_helper"
 
 RSpec.describe AI::TextTransforms::CreateRun,
-               with_flag: { ai_text_transform_actions: true },
-               with_settings: { ai_text_transform_actions_enabled: true } do
+               with_flag: { ai_text_actions: true } do
   shared_let(:user) { create(:user) }
-  shared_let(:action) { create(:ai_text_transform_action, prompt: "Fix grammar only.") }
+  shared_let(:action) { create(:ai_text_action, prompt: "Fix grammar only.") }
 
   let(:gateway) { AI::TextTransforms::FakeGateway.new }
   let(:availability) { AI::TextTransforms::Availability.new(gateway:) }

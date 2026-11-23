@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,30 +40,12 @@ RSpec.describe FormConfigurations::RowsController do
     form.update!(attribute_groups: [[:details, %w[priority category]]])
   end
 
-  describe "PUT #drop", with_ee: %i[edit_attribute_groups] do
-    it "uses the row_key param and moves the row to inactive" do
-      put :drop,
-          params: { form_configuration_id: form.id, row_key: "priority", target_id: "inactive", position: 1 },
-          format: :turbo_stream
+  describe "DELETE #destroy", with_ee: %i[edit_attribute_groups] do
+    it "removes the row from its group" do
+      delete :destroy, params: { form_configuration_id: form.id, row_key: "priority" }, format: :turbo_stream
 
       expect(response).to have_http_status(:ok)
       expect(variant.reload.attribute_groups.flat_map(&:members)).not_to include("priority")
-    end
-
-    it "moves the row into another active section at the requested position" do
-      form.update!(attribute_groups: [
-                     [:details, %w[priority]],
-                     ["Custom group", %w[category]]
-                   ])
-
-      put :drop,
-          params: { form_configuration_id: form.id, row_key: "priority", target_id: "Custom group", position: 1 },
-          format: :turbo_stream
-
-      expect(response).to have_http_status(:ok)
-
-      target_group = variant.reload.attribute_groups.find { |group| group.key == "Custom group" }
-      expect(target_group.members).to eq(%w[priority category])
     end
   end
 end

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -40,7 +39,7 @@ module Admin::Import::Jira::ImportRuns
       ) do
         "#{I18n.t('admin.jira.run.title')} ##{model.id}"
       end +
-        render(Admin::Import::Jira::ImportRuns::StatusBadgeComponent.new(model.current_state))
+        render(Admin::Import::Jira::ImportRuns::StatusLabelComponent.new(model.current_state))
     end
 
     def creator
@@ -48,15 +47,7 @@ module Admin::Import::Jira::ImportRuns
     end
 
     def last_changed
-      helpers.format_time(last_changed_date)
-    end
-
-    def last_changed_date
-      if model.last_transition
-        model.last_transition.created_at
-      else
-        model.updated_at
-      end
+      helpers.format_time(model.last_changed_at)
     end
 
     def projects

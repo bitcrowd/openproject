@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -62,7 +61,6 @@ FactoryBot.define do
     min_length { false }
     default_value { "" }
     max_length { false }
-    editable { true }
     possible_values { "" }
     admin_only { false }
     field_format { "bool" }
@@ -203,10 +201,7 @@ FactoryBot.define do
 
     trait :hierarchy do
       field_format { "hierarchy" }
-      hierarchy_root do
-        service = CustomFields::Hierarchy::HierarchicalItemService.new
-        service.generate_root(instance).value!
-      end
+      hierarchy_root { CustomField::Hierarchy::Item.create!(custom_field: instance) }
     end
 
     trait :multi_hierarchy do
@@ -216,10 +211,15 @@ FactoryBot.define do
 
     trait :weighted_item_list do
       field_format { "weighted_item_list" }
-      hierarchy_root do
-        service = CustomFields::Hierarchy::HierarchicalItemService.new
-        service.generate_root(instance).value!
-      end
+      hierarchy_root { CustomField::Hierarchy::Item.create!(custom_field: instance) }
+    end
+
+    trait :project_specific_allowlist do
+      project_specific_value_restriction { "allow" }
+    end
+
+    trait :project_specific_blocklist do
+      project_specific_value_restriction { "block" }
     end
 
     factory :project_custom_field, class: "ProjectCustomField" do

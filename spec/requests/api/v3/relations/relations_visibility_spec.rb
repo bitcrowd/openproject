@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -70,9 +69,26 @@ RSpec.describe "API v3 Relations visibility on relation filters", content_type: 
     end
   end
 
+  shared_examples "rejects operators that skip the visibility check" do |filter_name|
+    %w[>= <= *].each do |operator|
+      it "rejects the #{operator} operator" do
+        filter = [{ filter_name.to_sym => { operator:, values: [secret_wp.id.to_s] } }]
+
+        get "#{api_v3_paths.relations}?filters=#{CGI::escape(JSON.dump(filter))}"
+
+        expect(last_response).to have_http_status(:bad_request)
+        expect(last_response.body).not_to include(secret_wp.subject)
+      end
+    end
+  end
+
   describe "GET /api/v3/relations with invisible work package filters" do
     include_examples "does not return invisible relations", "involved"
     include_examples "does not return invisible relations", "from"
     include_examples "does not return invisible relations", "to"
+
+    include_examples "rejects operators that skip the visibility check", "involved"
+    include_examples "rejects operators that skip the visibility check", "from"
+    include_examples "rejects operators that skip the visibility check", "to"
   end
 end

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -395,14 +394,14 @@ RSpec.describe WorkPackage do
       create(:status,
              name: "New",
              is_default: true,
-             is_closed: false,
+             category: "to_do",
              default_done_ratio: 50)
     end
     shared_let(:status_assigned) do
       create(:status,
              name: "Assigned",
              is_default: true,
-             is_closed: false,
+             category: "to_do",
              default_done_ratio: 0)
     end
     shared_let(:work_package_new) do

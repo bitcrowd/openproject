@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -43,7 +42,7 @@ RSpec.describe CostReport do
       expect(PersistedView.find(instance.id)).to be_a(described_class)
     end
 
-    it "categorises itself as a cost report" do
+    it "categorizes itself as a cost report" do
       instance.save!
 
       expect(instance.category).to eq("cost_report")
@@ -177,12 +176,67 @@ RSpec.describe CostReport do
       end
     end
 
+    context "with a dimension naming a constant outside the engine" do
+      it "ignores it" do
+        instance.apply_pivot_configuration(rows: ["::Object"], columns: [:week])
+
+        replayed = instance.group_bys.map { |group_by| [group_by.class.name.demodulize, group_by.type] }
+
+        expect(replayed).to eq([["Week", :column]])
+      end
+    end
+
     context "without any dimension" do
       it "adds no singleton, because there is no pivot to render" do
         instance.apply_pivot_configuration(rows: [], columns: [])
 
         expect(instance.group_bys).to eq([])
         expect(instance).not_to be_pivot
+      end
+    end
+  end
+
+  describe "row level permissions" do
+    shared_let(:work_package) { create(:work_package, project:) }
+
+    let(:viewer) { create(:user, member_with_permissions: { project => permissions }) }
+    let(:colleague) { create(:user, member_with_permissions: { project => %i[view_own_time_entries] }) }
+    let(:instance) { described_class.new(name: "Costs", query:, principal: viewer) }
+
+    current_user { viewer }
+
+    before do
+      create(:time_entry, entity: work_package, project:, user: viewer, hours: 5)
+      create(:time_entry, entity: work_package, project:, user: colleague, hours: 10)
+      create(:cost_entry, entity: work_package, project:, user: viewer)
+      create(:cost_entry, entity: work_package, project:, user: colleague)
+    end
+
+    context "with permissions to view only the own entries" do
+      let(:permissions) { %i[view_own_time_entries view_own_cost_entries] }
+
+      it "adds the permission filter to the chain" do
+        expect(instance.filters.map(&:class)).to include(CostQuery::Filter::PermissionFilter)
+      end
+
+      it "reports only the user's own time and cost entries" do
+        expect(instance.result.count).to eq(2)
+      end
+    end
+
+    context "with permissions to view only the own time entries" do
+      let(:permissions) { %i[view_own_time_entries] }
+
+      it "reports only the user's own time entry" do
+        expect(instance.result.count).to eq(1)
+      end
+    end
+
+    context "with permissions to view all entries" do
+      let(:permissions) { %i[view_time_entries view_cost_entries] }
+
+      it "reports everybody's time and cost entries" do
+        expect(instance.result.count).to eq(4)
       end
     end
   end

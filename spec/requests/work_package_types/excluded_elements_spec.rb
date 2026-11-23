@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,9 +40,10 @@ RSpec.describe "Work package type excluded elements",
 
   before { login_as admin }
 
-  def toggle(value:, element: "assignee")
+  def toggle(value:, element: "assignee", headers: {})
     post type_variant_excluded_element_toggle_path(type_id: type.id, variant_id: link.id, aspect:, element:),
-         params: { value: }
+         params: { value: },
+         headers:
   end
 
   context "when the type is Linked for the aspect" do
@@ -97,6 +97,39 @@ RSpec.describe "Work package type excluded elements",
          params: { value: "0" }
 
     expect(response).to have_http_status(:not_found)
+  end
+
+  describe "a switch asking for a Turbo Stream" do
+    let(:turbo_stream) { { "Accept" => "text/vnd.turbo-stream.html" } }
+
+    it "refreshes the form so the row reflects the switch", :aggregate_failures do
+      toggle(value: "0", headers: turbo_stream)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq("text/vnd.turbo-stream.html")
+    end
+
+    it "gets no refresh when the switch is refused", :aggregate_failures do
+      custom_field = create(:integer_wp_custom_field, is_required: true)
+
+      toggle(value: "0", element: custom_field.attribute_name, headers: turbo_stream)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.media_type).to eq("application/json")
+    end
+
+    context "for the project attributes" do
+      let(:aspect) { TypeVariant::PROJECT_ATTRIBUTES }
+
+      before { link_configuration(link, aspect:) }
+
+      it "gets no refresh", :aggregate_failures do
+        toggle(value: "0", headers: turbo_stream)
+
+        expect(response).to have_http_status(:ok)
+        expect(response.media_type).to eq("application/json")
+      end
+    end
   end
 
   context "when the user is not an admin" do

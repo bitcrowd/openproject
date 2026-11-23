@@ -1,5 +1,32 @@
 # frozen_string_literal: true
 
+#-- copyright
+# OpenProject is an open source project management software.
+# Copyright (C) the OpenProject GmbH
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License version 3.
+#
+# OpenProject is a fork of ChiliProject, which is a fork of Redmine. The copyright follows:
+# Copyright (C) 2006-2013 Jean-Philippe Lang
+# Copyright (C) 2010-2013 the ChiliProject Team
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# See COPYRIGHT and LICENSE files for more details.
+#++
+
 require "spec_helper"
 
 RSpec.describe Projects::SprintSettings do
@@ -235,6 +262,44 @@ RSpec.describe Projects::SprintSettings do
         project.update!(estimation_unit: "none")
 
         expect(project.reload.estimation_unit).to eq("story_points")
+      end
+    end
+
+    describe "predicate methods" do
+      context "with feature flag enabled", with_flag: :project_settings_estimation_unit do
+        it "#estimation_unit_none? returns true if none is selected" do
+          project.estimation_unit = "none"
+          expect(project).to be_estimation_unit_none
+        end
+
+        it "#estimation_unit_time? returns true if time is selected" do
+          project.estimation_unit = "time"
+          expect(project).to be_estimation_unit_time
+        end
+
+        it "#estimation_unit_story_points? returns true if story_points is selected" do
+          project.estimation_unit = "story_points"
+          expect(project).to be_estimation_unit_story_points
+        end
+      end
+
+      context "without feature flag enabled" do
+        it "#estimation_unit_none? returns false if none is selected" do
+          project.estimation_unit = "none"
+          expect(project).not_to be_estimation_unit_none
+          expect(project).to be_estimation_unit_story_points
+        end
+
+        it "#estimation_unit_time? returns false if time is selected" do
+          project.estimation_unit = "time"
+          expect(project).not_to be_estimation_unit_time
+          expect(project).to be_estimation_unit_story_points
+        end
+
+        it "#estimation_unit_story_points? returns true if story_points is selected" do
+          project.estimation_unit = "story_points"
+          expect(project).to be_estimation_unit_story_points
+        end
       end
     end
   end

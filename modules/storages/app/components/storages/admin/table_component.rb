@@ -22,18 +22,17 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
-#
 
 module Storages::Admin
   class TableComponent < OpPrimer::BorderBoxTableComponent
     columns :name, :provider_type, :creator, :created_at
     main_column :name
-    mobile_columns :name, :provider_type, :creator, :created_at
+    mobile_columns :name, :provider_type, :creator
+    mobile_labels :provider_type
 
     def row_class
       ::Storages::Admin::RowComponent

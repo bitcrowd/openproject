@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -177,11 +176,12 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
 
       # Selection project scope 'In all projects' redirects away from current project.
       global_search.submit_in_global_scope
-      expect(page).to have_current_path (/\/search/)
-
-      expect(current_url).to include("q=#{"%23#{search_target.id}"}")
-      expect(current_url).to include("filter=work_packages")
-      expect(current_url).to include("scope=all")
+      expect(page).to have_current_path(%r{/search}, ignore_query: true)
+      expect(page).to have_current_query_params(
+        "q" => "##{search_target.id}",
+        "filter" => "work_packages",
+        "scope" => "all"
+      )
     end
 
     it "announces the number of items via aria-live" do
@@ -264,7 +264,7 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
         end
       end
 
-      context "when a work package is closed" do
+      context "when a work package is closed", driver: :rack_test, js: false do
         let(:params) { [{ q: query, scope: "all" }] }
         let(:run_visit) { false }
         let(:work_package) { work_packages.last }
@@ -300,10 +300,12 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
         # Expect that the "All" tab is selected.
         global_search.expect_active_tab :work_packages
 
-        expect(current_url).to include("/#{project.identifier}/search")
-        expect(current_url).to include("q=#{query}")
-        expect(current_url).to include("filter=work_packages")
-        expect(current_url).to include("scope=current_project")
+        expect(page).to have_current_path(%r{/#{project.identifier}/search}, ignore_query: true)
+        expect(page).to have_current_query_params(
+          "q" => query,
+          "filter" => "work_packages",
+          "scope" => "current_project"
+        )
 
         table = Pages::EmbeddedWorkPackagesTable.new(find(".work-packages-embedded-view--container"))
         table.expect_work_package_count(5) # because we set the page size to this
@@ -330,6 +332,7 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
 
         # clearing the text filter and searching by a just a custom field works
         page.find_by_id("filter-by-text-input").set("")
+        table.expect_work_package_listed(*work_packages[17..22]) # This line ensures that the table is completely rendered.
         filters.add_filter_by(custom_field_string.name,
                               "is",
                               [custom_field_string_value],
@@ -359,9 +362,13 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
         # and expect that subproject's work packages will not be found
         table.ensure_work_package_not_listed! other_work_package
 
-        expect(current_url).to include("q=Other+work+package")
-        expect(current_url).to include("filter=work_packages")
-        expect(current_url).to include("scope=current_project")
+        expect(page).to have_current_query_params(
+          a_hash_including(
+            "q" => "Other work package",
+            "filter" => "work_packages",
+            "scope" => "current_project"
+          )
+        )
 
         # Expect to find custom field values
         # ...for type: text
@@ -383,10 +390,14 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
         expect(page).to have_text "Search for \"#{other_work_package.subject}\" in #{project.name} and all subprojects"
 
         # Expect that the project scope is not set and work_packages module continues to stay selected.
-        expect(current_url).to match(/\/#{project.identifier}\/search/)
-        expect(current_url).to include("q=Other+work+package")
-        expect(current_url).to include("filter=work_packages")
-        expect(current_url).to include("scope=&")
+        expect(page).to have_current_path(%r{/#{project.identifier}/search}, ignore_query: true)
+        expect(page).to have_current_query_params(
+          a_hash_including(
+            "q" => "Other work package",
+            "filter" => "work_packages",
+            "scope" => ""
+          )
+        )
 
         table = Pages::EmbeddedWorkPackagesTable.new(find(".work-packages-embedded-view--container"))
         table.expect_work_package_count(1)
@@ -447,7 +458,7 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
   end
 
   describe "when semantic work package IDs are active",
-           with_settings: { work_packages_identifier: "semantic" } do
+           driver: :rack_test, js: false, with_settings: { work_packages_identifier: "semantic" } do
     let(:run_visit) { false }
     let(:semantic_project) { create(:project, :semantic) }
     let(:semantic_wp) do
@@ -469,7 +480,7 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
     end
   end
 
-  describe "search for notes" do
+  describe "search for notes", driver: :rack_test, js: false do
     let(:work_package) { work_packages[0] }
     let!(:note_one) do
       create(:work_package_journal,
@@ -485,9 +496,7 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
     end
 
     it "highlights last note" do
-      global_search.search "note"
-      global_search.submit_in_global_scope
-      global_search.open_tab "All"
+      visit search_path(q: "note", scope: "all")
 
       within("dt.work_package-note + dd") do
         expect(page).to have_css(".description", text: note_two.notes)
@@ -541,7 +550,7 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
 
       it_behaves_like "finds the project"
 
-      describe "searching for list project custom field" do
+      describe "searching for list project custom field", driver: :rack_test, js: false do
         let(:possible_values) { %w[Value1 Value2 Value3] }
         let!(:project_list_cf) do
           create(:list_project_custom_field,
@@ -555,6 +564,10 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
           end
         end
         let(:query) { project_list_cf.possible_values.pick(:value) }
+
+        subject do
+          visit search_path(q: query, scope: "all", filter: "projects")
+        end
 
         it_behaves_like "finds the project"
 
@@ -572,7 +585,7 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
           it_behaves_like "does not find the project"
         end
 
-        context "when using % in the query string the escaping works correcly and" do
+        context "when using % in the query string the escaping works correctly and" do
           let(:query) { "%#{project_list_cf.possible_values.pick(:value)}" }
 
           it_behaves_like "does not find the project"
@@ -587,7 +600,7 @@ RSpec.describe "Search", :js, with_settings: { per_page_options: "5" } do
     end
   end
 
-  describe "pagination" do
+  describe "pagination", driver: :rack_test, js: false do
     context "for project wide search" do
       it "works" do
         expect_range 13, 22

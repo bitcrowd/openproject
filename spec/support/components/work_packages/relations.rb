@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -327,7 +326,7 @@ module Components
       def add_parent(work_package)
         # Open the parent edit
         SeleniumHubWaiter.wait
-        find(".wp-relation--parent-change").click
+        click_on accessible_name: I18n.t("js.relation_buttons.set_parent")
 
         # Enter the query and select the child
         SeleniumHubWaiter.wait
@@ -350,7 +349,7 @@ module Components
 
       def remove_parent
         SeleniumHubWaiter.wait
-        find(".wp-relation--parent-remove").click
+        click_on accessible_name: I18n.t("js.relation_buttons.remove_parent")
       end
 
       def children_table

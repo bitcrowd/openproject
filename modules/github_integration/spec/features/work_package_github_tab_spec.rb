@@ -20,8 +20,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -106,8 +105,8 @@ RSpec.describe "Open the GitHub tab", :js do
         work_package_page.visit!
         work_package_page.switch_to_tab(tab: "github")
         tabs.expect_no_counter(github_tab_element)
-        expect(page).to have_content("There are no pull requests")
-        expect(page).to have_content("Link an existing PR by using the code OP##{work_package.id}")
+        expect(page).to have_text("There are no pull requests")
+        expect(page).to have_text("Link an existing PR by using the code OP##{work_package.id}")
       end
     end
 

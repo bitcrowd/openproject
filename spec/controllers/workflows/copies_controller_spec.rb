@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -79,6 +78,11 @@ RSpec.describe Workflows::CopiesController do
 
       it "assigns the source role" do
         expect(assigns[:source_role]).to eq(source_role)
+      end
+
+      it "excludes the source role from the roles to copy to" do
+        expect(assigns[:all_roles]).not_to include(source_role)
+        expect(assigns[:all_roles]).to match_array(Workflows::StatusTransition.eligible_roles - [source_role])
       end
     end
   end

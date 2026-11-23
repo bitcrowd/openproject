@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -34,7 +33,9 @@ module Import
 
     class AbortionError < StandardError; end
 
-    on_complete do
+    # Raised in on_shutdown rather than on_complete, so an aborted job skips on_complete and doesn't log "finished".
+    # A subclass's on_shutdown runs before this one, so work that must also run on abort belongs there.
+    on_shutdown do
       raise AbortionError, "Job was aborted" if @aborted
     end
 

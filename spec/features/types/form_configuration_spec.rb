@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -50,6 +49,8 @@ RSpec.describe "form configuration", :js, :selenium do
 
   describe "query group actions with EE token", with_ee: %i[edit_attribute_groups] do
     describe "default configuration" do
+      include_context "with mobile screen size", 1920, 1700
+
       let(:dialog) { Components::ConfirmationDialog.new }
 
       before do
@@ -160,9 +161,7 @@ RSpec.describe "form configuration", :js, :selenium do
         form.rename_group("People", "Cool Stuff")
 
         # Start renaming, but cancel
-        group_key = form.send(:find_group, "Cool Stuff")["data-group-key"]
-        form.send(:open_group_menu, "Cool Stuff")
-        page.find_test_selector("type-form-configuration-group-rename-#{group_key}", visible: :all).click
+        form.start_renaming_group("Cool Stuff")
         input = find_test_selector("type-form-configuration-group-name-input", wait: 10)
         input.set("FOOBAR")
         page.find_test_selector("type-form-configuration-group-cancel", wait: 10).click
@@ -285,7 +284,7 @@ RSpec.describe "form configuration", :js, :selenium do
         end
       end
 
-      it "removes a newly added unsaved custom group when canceling edit" do
+      it "cancels edits to new and persisted custom groups" do
         initial_order = form.group_order
 
         form.add_button_dropdown.click
@@ -301,9 +300,7 @@ RSpec.describe "form configuration", :js, :selenium do
         expect(page).to have_no_test_selector("type-form-configuration-group-name-input")
 
         expect(form.group_order).to eq(initial_order)
-      end
 
-      it "keeps a saved custom group when canceling rename" do
         form.add_attribute_group("Saved custom group")
 
         visit edit_form_configuration_path(type.default_variant.form_configuration)
@@ -334,168 +331,39 @@ RSpec.describe "form configuration", :js, :selenium do
         expect(persisted_group_order).not_to include("b) > 20.000 / 30.000 Nutzende")
       end
 
-      it "shows only the edit action for query rows" do
+      it "edits query rows directly from their pencil button" do
         form.add_query_group("Subtasks", :children)
 
-        menu_id = form.open_query_menu("Subtasks")
-        menu_selector = "##{menu_id}"
+        within form.find_group("Subtasks") do
+          expect(page).to have_no_button(accessible_name: I18n.t("types.edit.form_configuration.row_actions"))
+          click_on accessible_name: I18n.t("types.edit.form_configuration.edit_query")
+        end
 
-        expect(page).to have_selector(menu_selector, text: I18n.t("types.edit.form_configuration.edit_query"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("label_agenda_item_move_to_top"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("label_agenda_item_move_up"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("label_agenda_item_move_down"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("label_agenda_item_move_to_bottom"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("button_delete"))
+        expect(page).to have_css(".wp-table--configuration-modal")
       end
 
       it "shows only delete for a single attribute row" do
         form.add_attribute_group("New Group")
         form.move_to(:category, "New Group")
 
-        menu_id = form.open_attribute_menu(:category)
-        menu_selector = "##{menu_id}"
+        single_row_menu_id = form.open_attribute_menu(:category)
+        single_row_menu_selector = "##{single_row_menu_id}"
 
-        expect(page).to have_selector(menu_selector, text: I18n.t("button_delete"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("label_agenda_item_move_to_top"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("label_agenda_item_move_up"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("label_agenda_item_move_down"))
-        expect(page).to have_no_selector("#{menu_selector} [role='menuitem']", text: I18n.t("label_agenda_item_move_to_bottom"))
-      end
-
-      it "shows move actions only where valid for multi-row groups" do
-        details_order = form.attribute_order("Details")
-
-        first_row_menu_id = form.open_attribute_menu(details_order.first)
-
-        within "##{first_row_menu_id}" do
-          expect(page).to have_text(I18n.t("label_agenda_item_move_down"))
-          expect(page).to have_text(I18n.t("label_agenda_item_move_to_bottom"))
-          expect(page).to have_no_text(I18n.t("label_agenda_item_move_to_top"))
-          expect(page).to have_no_text(I18n.t("label_agenda_item_move_up"))
-          expect(page).to have_text(I18n.t("button_delete"))
-        end
-
-        form.close_menu(first_row_menu_id)
-
-        last_row_menu_id = form.open_attribute_menu(details_order.last)
-
-        within "##{last_row_menu_id}" do
-          expect(page).to have_text(I18n.t("label_agenda_item_move_to_top"))
-          expect(page).to have_text(I18n.t("label_agenda_item_move_up"))
-          expect(page).to have_no_text(I18n.t("label_agenda_item_move_down"))
-          expect(page).to have_no_text(I18n.t("label_agenda_item_move_to_bottom"))
-          expect(page).to have_text(I18n.t("button_delete"))
-        end
-      end
-
-      it "opens the query editor from the query row action" do
-        form.add_query_group("Subtasks", :children)
-
-        menu_id = form.open_query_menu("Subtasks")
-
-        within "##{menu_id}" do
-          click_button I18n.t("types.edit.form_configuration.edit_query")
-        end
-
-        expect(page).to have_css(".wp-table--configuration-modal")
-      end
-
-      it "reorders and deletes groups via group actions" do
-        expected_order = persisted_group_order
-        moving_group = expected_order.second
-
-        form.invoke_group_action(moving_group, I18n.t("label_agenda_item_move_up"))
-        index = expected_order.index(moving_group)
-        expected_order[index], expected_order[index - 1] = expected_order[index - 1], expected_order[index]
-        wait_for { persisted_group_order }.to eq(expected_order)
-
-        form.invoke_group_action(moving_group, I18n.t("label_agenda_item_move_to_bottom"))
-        expected_order.delete(moving_group)
-        expected_order << moving_group
-        wait_for { persisted_group_order }.to eq(expected_order)
-
-        form.invoke_group_action(moving_group, I18n.t("label_agenda_item_move_up"))
-        index = expected_order.index(moving_group)
-        expected_order[index], expected_order[index - 1] = expected_order[index - 1], expected_order[index]
-        wait_for { persisted_group_order }.to eq(expected_order)
-
-        form.invoke_group_action(moving_group, I18n.t("label_agenda_item_move_to_top"))
-        expected_order.delete(moving_group)
-        expected_order.unshift(moving_group)
-        wait_for { persisted_group_order }.to eq(expected_order)
-
-        deleted_group = expected_order.last
-        accept_confirm I18n.t("types.edit.form_configuration.confirm_delete_group") do
-          form.invoke_group_action(deleted_group, I18n.t("button_delete"))
-        end
-        expected_order.delete(deleted_group)
-        wait_for { persisted_group_order }.to eq(expected_order)
-      end
-
-      it "reorders and deletes attribute rows via row actions" do
-        expected_order = persisted_attribute_order(:details)
-        moving_attribute = expected_order.second
-
-        form.invoke_attribute_action(moving_attribute, I18n.t("label_agenda_item_move_up"))
-        index = expected_order.index(moving_attribute)
-        expected_order[index], expected_order[index - 1] = expected_order[index - 1], expected_order[index]
-        wait_for { persisted_attribute_order(:details) }.to eq(expected_order)
-
-        form.invoke_attribute_action(moving_attribute, I18n.t("label_agenda_item_move_down"))
-        index = expected_order.index(moving_attribute)
-        expected_order[index], expected_order[index + 1] = expected_order[index + 1], expected_order[index]
-        wait_for { persisted_attribute_order(:details) }.to eq(expected_order)
-
-        form.invoke_attribute_action(moving_attribute, I18n.t("label_agenda_item_move_to_bottom"))
-        expected_order.delete(moving_attribute)
-        expected_order << moving_attribute
-        wait_for { persisted_attribute_order(:details) }.to eq(expected_order)
-
-        form.invoke_attribute_action(moving_attribute, I18n.t("label_agenda_item_move_up"))
-        index = expected_order.index(moving_attribute)
-        expected_order[index], expected_order[index - 1] = expected_order[index - 1], expected_order[index]
-        wait_for { persisted_attribute_order(:details) }.to eq(expected_order)
-
-        form.invoke_attribute_action(moving_attribute, I18n.t("label_agenda_item_move_to_top"))
-        expected_order.delete(moving_attribute)
-        expected_order.unshift(moving_attribute)
-        wait_for { persisted_attribute_order(:details) }.to eq(expected_order)
-
-        form.invoke_attribute_action(moving_attribute, I18n.t("button_delete"))
-        expected_order.delete(moving_attribute)
-        wait_for { persisted_attribute_order(:details) }.to eq(expected_order)
-      end
-    end
-
-    describe "required custom field" do
-      let(:custom_fields) { [custom_field] }
-      let(:custom_field) { create(:issue_custom_field, :integer, is_required: true, name: "MyNumber") }
-      let(:cf_identifier) { custom_field.attribute_name }
-      let(:cf_identifier_api) { cf_identifier.camelcase(:lower) }
-
-      before do
-        project
-        custom_field
-
-        login_as(admin)
-        visit edit_form_configuration_path(type.default_variant.form_configuration)
-      end
-
-      it "shows the field" do
-        # Should be initially disabled
-        form.expect_inactive(cf_identifier)
-        form.expect_attribute(key: cf_identifier, translation: "MyNumber")
-
-        # Add into new group
-        form.add_attribute_group("New Group")
-        form.move_to(cf_identifier, "New Group")
-        form.expect_attribute(key: cf_identifier, translation: "MyNumber")
+        expect(page).to have_selector(single_row_menu_selector, text: I18n.t("button_delete"))
+        expect(page).to have_no_css("#{single_row_menu_selector} [role='menuitem']",
+                                    text: I18n.t("label_agenda_item_move_to_top"))
+        expect(page).to have_no_css("#{single_row_menu_selector} [role='menuitem']",
+                                    text: I18n.t("label_agenda_item_move_up"))
+        expect(page).to have_no_css("#{single_row_menu_selector} [role='menuitem']",
+                                    text: I18n.t("label_agenda_item_move_down"))
+        expect(page).to have_no_css("#{single_row_menu_selector} [role='menuitem']",
+                                    text: I18n.t("label_agenda_item_move_to_bottom"))
       end
     end
 
     describe "custom fields" do
       let(:custom_fields) { [custom_field] }
-      let(:custom_field) { create(:issue_custom_field, :integer, name: "MyNumber") }
+      let(:custom_field) { create(:issue_custom_field, :integer, is_required: true, name: "MyNumber") }
       let(:cf_identifier) { custom_field.attribute_name }
       let(:cf_identifier_api) { cf_identifier.camelcase(:lower) }
 
@@ -508,13 +376,14 @@ RSpec.describe "form configuration", :js, :selenium do
 
         # Should be initially disabled
         form.expect_inactive(cf_identifier)
+        form.expect_attribute(key: cf_identifier, translation: "MyNumber")
 
         # Add into new group
         form.add_attribute_group("New Group")
         form.move_to(cf_identifier, "New Group")
 
         # Make visible
-        form.expect_attribute(key: cf_identifier)
+        form.expect_attribute(key: cf_identifier, translation: "MyNumber")
       end
 
       context "if active in project" do
@@ -539,10 +408,14 @@ RSpec.describe "form configuration", :js, :selenium do
   end
 
   describe "without EE token", with_ee: false do
-    it "hides protected group actions" do
+    it "hides protected group and query actions" do
+      query = build(:global_query, user_id: 0)
+      groups = variant.attribute_groups.map { |group| [group.key, group.members] }
+      variant.attribute_groups = groups + [["Subtasks", [query]]]
+      variant.save!
+
       login_as(admin)
       visit edit_form_configuration_path(type.default_variant.form_configuration)
-
       expect(page).to have_no_test_selector("type-form-configuration-add-button")
 
       menu_id = form.send(:open_group_menu, "Details")
@@ -550,17 +423,8 @@ RSpec.describe "form configuration", :js, :selenium do
         expect(page).to have_no_text(I18n.t("types.edit.form_configuration.rename_group"))
         expect(page).to have_no_text(I18n.t("button_delete"))
       end
-    end
 
-    it "hides protected query group actions" do
-      query = build(:global_query, user_id: 0)
-      variant.attribute_groups = [["Subtasks", [query]]]
-      variant.save!
-
-      login_as(admin)
-      visit edit_form_configuration_path(type.default_variant.form_configuration)
-
-      expect(page).to have_no_test_selector("type-form-configuration-query-actions-Subtasks")
+      expect(page).to have_no_button(accessible_name: I18n.t("types.edit.form_configuration.edit_query"))
     end
   end
 

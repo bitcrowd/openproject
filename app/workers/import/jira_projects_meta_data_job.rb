@@ -22,15 +22,18 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 module Import
   class JiraProjectsMetaDataJob < ApplicationJob
+    # Declared before the concurrency extension, so that its retry_on keeps handling exceeded limits.
+    rescue_from StandardError, with: :transition_to_error
+
     include GoodJob::ActiveJobExtensions::Concurrency
+    include JiraJobLogging
 
     good_job_control_concurrency_with(
       total_limit: 2,
@@ -44,22 +47,21 @@ module Import
     end
 
     def perform(jira_import_id)
-      jira_import = Import::JiraImport.find(jira_import_id)
-      client = jira_import.jira.client
-      selected = collect_metadata(client, jira_import.project_ids)
-      jira_import.update!(selected:)
-      jira_import.transition_to!(:projects_meta_done, selected:)
-    rescue StandardError => e
-      jira_import&.transition_to!(:projects_meta_error, error: e.message, error_backtrace: e.backtrace)
+      @jira_import = Import::JiraImport.find(jira_import_id)
+      client = @jira_import.jira.client
+      selected = collect_metadata(client, @jira_import.projects)
+      @jira_import.update!(selected:)
+      @jira_import.transition_to!(:projects_meta_done, selected:)
     end
 
-    def collect_metadata(client, project_ids)
+    def collect_metadata(client, projects)
       issues_count = 0
       status_ids = []
       issue_type_ids = []
 
-      project_ids.map do |project_id|
-        project_issues_count, project_status_ids, project_issue_type_ids = collect_project_metadata(client, project_id)
+      projects.each do |project|
+        project_issues_count, project_status_ids, project_issue_type_ids =
+          collect_project_metadata(client, project["id"], project["key"])
 
         issue_type_ids = issue_type_ids.concat(project_issue_type_ids).uniq
         status_ids = status_ids.concat(project_status_ids).uniq
@@ -73,15 +75,24 @@ module Import
       }
     end
 
-    def collect_project_metadata(client, project_id)
-      project_statuses = client.project_statuses(project_id)
-      project_issue_type_ids = project_statuses.pluck("id")
-      project_status_ids = project_statuses.flat_map { |type| type["statuses"].map { |status| status["id"] } }
+    def collect_project_metadata(client, project_id, project_key)
+      with_log_context(jira_object_type: "project", jira_object_id_or_name: project_key) do
+        Rails.logger.debug "Fetching meta data for project"
+        project_statuses = client.project_statuses(project_id)
+        project_issue_type_ids = project_statuses.pluck("id")
+        project_status_ids = project_statuses.flat_map { |type| type["statuses"].map { |status| status["id"] } }
 
-      result = client.issues(jql: "project = '#{project_id}'", max_results: 0)
-      project_issues_count = result["total"]
+        result = client.issues(jql: "project = '#{project_id}'", max_results: 0)
+        project_issues_count = result["total"]
 
-      [project_issues_count, project_status_ids, project_issue_type_ids]
+        [project_issues_count, project_status_ids, project_issue_type_ids]
+      end
+    end
+
+    private
+
+    def transition_to_error(error)
+      @jira_import&.transition_to!(:projects_meta_error, error: error.message, error_backtrace: error.backtrace)
     end
   end
 end

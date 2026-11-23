@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,7 +31,6 @@ module API
   module V3
     module Meetings
       class MeetingRepresenter < ::API::Decorators::Single
-        include API::Decorators::LinkedResource
         include API::V3::Workspaces::LinkedResource
         include API::Caching::CachedRepresenter
         include API::V3::Attachments::AttachableRepresenterMixin
@@ -69,6 +67,7 @@ module API
 
         link :delete,
              cache_if: -> { current_user.allowed_in_project?(:delete_meetings, represented.project) } do
+          next if represented.series_template?
           {
             href: api_v3_paths.meeting(represented.id),
             method: :delete

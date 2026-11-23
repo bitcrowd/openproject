@@ -1,9 +1,36 @@
 # frozen_string_literal: true
 
+#-- copyright
+# OpenProject is an open source project management software.
+# Copyright (C) the OpenProject GmbH
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License version 3.
+#
+# OpenProject is a fork of ChiliProject, which is a fork of Redmine. The copyright follows:
+# Copyright (C) 2006-2013 Jean-Philippe Lang
+# Copyright (C) 2010-2013 the ChiliProject Team
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# See COPYRIGHT and LICENSE files for more details.
+#++
+
 require "spec_helper"
 require_relative "shared_context"
 
-RSpec.describe "Work package table context menu",
+RSpec.describe "Team planner context menu",
                :js,
                with_ee: %i[team_planner_view],
                with_settings: { start_of_week: 1 } do
@@ -50,5 +77,19 @@ RSpec.describe "Work package table context menu",
 
     menu.choose "Open details view"
     Pages::SplitWorkPackage.new(work_package, project).expect_attributes Subject: work_package.subject
+  end
+
+  it "opens on right-click, moves with the arrow keys and returns focus to the card on Escape" do
+    page.find(".op-wp-single-card-#{work_package.id} span", text: work_package.subject, match: :first).right_click
+
+    menu.expect_open
+    expect(page).to have_selector(:menuitem, "Open details view", focused: true)
+
+    page.driver.browser.keyboard.type(:down)
+    expect(page).to have_selector(:menuitem, "Open fullscreen view", focused: true)
+
+    menu.press_escape
+    menu.expect_closed
+    expect(page).to have_css(".op-wp-single-card-#{work_package.id}", focused: true)
   end
 end

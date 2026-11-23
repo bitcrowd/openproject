@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -69,7 +68,7 @@ RSpec.describe "form configuration exclusions", :js do
     toggle_for("assignee").click
 
     expect_toggle("assignee", pressed: false)
-    expect(excluded_configuration_elements(link, aspect: aspect)).to eq(%w[assignee])
+    wait_for { excluded_configuration_elements(link, aspect: aspect) }.to eq(%w[assignee])
 
     # The row stays listed so the switch remains reachable: the page shows the source's
     # configuration annotated with this variant's choices, not the resulting form.
@@ -82,6 +81,6 @@ RSpec.describe "form configuration exclusions", :js do
     toggle_for("assignee").click
 
     expect_toggle("assignee", pressed: true)
-    expect(excluded_configuration_elements(link, aspect: aspect)).to be_empty
+    wait_for { excluded_configuration_elements(link, aspect: aspect) }.to be_empty
   end
 end

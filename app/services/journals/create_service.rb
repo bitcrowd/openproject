@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -40,7 +39,7 @@
 #
 # for this purpose.
 
-# rubocop:disable Rails/SquishedSQLHeredocs
+# rubocop:disable-next Rails/SquishedSQLHeredocs
 module Journals
   class CreateService
     include Helpers
@@ -53,9 +52,11 @@ module Journals
       @associations = Association.for(journable)
     end
 
-    def call(notes: "", internal: false, cause: CauseOfChange::NoCause.new)
+    def call(notes: "", internal: false, cause: CauseOfChange::NoCause.new, skip_aggregation: false)
+      raise CauseOfChange::InvalidCauseError.new(cause) unless cause.is_a?(CauseOfChange::Base)
+
       Journal.transaction do
-        journal = create_journal(notes, internal, cause)
+        journal = create_journal(notes, internal, cause, skip_aggregation)
 
         if journal
           reload_journals
@@ -71,20 +72,24 @@ module Journals
     #
     # * The journalizing happens within the configured aggregation time
     # * The journalizing is carried out by the same user
-    # * The cause is identical
+    # * The cause is identical or extends the predecessor's cause
     # * ONLY one note exists between the predecessor and the journal to be created
     # * The predecessor and the journal to be created have the same restriction
+    # * The caller did not ask to skip aggregation
     #
     # Instead of removing the predecessor, return it here so that it can be stripped in the journal creating
     # SQL to than be refilled. That way, references to the journal, including ones users have, are kept intact.
-    def aggregatable_predecessor(notes, internal, cause)
+    def aggregatable_predecessor(notes, internal, cause, skip_aggregation)
+      return if skip_aggregation
+
       predecessor = journable.last_journal
 
       predecessor if aggregatable?(predecessor, notes, internal, cause)
     end
 
-    def create_journal(notes, internal, cause)
-      predecessor = aggregatable_predecessor(notes, internal, cause)
+    def create_journal(notes, internal, cause, skip_aggregation)
+      predecessor = aggregatable_predecessor(notes, internal, cause, skip_aggregation)
+      cause = aggregate_cause(predecessor, cause)
 
       log_journal_creation(predecessor)
 
@@ -577,7 +582,7 @@ module Journals
 
     def cause_sql(cause)
       # Using the same encoder mechanism that ActiveRecord uses for json/jsonb columns
-      ActiveSupport::JSON.encode(cause || {})
+      ActiveSupport::JSON.encode(cause)
     end
 
     # Because we added the journal via bare metal sql, rails does not yet
@@ -612,7 +617,13 @@ module Journals
     end
 
     def only_one_or_same_cause?(predecessor, cause)
-      predecessor.cause.empty? || cause.blank? || predecessor.cause == cause
+      predecessor.cause.empty? || predecessor.cause == cause || cause.mergeable_into?(predecessor.cause)
+    end
+
+    def aggregate_cause(predecessor, cause)
+      return cause unless predecessor
+
+      cause.merge_into(predecessor.cause) || cause
     end
 
     def only_one_note?(predecessor, notes)
@@ -632,4 +643,3 @@ module Journals
     end
   end
 end
-# rubocop:enable Rails/SquishedSQLHeredocs

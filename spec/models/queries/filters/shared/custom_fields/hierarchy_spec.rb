@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -34,12 +33,8 @@ RSpec.describe Queries::Filters::Shared::CustomFields::Hierarchy,
                with_ee: %i[custom_field_hierarchies] do
   # `let!` (not shared_let): the hierarchy format is only valid while the EE
   # token from `with_ee` is active, which is per-example.
-  let(:service) { CustomFields::Hierarchy::HierarchicalItemService.new }
   let!(:custom_field) { create(:user_custom_field, :hierarchy, name: "Job title") }
-  let!(:developer) do
-    service.insert_item(contract_class: CustomFields::Hierarchy::InsertListItemContract,
-                        parent: custom_field.hierarchy_root, label: "Developer").value!
-  end
+  let!(:developer) { create(:hierarchy_item, parent: custom_field.hierarchy_root, label: "Developer") }
 
   # The filter UserQuery builds for this hierarchy custom field, with its values
   # set as strings (how they come back when editing a stored filter).

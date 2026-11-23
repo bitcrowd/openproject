@@ -20,29 +20,16 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 See COPYRIGHT and LICENSE files for more details.
 
 ++#%>
 
 <%=
-  component_wrapper(tag: "turbo-frame", **wrapper_options) do
-    concat(
-      settings_primer_form_with(**form_options) do |f|
-        render(Admin::Import::Jira::Form.new(f))
-      end
-    )
-    concat(
-      render(
-        Admin::Import::Jira::ImportRuns::ProgressBoxComponent.new(
-          message: I18n.t("admin.jira.form.label_testing"),
-          hidden: true,
-          mt: 3,
-          data: { "admin--jira-configuration-form-target": "progressBanner" }
-        )
-      )
-    )
+  component_wrapper(**wrapper_options) do
+    settings_primer_form_with(**form_options) do |f|
+      render(Admin::Import::Jira::Form.new(f))
+    end
   end
 %>

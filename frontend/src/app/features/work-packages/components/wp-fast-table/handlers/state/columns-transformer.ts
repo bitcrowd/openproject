@@ -25,17 +25,14 @@
 // See COPYRIGHT and LICENSE files for more details.
 //++
 
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Injector } from '@angular/core';
 import { debugLog } from 'core-app/shared/helpers/debug_output';
-import { IsolatedQuerySpace } from 'core-app/features/work-packages/directives/query-space/isolated-query-space';
-import { takeUntil } from 'rxjs/operators';
 import { WorkPackageViewColumnsService } from 'core-app/features/work-packages/routing/wp-view-base/view-services/wp-view-columns.service';
 import { LazyInject } from 'core-app/shared/helpers/angular/lazy-inject.decorator';
 import { WorkPackageTable } from '../../wp-fast-table';
 
 export class ColumnsTransformer {
-  @LazyInject() public querySpace:IsolatedQuerySpace;
-
   @LazyInject() public wpTableColumns:WorkPackageViewColumnsService;
 
   constructor(public readonly injector:Injector,
@@ -43,7 +40,7 @@ export class ColumnsTransformer {
     this.wpTableColumns
       .updates$()
       .pipe(
-        takeUntil(this.querySpace.stopAllSubscriptions),
+        takeUntilDestroyed(table.destroyRef),
       )
       .subscribe(() => {
         if (table.originalRows.length > 0) {

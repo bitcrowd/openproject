@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -147,12 +146,18 @@ RSpec.describe API::V3::Attachments::AttachmentRepresenter do
 
         it_behaves_like "has an untitled link" do
           let(:link) { "downloadLocation" }
-          let(:href) { external_url }
+          let(:href) { api_v3_paths.attachment_content(attachment.id) }
         end
 
         it_behaves_like "has an untitled link" do
           let(:link) { "staticDownloadLocation" }
           let(:href) { api_v3_paths.attachment_content(attachment.id) }
+        end
+
+        it "does not generate an external download URL" do
+          generated
+
+          expect(attachment).not_to have_received(:external_url)
         end
       end
     end

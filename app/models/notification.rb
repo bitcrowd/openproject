@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -63,7 +62,13 @@ class Notification < ApplicationRecord
          :recipient,
          :visible
 
+  after_commit :schedule_push, if: -> { read_ian == false && (previously_new_record? || saved_change_to_read_ian?) }
+
   def date_alert?
     reason.in?(["date_alert_start_date", "date_alert_due_date"])
   end
+
+  private
+
+  def schedule_push = PushSubscriptions::NotifyJob.schedule_for(recipient_id)
 end

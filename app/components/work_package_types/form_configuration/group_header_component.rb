@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,6 +31,7 @@ module WorkPackageTypes
   module FormConfiguration
     class GroupHeaderComponent < ApplicationComponent
       include OpPrimer::ComponentHelpers
+      include SortableLists::MoveMenu
 
       def initialize(group:, context:, ee_available:, first:, last:, edit_mode:, form_model: nil)
         super
@@ -72,6 +72,8 @@ module WorkPackageTypes
         @last
       end
 
+      def sole_group? = first? && last?
+
       def edit_path
         @context.group_path(:edit, key: @group[:key])
       end
@@ -90,10 +92,6 @@ module WorkPackageTypes
         @context.group_path(:cancel_edit, key: @group[:key])
       end
 
-      def move_path(move_to)
-        @context.group_path(:move, key: @group[:key], move_to:)
-      end
-
       def destroy_path
         @context.group_path(key: @group[:key])
       end
@@ -104,17 +102,6 @@ module WorkPackageTypes
 
       def create_path
         @context.group_path
-      end
-
-      def move_action(menu:, href:, label:, icon:)
-        menu.with_item(
-          label:,
-          tag: :a,
-          href:,
-          content_arguments: { data: { turbo_method: :put, turbo_stream: true } }
-        ) do |item|
-          item.with_leading_visual_icon(icon:)
-        end
       end
     end
   end

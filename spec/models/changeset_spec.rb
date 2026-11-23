@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -303,7 +302,7 @@ RSpec.describe Changeset do
 
     it "references the work package id" do
       # make sure work package 1 is not already closed
-      expect(work_package.status.is_closed?).to be false
+      expect(work_package.status.closed?).to be false
 
       changeset.scan_comment_for_work_package_ids
       work_package.reload
@@ -344,7 +343,7 @@ RSpec.describe Changeset do
 
       it "can reference it" do
         # make sure work package 1 is not already closed
-        expect(work_package.status.is_closed?).to be false
+        expect(work_package.status.closed?).to be false
 
         changeset.scan_comment_for_work_package_ids
         work_package.reload
@@ -372,7 +371,7 @@ RSpec.describe Changeset do
 
       it "can reference it" do
         # make sure work package 1 is not already closed
-        expect(work_package.status.is_closed?).to be false
+        expect(work_package.status.closed?).to be false
 
         changeset.scan_comment_for_work_package_ids
         work_package.reload

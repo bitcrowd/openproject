@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -50,11 +49,19 @@ module Workflows
       @displayed_status_ids = status_ids_from(displayed_status_ids)
     end
 
-    # Normalised, so that rendering, the status query and persistence cannot disagree
+    # Normalized, so that rendering, the status query and persistence cannot disagree
     # about which tab is being edited. The raw value is absent whenever the matrix is
     # opened without one.
     def tab
       @tab ||= TABS.include?(@requested_tab.to_s) ? @requested_tab.to_s : DEFAULT_TAB
+    end
+
+    # Rendering falls back to a default tab and roles. Persisting must not: a write without an
+    # explicit tab and roles would rewrite transitions the user was never shown.
+    def explicit_selection?
+      TABS.include?(@requested_tab.to_s) &&
+        requested_role_ids.any? &&
+        roles.map(&:id).sort == requested_role_ids
     end
 
     def standalone? = variant.nil?
@@ -63,9 +70,11 @@ module Workflows
 
     def variant_tab? = !standalone? && !wizard?
 
-    def readonly? = @readonly || variant_tab? || (wizard? && reused?)
+    def readonly? = @readonly || variant_tab? || (wizard? && (reused? || project_variant?))
 
     def reused? = !workflow.used_by_one_variant?
+
+    def project_variant? = variant&.project_id.present?
 
     def matrix_path(**)
       if standalone?
@@ -79,7 +88,7 @@ module Workflows
       if standalone?
         routes.status_dialog_workflow_matrix_path(workflow, **)
       else
-        status_dialog_variant_workflow_matrix_path(scope_project, variant, **wizard_params, **)
+        status_dialog_variant_workflow_matrix_path(variant, **wizard_params, **)
       end
     end
 
@@ -87,22 +96,26 @@ module Workflows
       if standalone?
         routes.confirm_statuses_workflow_matrix_path(workflow, **)
       else
-        confirm_statuses_variant_workflow_matrix_path(scope_project, variant, **wizard_params, **)
+        confirm_statuses_variant_workflow_matrix_path(variant, **wizard_params, **)
       end
     end
 
     def copy_path(**)
       return routes.new_workflow_copy_path(workflow, **) if standalone?
 
-      new_variant_workflow_copy_path(scope_project, variant, **wizard_params, **)
+      new_variant_workflow_copy_path(variant, **wizard_params, **)
     end
 
     def eligible_roles
       @eligible_roles ||= Workflows::StatusTransition.ordered_eligible_roles
     end
 
+    def used_roles
+      @used_roles ||= Workflows::StatusTransition.used_roles(workflow)
+    end
+
     def roles
-      @roles ||= Workflows::StatusTransition.selected_roles(@requested_role_ids)
+      @roles ||= Workflows::StatusTransition.selected_roles(@requested_role_ids, workflow:)
     end
 
     # The dialogs forward these verbatim, so they must stay the raw request and never fall
@@ -168,6 +181,10 @@ module Workflows
 
     def status_ids_from(ids)
       Array(ids).flatten.map(&:to_i)
+    end
+
+    def requested_role_ids
+      Array(@requested_role_ids).map(&:to_i).uniq.sort
     end
 
     def belongs_to_tab?(workflow)

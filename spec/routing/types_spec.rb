@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -57,18 +56,8 @@ RSpec.describe "types routes" do
     end
 
     it do
-      expect(put("/forms/42/group/move?#{query}&move_to=higher"))
-        .to route_to("form_configurations/groups#move", form_configuration_id: "42", key:, move_to: "higher")
-    end
-
-    it do
       expect(patch("/forms/42/group/update_query?#{query}"))
         .to route_to("form_configurations/groups#update_query", form_configuration_id: "42", key:)
-    end
-
-    it do
-      expect(put("/forms/42/group/drop?#{query}"))
-        .to route_to("form_configurations/groups#drop", form_configuration_id: "42", key:)
     end
 
     it do
@@ -79,6 +68,18 @@ RSpec.describe "types routes" do
     it do
       expect(post("/forms/42/group/add_group"))
         .to route_to("form_configurations/groups#add_group", form_configuration_id: "42")
+    end
+  end
+
+  describe "form configuration moves (addressed by record id)" do
+    it do
+      expect(put("/forms/42/groups/7/move"))
+        .to route_to("form_configurations/groups#move", form_configuration_id: "42", id: "7")
+    end
+
+    it do
+      expect(put("/forms/42/attributes/7/move"))
+        .to route_to("form_configurations/attributes#move", form_configuration_id: "42", id: "7")
     end
   end
 

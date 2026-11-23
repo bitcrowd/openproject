@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -65,7 +64,7 @@ module Pages
 
     def open_details_view
       card_element.hover
-      card_element.find('[data-test-selector="op-wp-single-card--details-button"]').click
+      card_element.find(:button, accessible_name: I18n.t("js.button_open_details")).click
 
       Pages::PrimerizedSplitWorkPackage.new work_package
     end

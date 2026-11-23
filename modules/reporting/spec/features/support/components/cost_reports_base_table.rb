@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -77,6 +76,7 @@ module Components
       page.find("#{row_selector(row)} .icon-edit").click
 
       time_logging_modal.is_visible true
+      expect(page).to have_css("opce-time-entries-work-package-autocompleter .ng-value", wait: 10)
       time_logging_modal.change_hours(hours)
       time_logging_modal.activity_input_disabled_because_work_package_missing? false
 

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,6 +30,9 @@
 module Import
   class JiraFetchPrioritiesJob < ApplicationJob
     include JiraJobUtils
+    include JiraJobLogging
+
+    self.jira_object_type = "priority"
 
     def text
       I18n.t(:"admin.jira.run.jobs.#{self.class.to_s.demodulize}.title")
@@ -45,6 +47,9 @@ module Import
 
     def fetch_data
       priorities_upsert_data = @jira_client.priorities.map do |payload|
+        with_log_context(jira_object_id_or_name: payload["name"]) do
+          Rails.logger.debug "Fetched priority"
+        end
         {
           payload:,
           origin_id: payload.fetch("id"),

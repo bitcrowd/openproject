@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -38,7 +37,7 @@ module Queries::Filters::Shared::CustomFieldFilter
 
   module ClassMethods
     def key
-      /cf_(\d+)/
+      CustomField::COLUMN_NAME_PATTERN
     end
 
     def all_for(context = nil)
@@ -53,10 +52,10 @@ module Queries::Filters::Shared::CustomFieldFilter
     ##
     # Find the given custom field by its accessor, should it exist.
     def find_by_accessor(name)
-      match = name.match /cf_(\d+)/
+      custom_field_id = CustomField.id_from_column_name(name)
 
-      if match.present? && match[1].to_i > 0
-        all_custom_fields.detect { |cf| cf.id == match[1].to_i }
+      if custom_field_id
+        all_custom_fields.detect { |cf| cf.id == custom_field_id }
       end
     end
 

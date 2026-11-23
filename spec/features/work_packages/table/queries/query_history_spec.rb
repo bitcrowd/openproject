@@ -22,15 +22,14 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 require "spec_helper"
 
-RSpec.describe "Going back and forth through the browser history", :js, :selenium do
+RSpec.describe "Going back and forth through the browser history", :js do
   let(:user) do
     create(:user, member_with_roles: { project => role })
   end
@@ -132,7 +131,7 @@ RSpec.describe "Going back and forth through the browser history", :js, :seleniu
     retry_block do
       filters.open
       filters.expect_open
-      filters.expect_filter_by("Status", "open", nil)
+      filters.expect_filter_by("Status", "open (to-do + in progress)", nil)
       filters.expect_filter_by("Target versions", "is (OR)", version.name, "targetVersion")
     end
 
@@ -144,7 +143,7 @@ RSpec.describe "Going back and forth through the browser history", :js, :seleniu
     retry_block do
       filters.open
       filters.expect_open
-      filters.expect_filter_by("Status", "open", nil)
+      filters.expect_filter_by("Status", "open (to-do + in progress)", nil)
       filters.expect_filter_by("Assignee", "is (OR)", user.name)
     end
 
@@ -158,7 +157,7 @@ RSpec.describe "Going back and forth through the browser history", :js, :seleniu
     retry_block do
       filters.open
       filters.expect_open
-      filters.expect_filter_by("Status", "open", nil)
+      filters.expect_filter_by("Status", "open (to-do + in progress)", nil)
     end
 
     page.execute_script("window.history.forward()")
@@ -169,7 +168,7 @@ RSpec.describe "Going back and forth through the browser history", :js, :seleniu
     retry_block do
       filters.open
       filters.expect_open
-      filters.expect_filter_by("Status", "open", nil)
+      filters.expect_filter_by("Status", "open (to-do + in progress)", nil)
       filters.expect_filter_by("Assignee", "is (OR)", user.name)
     end
 
@@ -181,7 +180,7 @@ RSpec.describe "Going back and forth through the browser history", :js, :seleniu
     retry_block do
       filters.open
       filters.expect_open
-      filters.expect_filter_by("Status", "open", nil)
+      filters.expect_filter_by("Status", "open (to-do + in progress)", nil)
       filters.expect_filter_by("Target versions", "is (OR)", version.name, "targetVersion")
     end
 
@@ -193,7 +192,7 @@ RSpec.describe "Going back and forth through the browser history", :js, :seleniu
     retry_block do
       filters.open
       filters.expect_open
-      filters.expect_filter_by("Status", "open", nil)
+      filters.expect_filter_by("Status", "open (to-do + in progress)", nil)
       filters.expect_filter_by("Target versions", "is (OR)", version.name, "targetVersion")
       filters.expect_filter_by("Assignee", "is (OR)", user.name)
     end

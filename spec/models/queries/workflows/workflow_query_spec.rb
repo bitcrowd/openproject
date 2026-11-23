@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -109,6 +108,22 @@ RSpec.describe Queries::Workflows::WorkflowQuery do
 
     it "excludes a workflow when negated" do
       expect(results { it.where(:project_id, "!", [on_bug.id.to_s]) }).to contain_exactly(phase_workflow)
+    end
+
+    context "with a workflow whose type is not active in any project" do
+      let(:unassigned_workflow) do
+        create(:type, name: "Unassigned").default_variant.workflow.tap { it.update!(name: "Unassigned flow") }
+      end
+
+      it "finds only workflows used in some project for the is-not-empty operator" do
+        unassigned_workflow
+        expect(results { it.where(:project_id, "*", []) }).to contain_exactly(shared_workflow, phase_workflow)
+      end
+
+      it "finds only workflows used in no project for the is-empty operator" do
+        unassigned_workflow
+        expect(results { it.where(:project_id, "!*", []) }).to contain_exactly(unassigned_workflow)
+      end
     end
   end
 

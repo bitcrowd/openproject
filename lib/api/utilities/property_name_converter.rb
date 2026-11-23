@@ -20,8 +20,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -133,10 +132,10 @@ module API
         # expands short custom field column names to be represented in their long form
         # (e.g. cf_1 -> custom_field_1)
         def expand_custom_field_name(attribute)
-          match = attribute.match /\Acf_(?<id>\d+)\z/
+          custom_field_id = CustomField.id_from_column_name(attribute)
 
-          if match
-            "custom_field_#{match[:id]}"
+          if custom_field_id
+            "custom_field_#{custom_field_id}"
           else
             attribute
           end
@@ -145,10 +144,10 @@ module API
         # collapses long custom field column names to be represented in their short form
         # (e.g. custom_field_1 -> cf_1)
         def collapse_custom_field_name(attribute)
-          match = attribute.match /\Acustom_field_(?<id>\d+)\z/
+          custom_field_id = CustomField.id_from_attribute_name(attribute)
 
-          if match
-            "cf_#{match[:id]}"
+          if custom_field_id
+            "cf_#{custom_field_id}"
           else
             attribute
           end

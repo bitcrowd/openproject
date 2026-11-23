@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -938,6 +937,20 @@ RSpec.describe IncomingEmails::MailHandler do # rubocop:disable RSpec/SpecFilePa
         it "assigns the status to the created work package" do
           expect(subject.status)
             .to eql(status)
+        end
+      end
+
+      context "for wp on a project given in a different case" do
+        include_context "for wp_on_given_project"
+
+        def read_email(filename)
+          super.gsub("Project: #{project.identifier}", "Project: #{project.identifier.swapcase}")
+        end
+
+        it_behaves_like "work package created"
+
+        it "creates the work package in that project" do
+          expect(subject.project).to eq(project)
         end
       end
 

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -87,9 +86,7 @@ class CustomFieldFormBuilder < TabularFormBuilder
 
   def custom_field_input_hierarchy(field, input_options)
     root = custom_field.hierarchy_root
-    all_items = CustomFields::Hierarchy::HierarchicalItemService.new
-      .get_descendants(item: root, include_self: false)
-      .either(->(result) { result }, ->(_) { [] })
+    all_items = root.descendants_preordered
 
     by_parent  = all_items.group_by(&:parent_id)
     top_level  = by_parent[root&.id] || []

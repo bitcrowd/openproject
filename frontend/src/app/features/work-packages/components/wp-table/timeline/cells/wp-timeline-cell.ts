@@ -25,6 +25,7 @@
 // See COPYRIGHT and LICENSE files for more details.
 //++
 
+import { runCleanup } from 'core-app/shared/helpers/angular/owned-ui-cleanup';
 import { WorkPackageResource } from 'core-app/features/hal/resources/work-package-resource';
 import { States } from 'core-app/core/states/states.service';
 import { Injector } from '@angular/core';
@@ -33,7 +34,7 @@ import { LoadingIndicatorService } from 'core-app/core/loading-indicator/loading
 import { HalResourceEditingService } from 'core-app/shared/components/fields/edit/services/hal-resource-editing.service';
 import { HalEventsService } from 'core-app/features/hal/services/hal-events.service';
 import { WorkPackageNotificationService } from 'core-app/features/work-packages/services/notifications/work-package-notification.service';
-import { LazyInject } from 'core-app/shared/helpers/angular/lazy-inject.decorator';
+import { lazyInject } from 'core-app/shared/helpers/angular/lazy-inject';
 import { SchemaCacheService } from 'core-app/core/schemas/schema-cache.service';
 import { registerWorkPackageMouseHandler } from './wp-timeline-cell-mouse-handler';
 import { TimelineMilestoneCellRenderer } from './timeline-milestone-cell-renderer';
@@ -43,17 +44,19 @@ import { RenderInfo } from '../wp-timeline';
 import { WorkPackageTimelineTableController } from '../container/wp-timeline-container.directive';
 
 export class WorkPackageTimelineCell {
-  @LazyInject() halEditing:HalResourceEditingService;
+  readonly halEditing = lazyInject(HalResourceEditingService, { injector: () => this.injector });
 
-  @LazyInject() halEvents:HalEventsService;
+  readonly halEvents = lazyInject(HalEventsService, { injector: () => this.injector });
 
-  @LazyInject() notificationService:WorkPackageNotificationService;
+  readonly notificationService = lazyInject(WorkPackageNotificationService, { injector: () => this.injector });
 
-  @LazyInject() states:States;
+  readonly states = lazyInject(States, { injector: () => this.injector });
 
-  @LazyInject() loadingIndicator:LoadingIndicatorService;
+  readonly loadingIndicator = lazyInject(LoadingIndicatorService, { injector: () => this.injector });
 
-  @LazyInject() schemaCache:SchemaCacheService;
+  readonly schemaCache = lazyInject(SchemaCacheService, { injector: () => this.injector });
+
+  private unregisterMouseHandler:() => void = () => undefined;
 
   private wpElement:HTMLDivElement|null = null;
 
@@ -91,7 +94,7 @@ export class WorkPackageTimelineCell {
 
   canConnectRelations():boolean {
     const wp = this.latestRenderInfo.workPackage;
-    if (this.schemaCache.of(wp).isMilestone) {
+    if (this.schemaCache().of(wp).isMilestone) {
       return wp.date != null;
     }
 
@@ -99,6 +102,8 @@ export class WorkPackageTimelineCell {
   }
 
   public clear() {
+    runCleanup(this.unregisterMouseHandler);
+    this.unregisterMouseHandler = () => undefined;
     if (this.cellElement) {
       this.cellElement.innerHTML = '';
     }
@@ -129,6 +134,9 @@ export class WorkPackageTimelineCell {
       return Promise.resolve();
     }
 
+    runCleanup(this.unregisterMouseHandler);
+    this.unregisterMouseHandler = () => undefined;
+
     // Remove the element first if we're redrawing
     if (!renderInfo.isDuplicatedCell) {
       this.clear();
@@ -146,14 +154,14 @@ export class WorkPackageTimelineCell {
     if (renderer.canMoveDates(renderInfo.workPackage)) {
       this.wpElement.classList.add('-editable');
 
-      registerWorkPackageMouseHandler(
+      this.unregisterMouseHandler = registerWorkPackageMouseHandler(
         this.injector,
         () => this.latestRenderInfo,
         this.workPackageTimeline,
-        this.halEditing,
-        this.halEvents,
-        this.notificationService,
-        this.loadingIndicator,
+        this.halEditing(),
+        this.halEvents(),
+        this.notificationService(),
+        this.loadingIndicator(),
         cell,
         this.wpElement,
         this.labels,
@@ -166,7 +174,7 @@ export class WorkPackageTimelineCell {
   }
 
   private cellRenderer(workPackage:WorkPackageResource):TimelineCellRenderer {
-    if (this.schemaCache.of(workPackage).isMilestone) {
+    if (this.schemaCache().of(workPackage).isMilestone) {
       return this.renderers.milestone;
     }
 
@@ -174,6 +182,10 @@ export class WorkPackageTimelineCell {
   }
 
   public refreshView(renderInfo:RenderInfo) {
+    const table = this.workPackageTimeline.workPackageTable;
+    const alive = () => !this.workPackageTimeline.destroyRef.destroyed && !table.destroyed
+      && this.workPackageTimeline.workPackageTable === table;
+    if (!alive()) return;
     this.latestRenderInfo = renderInfo;
 
     const renderer = this.cellRenderer(renderInfo.workPackage);
@@ -181,9 +193,10 @@ export class WorkPackageTimelineCell {
     // Render initial element if necessary
     this.lazyInit(renderer, renderInfo)
       .then(() => {
+        if (!alive() || !this.wpElement) return;
         // Render the upgrade from renderInfo
         const shouldBeDisplayed = renderer.update(
-          this.wpElement!,
+          this.wpElement,
           this.labels,
           renderInfo,
         );

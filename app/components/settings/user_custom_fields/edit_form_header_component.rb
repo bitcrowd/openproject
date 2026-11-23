@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -34,6 +33,7 @@ module Settings
       def initialize(custom_field:, selected:)
         super
         @custom_field = custom_field
+        @selected = selected
       end
 
       def tabs
@@ -49,13 +49,13 @@ module Settings
           tabs << {
             name: "items",
             path: admin_settings_user_custom_field_items_path(@custom_field),
-            label: t(:label_item_plural)
+            label: t(:label_value_plural)
           }
         elsif @custom_field.list?
           tabs << {
             name: "items",
             path: list_items_admin_settings_user_custom_field_path(@custom_field),
-            label: t(:label_item_plural)
+            label: t(:label_value_plural)
           }
         end
 

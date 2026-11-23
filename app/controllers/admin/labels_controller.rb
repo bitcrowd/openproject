@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,10 +31,8 @@ module Admin
   class LabelsController < ::ApplicationController
     include OpTurbo::ComponentStream
     include PaginationHelper
-    include ::Labels::LabelsFeature
 
     before_action :require_admin
-    before_action :require_work_package_labels_feature
     before_action :find_label, only: %i[edit_dialog update deletion_dialog destroy]
 
     menu_item :labels

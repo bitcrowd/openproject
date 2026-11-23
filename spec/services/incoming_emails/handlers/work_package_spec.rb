@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -84,7 +83,7 @@ RSpec.describe IncomingEmails::Handlers::WorkPackage do
 
     before do
       allow(WorkPackages::CreateService).to receive(:new).and_return(service_instance)
-      allow(Project).to receive(:find_by).with(identifier: "foobar").and_return(project)
+      allow(Project).to receive(:find_by).with("LOWER(identifier) = ?", "foobar").and_return(project)
     end
 
     it "creates a work package" do

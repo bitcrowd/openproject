@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -82,7 +81,7 @@ module CustomFields
 
       private
 
-      def ancestors(item) = persistence_service.get_ancestors(item:).value!.filter_map(&:label)
+      def ancestors(item) = item.ancestors.reverse.filter_map(&:label)
 
       def format_suffix(item)
         return "" if item.short.nil? && item.weight.nil?
@@ -96,10 +95,6 @@ module CustomFields
         str = item.short.presence || number_with_limit(item.weight, opts)
 
         @suffix_parentheses ? "(#{str})" : str
-      end
-
-      def persistence_service
-        @persistence_service ||= HierarchicalItemService.new
       end
     end
   end

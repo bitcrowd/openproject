@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -681,26 +680,6 @@ RSpec.describe Journable::Timestamps do
       end
     end
 
-    describe "#rollback!" do
-      describe "when trying to rollback to a current (non-historic) record" do
-        subject { work_package.rollback! }
-
-        it "raises an error" do
-          expect { subject }.to raise_error ActiveRecord::RecordNotSaved
-        end
-      end
-
-      describe "when rolling back to historic data" do
-        subject { work_package.at_timestamp(wednesday).rollback! }
-
-        it "updates the journable records to its historic values" do
-          expect(work_package.reload.description).to eq "The work package as it is since Friday"
-          subject
-          expect(work_package.reload.description).to eq "The work package as it has been on Wednesday"
-        end
-      end
-    end
-
     describe "#position (unjournalized column)" do
       let(:timestamp) { monday }
       let(:position) { 42 }
@@ -709,7 +688,7 @@ RSpec.describe Journable::Timestamps do
         work_package.update_attribute :position, position
       end
 
-      describe "when retrieving the position of the current (nin-historic) record" do
+      describe "when retrieving the position of the current (non-historic) record" do
         subject { work_package.position }
 
         it "returns the value of the work_packages table" do

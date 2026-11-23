@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,6 +30,9 @@
 module Import
   class JiraCreateProjectRoleJob < ApplicationJob
     include Import::JiraOpenProjectReferenceCreation
+    include Import::JiraJobLogging
+
+    self.jira_object_type = "projectRole"
 
     def text
       I18n.t(:"admin.jira.run.jobs.#{self.class.to_s.demodulize}.title")
@@ -44,7 +46,10 @@ module Import
                         view_work_packages
                         add_work_package_comments
                         add_work_package_attachments
-                        work_package_assigned]
+                        work_package_assigned
+                        view_time_entries
+                        view_sprints
+                        show_board_views]
       )
       if service_call.success?
         create_reference!(op_leg: service_call.result,

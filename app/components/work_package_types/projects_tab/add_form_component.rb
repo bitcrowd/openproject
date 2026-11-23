@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -49,7 +48,7 @@ module WorkPackageTypes
       def form_arguments
         {
           id: FORM_ID,
-          url: link_variant_projects_path(variant),
+          url: variant_projects_link_path(variant),
           method: :post,
           data: { turbo: true }
         }
@@ -59,7 +58,7 @@ module WorkPackageTypes
 
       attr_reader :variant, :validation_message
 
-      def tree_src = tree_variant_projects_path(variant, name: FIELD_NAME)
+      def tree_src = variant_projects_link_candidates_path(variant, name: FIELD_NAME)
     end
   end
 end

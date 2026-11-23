@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -89,7 +88,7 @@ RSpec.describe "Editing the form on a type's tab", :js do
     expect_toggle("assignee", pressed: true)
     toggle_for("assignee").click
     expect_toggle("assignee", pressed: false)
-    expect(variant.reload.form_configuration_excluded_elements).to eq(%w[assignee])
+    wait_for { variant.reload.form_configuration_excluded_elements }.to eq(%w[assignee])
 
     expect_field_on(task_package, :assignee, shown: false)
     expect_field_on(bug_package, :assignee, shown: true)

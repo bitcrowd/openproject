@@ -16,6 +16,14 @@
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
 #
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
@@ -157,6 +165,27 @@ RSpec.describe "Work package type required attributes",
         expect(response).to have_http_status(:forbidden)
         expect(required_on(owned_variant)).to be_empty
       end
+    end
+  end
+
+  describe "a field switched off behind a stale page" do
+    let(:given_user) { admin }
+    let(:require_action) { "type-form-configuration-toggle-required-#{custom_field.attribute_name}" }
+
+    def streamed = Capybara.string(Nokogiri::HTML5.fragment(response.body).css("template").map(&:inner_html).join)
+
+    before do
+      exclude_configuration_elements(global_variant, aspect: TypeVariant::FORM_CONFIGURATION,
+                                                     elements: [custom_field.attribute_name])
+    end
+
+    it "refuses, refreshing the row to show why", :aggregate_failures do
+      toggle(global_variant)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to have_css('turbo-stream[action="flash"]')
+      expect(streamed).to have_css("#{test_selector(require_action)}[aria-disabled='true']")
+      expect(required_on(global_variant)).to be_empty
     end
   end
 

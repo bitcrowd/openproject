@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,6 +30,9 @@
 module Import
   class JiraFetchProjectVersionsJob < ProgressableJob
     include JiraJobUtils
+    include JiraJobLogging
+
+    self.jira_object_type = "version"
 
     def text
       jira_project_name = Import::JiraProject.find(arguments[1]).payload["name"]
@@ -52,8 +54,8 @@ module Import
 
     # rubocop:disable Metrics/AbcSize
     def build_enumerator(jira_import_id, jira_project_id, cursor:)
+      jira_project = jira_project(jira_project_id)
       prepare_jira_import_ivars(jira_import_id)
-      jira_project = Import::JiraProject.find(jira_project_id)
 
       cursor ||= @jira_import.get_job_cursor(self)
       start_at = cursor&.dig("start_at") || 0
@@ -76,6 +78,8 @@ module Import
 
           @jira_import.set_job_cursor(self, new_cursor)
 
+          Rails.logger.debug { "Fetched #{start_at + versions.size} of #{total} project versions" }
+
           yielder.yield(
             versions_and_total,
             new_cursor
@@ -89,6 +93,9 @@ module Import
     def each_iteration(versions_and_total, jira_import_id, jira_project_id)
       versions = versions_and_total["versions"]
       versions_upsert_data = versions.map do |payload|
+        with_log_context(jira_object_id_or_name: payload["name"]) do
+          Rails.logger.debug "Fetched project version"
+        end
         {
           payload:,
           jira_project_id:,

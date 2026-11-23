@@ -22,12 +22,11 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
-#
+
 require "spec_helper"
 
 RSpec.describe Settings::AuthenticationSettingsForm, type: :forms do
@@ -47,6 +46,13 @@ RSpec.describe Settings::AuthenticationSettingsForm, type: :forms do
 
   it "renders 'Autologin' select list" do
     expect(page).to have_select "Autologin"
+  end
+
+  context "when autologin is disabled", with_settings: { autologin: 0 } do
+    it "selects the disabled option without duplicating its value" do
+      expect(page).to have_select "Autologin", selected: I18n.t(:label_disabled)
+      expect(page.find(:select, "Autologin")).to have_css "option[value='0']", count: 1
+    end
   end
 
   it "renders 'Session expires' checkbox" do

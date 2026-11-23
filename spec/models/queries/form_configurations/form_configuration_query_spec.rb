@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -71,5 +70,21 @@ RSpec.describe Queries::FormConfigurations::FormConfigurationQuery do
   it "finds a form by the projects its types are active in" do
     expect(results { it.where(:project_id, "=", [on_task.id.to_s]) }).to contain_exactly(shared_form)
     expect(results { it.where(:project_id, "!", [on_bug.id.to_s]) }).to contain_exactly(phase_form)
+  end
+
+  context "with a form whose type is not active in any project" do
+    let(:unassigned_form) do
+      create(:type, name: "Unassigned").default_variant.form_configuration.tap { it.update!(name: "Unassigned form") }
+    end
+
+    it "finds only forms used in some project for the is-not-empty operator" do
+      unassigned_form
+      expect(results { it.where(:project_id, "*", []) }).to contain_exactly(shared_form, phase_form)
+    end
+
+    it "finds only forms used in no project for the is-empty operator" do
+      unassigned_form
+      expect(results { it.where(:project_id, "!*", []) }).to contain_exactly(unassigned_form)
+    end
   end
 end

@@ -1,5 +1,32 @@
 # frozen_string_literal: true
 
+#-- copyright
+# OpenProject is an open source project management software.
+# Copyright (C) the OpenProject GmbH
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License version 3.
+#
+# OpenProject is a fork of ChiliProject, which is a fork of Redmine. The copyright follows:
+# Copyright (C) 2006-2013 Jean-Philippe Lang
+# Copyright (C) 2010-2013 the ChiliProject Team
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# See COPYRIGHT and LICENSE files for more details.
+#++
+
 require "spec_helper"
 
 RSpec.describe "Admin types UI smoke", :skip_csrf, type: :rails_request do
@@ -66,15 +93,14 @@ RSpec.describe "Admin types UI smoke", :skip_csrf, type: :rails_request do
   it "asks for confirmation before removing a project" do
     project = create(:project, name: "Bookshop", types: [variant])
 
-    get edit_type_projects_path(type_id: type.id)
+    get new_type_projects_link_deletion_path(type_id: type.id, project_ids: [project.id]), as: :turbo_stream
 
-    confirmation = I18n.t("types.edit.projects.actions.confirm_remove", project: project.name, type: type.name)
-
-    expect(response.body).to include(CGI.escapeHTML(confirmation))
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include(CGI.escapeHTML("Remove type '#{type.name}' from this project?"))
   end
 
   it "renders the add projects dialog" do
-    get new_link_type_projects_path(type_id: type.id), as: :turbo_stream
+    get new_type_projects_link_path(type_id: type.id), as: :turbo_stream
 
     expect(response).to have_http_status(:ok)
   end
@@ -82,7 +108,7 @@ RSpec.describe "Admin types UI smoke", :skip_csrf, type: :rails_request do
   it "renders the project tree the add dialog picks from" do
     create(:project, name: "Bookshop")
 
-    get tree_type_projects_path(type_id: type.id, name: "project_ids")
+    get type_projects_link_candidates_path(type_id: type.id, name: "project_ids")
 
     expect(response).to have_http_status(:ok)
     expect(response.body).to include("Bookshop")
@@ -91,7 +117,7 @@ RSpec.describe "Admin types UI smoke", :skip_csrf, type: :rails_request do
   it "renders the switch dialog for a listed project" do
     project = create(:project, types: [variant])
 
-    get new_switch_type_projects_path(type_id: type.id, project_id: project.id),
+    get new_type_projects_switch_path(type_id: type.id, project_ids: [project.id]),
         as: :turbo_stream
 
     expect(response).to have_http_status(:ok)

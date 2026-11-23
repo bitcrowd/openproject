@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,7 +40,8 @@ module WorkPackageTypes
     def index
       return unless turbo_frame_request?
 
-      render VariantsListComponent.new(type: @type, query: params[:query]), layout: false
+      render VariantsListComponent.new(type: @type, query: params[:query], created_by_migration: params[:created_by_migration]),
+             layout: false
     end
 
     def comparison
@@ -55,19 +55,21 @@ module WorkPackageTypes
 
     def deletion_dialog
       variant = named_variant
-      targets = variant.migration_targets.in_display_order
 
-      respond_with_dialog Types::VariantDeletionDialogComponent.new(
-        variant:, targets:, selected: targets.first, impact: deletion_impact(variant, targets.first),
-        url: type_variant_path(type_id: variant.type_id, id: variant.id)
-      )
+      if variant.project_types.exists?
+        respond_with_dialog migration_deletion_dialog(variant)
+      else
+        respond_with_dialog Types::UnusedVariantDeletionDialogComponent.new(
+          variant:, url: deletion_path(variant)
+        )
+      end
     end
 
     def deletion_preview
       variant = named_variant
 
       update_via_turbo_stream(
-        component: ::Projects::Settings::WorkPackages::Types::SwitchImpactComponent.new(
+        component: Projects::Types::Switch::ImpactComponent.new(
           impact: deletion_impact(variant, chosen_target(variant))
         )
       )
@@ -144,6 +146,19 @@ module WorkPackageTypes
       addressable.find(params.expect(:id))
     end
 
+    def migration_deletion_dialog(variant)
+      targets = variant.migration_targets.in_display_order
+
+      Types::VariantDeletionDialogComponent.new(
+        variant:, targets:, selected: targets.first, impact: deletion_impact(variant, targets.first),
+        url: deletion_path(variant)
+      )
+    end
+
+    def deletion_path(variant)
+      type_variant_path(type_id: variant.type_id, id: variant.id, back_url: params[:back_url])
+    end
+
     def chosen_target(variant)
       return if params[:target_id].blank?
 
@@ -171,7 +186,7 @@ module WorkPackageTypes
         component: Types::DeletionFormComponent.new(
           variant:, targets: variant.migration_targets.in_display_order, selected: target,
           impact: deletion_impact(variant, target),
-          url: type_variant_path(type_id: variant.type_id, id: variant.id),
+          url: deletion_path(variant),
           validation_message: service_call.errors.full_messages.to_sentence
         )
       )

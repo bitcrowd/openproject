@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -190,6 +189,18 @@ RSpec.describe FormConfiguration do
       form.reload.destroy
 
       expect(Query.find_by(id: query.id)).to be_nil
+    end
+  end
+
+  describe "#reload" do
+    it "drops the memoized attribute group objects" do
+      form = create(:form_configuration)
+      group = create(:form_configuration_group, form_configuration: form, label: "Details")
+      expect(form.attribute_groups.map(&:key)).to eq(["Details"])
+
+      group.update!(label: "Specifics")
+
+      expect(form.reload.attribute_groups.map(&:key)).to eq(["Specifics"])
     end
   end
 end

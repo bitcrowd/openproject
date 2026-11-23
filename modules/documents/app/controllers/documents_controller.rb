@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -60,7 +59,7 @@ class DocumentsController < ApplicationController
   def show
     @attachments = @document.attachments.order(Arel.sql("created_at DESC"))
 
-    if @document.collaborative? && Setting.real_time_text_collaboration_enabled?
+    if @document.real_time_collaboration_available?
       setup_collaboration_context
       derive_show_edit_state_from_params
     end
@@ -220,7 +219,7 @@ class DocumentsController < ApplicationController
     return unless current_user.allowed_in_project?(:view_documents, @project)
 
     token_result = Documents::OAuth::TokenWithMetadataService
-      .new(user: current_user, document: @document, project: @project)
+      .new(user: current_user, document: @document)
       .call
 
     if token_result.failure?

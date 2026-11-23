@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -425,6 +424,56 @@ RSpec.describe User do
     it "returns the single blocked user" do
       expect(described_class.blocked.length).to eq(1)
       expect(described_class.blocked.first.id).to eq(blocked_user.id)
+    end
+  end
+
+  describe "#log_failed_login", with_settings: { brute_force_block_minutes: 30 } do
+    let!(:user) { create(:user, failed_login_count: 2, last_failed_login_on: 1.minute.ago) }
+
+    it "increments the count and updates the timestamp" do
+      user.log_failed_login
+
+      user.reload
+      expect(user.failed_login_count).to eq 3
+      expect(user.last_failed_login_on).to be_within(1.second).of(Time.zone.now)
+    end
+
+    it "counts failures logged through stale instances" do
+      first = described_class.find(user.id)
+      second = described_class.find(user.id)
+
+      first.log_failed_login
+      second.log_failed_login
+
+      expect(user.reload.failed_login_count).to eq 4
+    end
+
+    it "counts failures for users that fail validation" do
+      user.update_column(:mail, "not-an-email")
+
+      user.log_failed_login
+
+      expect(user.reload.failed_login_count).to eq 3
+    end
+
+    context "when the last failure is outside the block time" do
+      let!(:user) { create(:user, failed_login_count: 2, last_failed_login_on: 31.minutes.ago) }
+
+      it "restarts the count" do
+        user.log_failed_login
+
+        expect(user.reload.failed_login_count).to eq 1
+      end
+    end
+
+    context "when there was no failure before" do
+      let!(:user) { create(:user, failed_login_count: 0, last_failed_login_on: nil) }
+
+      it "starts the count" do
+        user.log_failed_login
+
+        expect(user.reload.failed_login_count).to eq 1
+      end
     end
   end
 
@@ -837,8 +886,8 @@ RSpec.describe User do
 
     context "default admin account exists with changed password" do
       before do
-        default_admin.update_attribute :password, "dafaultAdminPwd"
-        default_admin.update_attribute :password_confirmation, "dafaultAdminPwd"
+        default_admin.update_attribute :password, "defaultAdminPwd"
+        default_admin.update_attribute :password_confirmation, "defaultAdminPwd"
         default_admin.save
       end
 

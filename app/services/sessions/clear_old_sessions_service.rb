@@ -22,19 +22,31 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
+
 module Sessions
   class ClearOldSessionsService
     class << self
-      ##
-      # Drop all sessions for the given user
-      def call!(days_ago: 30)
-        # sessions expire after 30 days of inactivity by default
-        ActiveRecord::SessionStore::Session.where("updated_at < ?", days_ago.days.ago).delete_all
+      def call!(days_ago: 30, anonymous_days_ago: 1)
+        sessions = ActiveRecord::SessionStore::Session
+
+        sessions
+          .where(updated_at: ...days_ago.days.ago)
+          .or(sessions.where(user_id: nil, updated_at: ...anonymous_days_ago.days.ago))
+          .in_batches
+          .delete_all
+
+        forget_dormant_push_subscriptions(days_ago)
+      end
+
+      private
+
+      def forget_dormant_push_subscriptions(days_ago)
+        PushSubscription.dormant.where(suspended_at: nil).update_all(suspended_at: Time.current)
+        PushSubscription.dormant.where(suspended_at: ...days_ago.days.ago).delete_all
       end
     end
   end

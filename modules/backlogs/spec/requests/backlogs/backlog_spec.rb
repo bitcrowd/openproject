@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -74,7 +73,6 @@ RSpec.describe "Backlogs::Backlog", :skip_csrf, type: :rails_request do
       get "/projects/#{project.identifier}/backlogs/backlog"
 
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include('data-controller="backlogs--list-refresh backlogs--split-view-sync sortable-lists"')
       expect(response.body).to include(
         %(data-sortable-lists-move-url-template-value="/projects/#{project.identifier}/backlogs/work_packages/{id}/move")
       )
@@ -98,8 +96,22 @@ RSpec.describe "Backlogs::Backlog", :skip_csrf, type: :rails_request do
       )
     end
 
+    it "points the card menu source at the menu endpoint on the backlogs turbo frame" do
+      get "/projects/#{project.identifier}/backlogs/backlog"
+
+      expect(response.body).to include(
+        'data-controller="backlogs--list-refresh backlogs--split-view-sync sortable-lists sortable-lists--menu-source"'
+      )
+      expect(response.body).to include(
+        %(data-sortable-lists--menu-source-url-value="/projects/#{project.identifier}/backlogs/work_packages/menu")
+      )
+      expect(response.body).to include(
+        'data-sortable-lists--menu-source-menu-label-key-value="js.backlogs.action_menu.menu_label"'
+      )
+    end
+
     it "passes all=true to the frame src but keeps it off the move URL template" do
-      get "/projects/#{project.identifier}/backlogs/backlog", params: { all: "1" }
+      get "/projects/#{project.identifier}/backlogs/backlog", params: { all: "true" }
 
       expect(response).to have_http_status(:ok)
       expect(response).to have_turbo_frame "backlogs_container",
@@ -168,7 +180,7 @@ RSpec.describe "Backlogs::Backlog", :skip_csrf, type: :rails_request do
 
         it "still renders the shared selection description" do
           get "/projects/#{project.identifier}/backlogs/backlog",
-              params: { bucket_ids: [backlog_bucket.id] },
+              params: { bucket_ids: backlog_bucket.id.to_s.to_json },
               headers: { "Turbo-Frame" => "backlogs_container" }
 
           expect(response).to have_http_status(:ok)

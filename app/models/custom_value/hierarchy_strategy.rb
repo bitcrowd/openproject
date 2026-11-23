@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -43,9 +42,7 @@ class CustomValue::HierarchyStrategy < CustomValue::ARObjectStrategy
     item = ar_object(value)
     return :invalid unless item
 
-    parent = custom_field.hierarchy_root
-
-    if persistence_service.descendant_of?(item:, parent:).failure?
+    if !item.descendant_of?(custom_field.hierarchy_root) || !usable_in_project?
       :inclusion
     end
   end
@@ -54,9 +51,5 @@ class CustomValue::HierarchyStrategy < CustomValue::ARObjectStrategy
 
   def ar_class
     CustomField::Hierarchy::Item
-  end
-
-  def persistence_service
-    @persistence_service ||= CustomFields::Hierarchy::HierarchicalItemService.new
   end
 end

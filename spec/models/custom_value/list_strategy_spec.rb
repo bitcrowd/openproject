@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,9 +31,9 @@ require "spec_helper"
 
 RSpec.describe CustomValue::ListStrategy do
   let(:instance) { described_class.new(custom_value) }
-  let(:custom_field) { create(:list_wp_custom_field) }
-  let(:custom_value) { instance_double(CustomValue, value:, custom_field:, customized:) }
-  let(:customized) { instance_double(Project) }
+  let!(:custom_field) { create(:list_wp_custom_field) }
+  let(:custom_value) { instance_double(CustomValue, value:, custom_field:, customized:, persisted?: false) }
+  let(:customized) { instance_double(WorkPackage, project: build_stubbed(:project)) }
 
   before do
     allow(CustomOption).to receive(:where).and_call_original

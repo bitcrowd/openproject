@@ -20,8 +20,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 See COPYRIGHT and LICENSE files for more details.
 
@@ -47,14 +46,18 @@ See COPYRIGHT and LICENSE files for more details.
     end
 
     candidates.each do |candidate|
+      item_label = candidate.name
+      if candidate.marked_default?
+        item_label = safe_join([candidate.name, render(Primer::Beta::Text.new(color: :muted)) { default_text }], " ")
+      end
+
       panel.with_item(
-        label: candidate.name,
+        label: item_label,
         active: candidate.id == selected,
         href: change_path(candidate),
         content_arguments: { data: { turbo: true, turbo_method: :patch, turbo_frame: "_top" } }
       ) do |item|
         item.with_description { candidate.description } if candidate.description.present?
-        item.with_trailing_visual_text(default_text) if candidate.marked_default?
       end
     end
   end

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -44,8 +43,8 @@ RSpec.describe "my", :js do
   ##
   # Expectations for a successful account change
   def expect_changed!
-    expect(page).to have_content I18n.t(:notice_account_updated)
-    expect(page).to have_content I18n.t(:notice_account_other_session_expired)
+    expect(page).to have_text I18n.t(:notice_account_updated)
+    expect(page).to have_text I18n.t(:notice_account_other_session_expired)
 
     # expect session to be removed
     expect(Sessions::UserSession.for_user(user).where(session_id: "other").count).to eq 0
@@ -158,7 +157,7 @@ RSpec.describe "my", :js do
 
   describe "non-editable custom fields" do
     let!(:readonly_cf) do
-      create(:user_custom_field, :string, name: "Employee ID", editable: false)
+      create(:user_custom_field, :string, name: "Employee ID", user_self_editable: false)
     end
 
     it "renders them read-only on the account page" do
@@ -307,7 +306,7 @@ RSpec.describe "my", :js do
         fill_in "Hobbies", with: "Ruby, DCS"
         click_on "Update profile"
 
-        expect(page).to have_content I18n.t(:notice_account_updated)
+        expect(page).to have_text I18n.t(:notice_account_updated)
 
         user.reload
         expect(user.custom_values.find_by(custom_field_id: string_cf).value).to eql "Ruby, DCS"

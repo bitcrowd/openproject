@@ -22,16 +22,14 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 require "spec_helper"
 
-RSpec.describe "Admin labels", :skip_csrf,
-               type: :rails_request, with_flag: { work_package_labels: true } do
+RSpec.describe "Admin labels", :skip_csrf, type: :rails_request do
   shared_let(:admin) { create(:admin) }
 
   let(:turbo_stream_headers) { { "Accept" => "text/vnd.turbo-stream.html" } }
@@ -117,27 +115,6 @@ RSpec.describe "Admin labels", :skip_csrf,
       post admin_labels_path, params: { label: { name: "Nope" } }
       expect(response).to have_http_status(:forbidden)
       expect(Label.where(name: "Nope")).not_to exist
-    end
-  end
-
-  context "when the feature flag is inactive", with_flag: { work_package_labels: false } do
-    let!(:label) { create(:label) }
-
-    it "responds with 404 for create and creates nothing" do
-      post admin_labels_path, params: { label: { name: "Nope" } }
-      expect(response).to have_http_status(:not_found)
-      expect(Label.where(name: "Nope")).not_to exist
-    end
-
-    it "responds with 404 for a member route" do
-      get deletion_dialog_admin_label_path(label)
-      expect(response).to have_http_status(:not_found)
-    end
-
-    it "does not render the admin menu entry" do
-      get admin_index_path
-
-      expect(sidebar_menu_links(response.body)).not_to include(admin_labels_path)
     end
   end
 end

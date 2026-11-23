@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -75,17 +74,15 @@ class Queries::WorkPackages::Filter::TypeaheadFilter <
   end
 
   def status_condition(string)
-    # Check if the search string matches translated "open" or "closed" meta statuses
-    open_term = I18n.t("label_open").downcase
-    closed_term = I18n.t("label_closed").downcase
     search_term = string.downcase
 
-    if search_term == open_term
-      # Match meta statuses that are not closed (open statuses)
-      "#{Status.table_name}.is_closed = false"
-    elsif search_term == closed_term
-      # Match meta statuses that are closed
-      "#{Status.table_name}.is_closed = true"
+    # Check if the search string matches translated meta statuses
+    if Status.human_attribute_name("category.to_do").downcase.match(search_term)
+      "#{Status.table_name}.category = 'to_do'"
+    elsif Status.human_attribute_name("category.in_progress").downcase.match(search_term)
+      "#{Status.table_name}.category = 'in_progress'"
+    elsif Status.human_attribute_name("category.closed").downcase.match(search_term)
+      "#{Status.table_name}.category = 'closed'"
     else
       # Match statuses by name
       Queries::Operators::Contains.sql_for_field([string], Status.table_name, "name")

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -46,14 +45,14 @@ module Components
         retry_block do
           # Run in retry block because filters do nothing if not yet loaded
           filter_button.click
-          find(filters_selector, visible: true)
+          find(filters_selector, visible: :visible)
           # The container can become visible slightly before Angular has finished
           # rendering its actual content (e.g. right after a browser back/forward
           # navigation, while the app is still being rebuilt) - wait for the
           # always-present "add filter" row too, so callers that immediately
           # interact with a specific filter's fields (e.g. expect_filter_by) don't
           # race that render.
-          find(".advanced-filters--add-filter-value", visible: true)
+          find(".advanced-filters--add-filter-value", visible: :visible)
         end
       end
 
@@ -79,7 +78,7 @@ module Components
       end
 
       def expect_closed
-        expect(page).to have_no_selector("#{filters_selector} #query_form_content", visible: :all)
+        expect(page).to have_no_css("#{filters_selector} #query_form_content", visible: :all)
       end
 
       def expect_quick_filter(text)
@@ -266,7 +265,7 @@ module Components
       end
 
       def remove_filter(field)
-        find("#filter_#{field} .advanced-filters--remove-filter-icon").click
+        page.within("#filter_#{field}") { click_on accessible_name: I18n.t("js.button_delete") }
         expect(page).to have_no_css("#filter_#{field}")
         page.has_css?(".loading-indicator--background", wait: 2)
         expect(page).to have_no_css(".loading-indicator--background", wait: 10)
@@ -282,8 +281,16 @@ module Components
 
       def close_autocompleter(id)
         with_filter_input(id) do |input|
-          input.send_keys :escape
+          input.send_keys(:escape) if input["aria-expanded"] == "true"
         end
+      end
+
+      def select_value(id, query:, select_text:)
+        select_autocomplete -> { page.find("#filter_#{id} ng-select") },
+                            query:,
+                            select_text:,
+                            results_selector: ".ng-dropdown-panel-items"
+        close_autocompleter(id)
       end
 
       protected

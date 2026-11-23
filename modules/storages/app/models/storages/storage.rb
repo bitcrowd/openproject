@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -88,6 +87,10 @@ module Storages
                   .to_h.with_indifferent_access
       end
 
+      def provider_type_for(class_name)
+        provider_types.values.find { it.name == class_name }
+      end
+
       def short_provider_name = raise SubclassResponsibilityError
 
       def allowed_by_enterprise_token? = true
@@ -96,7 +99,7 @@ module Storages
 
       # TODO: Compatibility Method To be Removed once all references are removed - 2025-07-14 @mereghost
       def shorten_provider_type(provider_type)
-        provider_type.constantize.short_provider_name.to_s
+        provider_type_for(provider_type)&.short_provider_name.to_s
       end
 
       def extract_part_from_piped_string(text, index)

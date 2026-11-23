@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,8 +30,11 @@
 module Import
   class JiraFetchCustomFieldJob < ApplicationJob
     include Import::JiraJobUtils
+    include Import::JiraJobLogging
 
     OPTION_BASED_CUSTOM_SUFFIXES = %w[select multiselect multicheckboxes radiobuttons cascadingselect].freeze
+
+    self.jira_object_type = "customField"
 
     def text
       I18n.t(:"admin.jira.run.jobs.#{self.class.to_s.demodulize}.title")
@@ -68,6 +70,9 @@ module Import
         field.fetch("custom", false) && used_custom_field_ids.include?(field.fetch("id"))
       end
       fields_upsert_data = used_fields.map do |payload|
+        with_log_context(jira_object_id_or_name: payload["name"]) do
+          Rails.logger.debug "Fetched custom field"
+        end
         {
           payload:,
           origin_id: payload.fetch("id"),
@@ -134,7 +139,9 @@ module Import
     rescue Import::JiraClient::UnsupportedEndpointError, Import::JiraClient::ApiError => e
       raise unless @options_api_confirmed
 
-      Rails.logger.warn("Could not fetch options of custom field #{jira_field.origin_id}: #{e.message}.")
+      with_log_context(jira_object_id_or_name: jira_field.origin_id) do
+        Rails.logger.warn("Could not fetch options of custom field: #{e.message}.")
+      end
       nil
     end
 
@@ -184,7 +191,9 @@ module Import
       result = @jira_client.issue_editmeta(issue_key)
       record_editmeta_fields(result["fields"], project_key, issuetype_id, option_based_fields_by_jira_id, groups_by_field)
     rescue Import::JiraClient::ApiError => e
-      Rails.logger.warn("Could not fetch editmeta for issue #{issue_key}: #{e.message}.")
+      with_log_context(jira_issue_key: issue_key) do
+        Rails.logger.warn("Could not fetch editmeta for issue: #{e.message}.")
+      end
     end
 
     def record_editmeta_fields(fields_meta, project_key, issuetype_id, option_based_fields_by_jira_id, groups_by_field)

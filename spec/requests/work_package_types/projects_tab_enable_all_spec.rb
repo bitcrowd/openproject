@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,8 +40,18 @@ RSpec.describe "Enabling a work package type in all projects", :skip_csrf,
 
   before { login_as admin }
 
-  def toggle(value)
-    post enable_all_type_projects_path(type_id: type.id, value:), as: :turbo_stream
+  def toggle(value, confirm_switch: false)
+    post enable_all_type_projects_path(type_id: type.id, value:),
+         params: { confirm_switch: confirm_switch ? "1" : "0" },
+         as: :turbo_stream
+  end
+
+  def switch_dialog_id = WorkPackageTypes::ProjectsTab::SwitchConfirmDialogComponent::DIALOG_ID
+
+  # What the listing's frame fetches once the change asks it to reload.
+  def reloaded_listing
+    get edit_type_projects_path(type_id: type.id)
+    response.body
   end
 
   it "enables the type everywhere and offers to disable it next" do
@@ -50,8 +59,9 @@ RSpec.describe "Enabling a work package type in all projects", :skip_csrf,
 
     expect(response).to have_http_status(:ok)
     expect(variant.projects).to contain_exactly(one, other)
-    expect(response.body).to include(I18n.t("types.edit.projects.disable_all"))
-    expect(response.body).not_to include(I18n.t("types.edit.projects.enable_all"))
+    listing = reloaded_listing
+    expect(listing).to include("Disable for all projects")
+    expect(listing).not_to include("Enable for all projects")
   end
 
   it "disables it everywhere and offers to enable it next" do
@@ -61,7 +71,34 @@ RSpec.describe "Enabling a work package type in all projects", :skip_csrf,
     toggle("0")
 
     expect(variant.reload.projects).to be_empty
-    expect(response.body).to include(I18n.t("types.edit.projects.enable_all"))
+    expect(reloaded_listing).to include("Enable for all projects")
+  end
+
+  context "when a project uses another variant of the type" do
+    shared_let(:hardware) { create(:type_variant, type:, variant_name: "Hardware") }
+
+    before { create(:project_type, project: one, type:, variant: hardware) }
+
+    it "asks before switching it back" do
+      toggle("1")
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include(switch_dialog_id).and include("Foundry")
+      expect(one.reload.type_variant(type)).to eq(hardware)
+    end
+
+    it "enables nothing else while asking" do
+      toggle("1")
+
+      expect(variant.projects).to be_empty
+    end
+
+    it "switches it once confirmed" do
+      toggle("1", confirm_switch: true)
+
+      expect(response.body).to include(%(action="closeDialog" target="#{switch_dialog_id}"))
+      expect(variant.projects).to contain_exactly(one, other)
+    end
   end
 
   context "when one project refuses" do
@@ -72,13 +109,12 @@ RSpec.describe "Enabling a work package type in all projects", :skip_csrf,
       create(:work_package, project: blocked, type:)
     end
 
-    it "still repaints the list and the button" do
+    it "still reloads the listing" do
       toggle("0")
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(variant.reload.projects).to contain_exactly(blocked)
-      expect(response.body).to include("projects-table")
-      expect(response.body).to include(I18n.t("types.edit.projects.enable_all"))
+      expect(response.body).to include(WorkPackageTypes::ReloadableConfigurationFrameComponent::RELOAD_EVENT_NAME)
     end
 
     it "reports which project stood in the way" do
@@ -90,13 +126,13 @@ RSpec.describe "Enabling a work package type in all projects", :skip_csrf,
 
   describe "the toggle label after the project set changes some other way" do
     def add(project)
-      post link_type_projects_path(type_id: type.id),
+      post type_projects_link_path(type_id: type.id),
            params: { project_ids: [{ nodeId: project.id.to_s }.to_json] },
            as: :turbo_stream
     end
 
     def remove(project)
-      delete unlink_type_projects_path(type_id: type.id, project_id: project.id), as: :turbo_stream
+      delete type_projects_link_path(type_id: type.id, project_ids: [project.id]), as: :turbo_stream
     end
 
     it "offers to disable once the last remaining project has been added" do
@@ -105,8 +141,9 @@ RSpec.describe "Enabling a work package type in all projects", :skip_csrf,
       add(other)
 
       expect(variant.reload.projects).to contain_exactly(one, other)
-      expect(response.body).to include(I18n.t("types.edit.projects.disable_all"))
-      expect(response.body).not_to include(I18n.t("types.edit.projects.enable_all"))
+      listing = reloaded_listing
+      expect(listing).to include("Disable for all projects")
+      expect(listing).not_to include("Enable for all projects")
     end
 
     it "offers to enable again once one project has been removed from the full set" do
@@ -115,8 +152,9 @@ RSpec.describe "Enabling a work package type in all projects", :skip_csrf,
       remove(other)
 
       expect(variant.reload.projects).to contain_exactly(one)
-      expect(response.body).to include(I18n.t("types.edit.projects.enable_all"))
-      expect(response.body).not_to include(I18n.t("types.edit.projects.disable_all"))
+      listing = reloaded_listing
+      expect(listing).to include("Enable for all projects")
+      expect(listing).not_to include("Disable for all projects")
     end
   end
 end

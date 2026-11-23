@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -112,7 +111,7 @@ RSpec.describe "InplaceEditFieldsController — admin_only project custom field 
     current_user { non_admin_user }
 
     it "does not block the non-admin user for standard project attributes" do
-      get inplace_edit_field_dialog_path(model: "project", id: project.id, attribute: "name"),
+      get inplace_edit_field_dialog_path(model: "project", id: project.id, attribute: "description"),
           headers: turbo_headers
 
       expect(response).to have_http_status(:ok)

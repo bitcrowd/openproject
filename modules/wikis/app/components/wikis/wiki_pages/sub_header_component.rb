@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,16 +40,7 @@ module Wikis
         query.find_active_filter(:name)&.values&.first
       end
 
-      def sub_header_data_attributes
-        {
-          controller: "filter--filters-form",
-          "filter--filters-form-turbo-stream-request-value": true,
-          "filter--filters-form-url-path-name-value": wiki_pages_path,
-          "filter--filters-form-output-format-value": "json",
-          "filter--filters-form-clear-button-id-value": clear_button_id,
-          test_selector: "wikis-sub-header"
-        }
-      end
+      def url_path_name = wiki_pages_path
 
       def name_filter_input_data_attributes
         {

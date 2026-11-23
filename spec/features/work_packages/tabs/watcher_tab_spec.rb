@@ -1,9 +1,38 @@
 # frozen_string_literal: true
 
+#-- copyright
+# OpenProject is an open source project management software.
+# Copyright (C) the OpenProject GmbH
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License version 3.
+#
+# OpenProject is a fork of ChiliProject, which is a fork of Redmine. The copyright follows:
+# Copyright (C) 2006-2013 Jean-Philippe Lang
+# Copyright (C) 2010-2013 the ChiliProject Team
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# See COPYRIGHT and LICENSE files for more details.
+#++
+
 require "spec_helper"
 
-RSpec.describe "Watcher tab", :js, :selenium do
+RSpec.describe "Watcher tab", :js do
   include Components::Autocompleter::NgSelectAutocompleteHelpers
+
+  include_context "with axe on Cuprite"
 
   let!(:standard_global_role) { create(:empty_global_role) }
   let(:project) { create(:project) }
@@ -36,14 +65,12 @@ RSpec.describe "Watcher tab", :js, :selenium do
   end
 
   def expect_button_is_watching
-    title = I18n.t("js.label_unwatch_work_package")
-    expect(page).to have_css("#unwatch-button[title='#{title}']", wait: 30)
+    expect(page).to have_button("unwatch-button", accessible_name: "Unwatch work package", wait: 30)
     expect(page).to have_css("#unwatch-button .button--icon[eye-icon]")
   end
 
   def expect_button_is_not_watching
-    title = I18n.t("js.label_watch_work_package")
-    expect(page).to have_css("#watch-button[title='#{title}']")
+    expect(page).to have_button("watch-button", accessible_name: "Watch work package")
     expect(page).to have_css("#watch-button .button--icon[eye-closed-icon]")
   end
 
@@ -87,10 +114,11 @@ RSpec.describe "Watcher tab", :js, :selenium do
 
       # Expect watchers counter to increase
       tabs.expect_counter(watchers_tab, 1)
+      expect(page).to be_axe_clean.within("op-wp-watcher-entry")
 
       # Remove watcher from list
       page.find_test_selector("op-wp-watcher-name", text: user.name).hover
-      page.find(".form--selected-value--remover").click
+      click_on accessible_name: "Remove watcher #{user.name}"
 
       # Watchers counter should not be displayed
       tabs.expect_no_counter(watchers_tab)

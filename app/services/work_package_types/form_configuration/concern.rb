@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -33,10 +32,20 @@ module WorkPackageTypes
     module Concern
       extend ActiveSupport::Concern
 
+      include LayoutLock
+
       def initialize(user:, form_configuration:, **)
         super()
         @user = user
         @form_configuration = form_configuration
+      end
+
+      protected
+
+      def perform(*)
+        with_layout_lock(form_configuration) { perform_locked }
+      rescue ActiveRecord::ActiveRecordError
+        failure_with_message(I18n.t("types.edit.form_configuration.save_failed"))
       end
 
       private

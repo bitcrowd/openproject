@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -277,7 +276,7 @@ class ProjectsController < ApplicationController
   def clear_custom_field_errors!(project)
     # Delete custom field errors from project
     project.errors.attribute_names
-      .select { |key| key.to_s.start_with?("custom_field") }
+      .select { |key| CustomField.custom_field_attribute?(key) }
       .each { |key| project.errors.delete(key) }
 
     # Clear errors on custom value objects

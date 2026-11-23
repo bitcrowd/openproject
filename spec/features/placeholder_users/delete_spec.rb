@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -86,7 +85,7 @@ RSpec.describe "delete placeholder user", :js do
 
     it "returns an error when trying to delete and disables the button" do
       visit deletion_info_placeholder_user_path(placeholder_user)
-      expect(page).to have_content I18n.t("placeholder_users.right_to_manage_members_missing").strip
+      expect(page).to have_text I18n.t("placeholder_users.right_to_manage_members_missing").strip
 
       visit placeholder_user_path(placeholder_user)
 

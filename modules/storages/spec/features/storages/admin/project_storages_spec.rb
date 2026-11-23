@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -337,7 +336,7 @@ RSpec.describe "Admin lists project mappings for a storage",
 
           within("dialog") do
             choose_manually_managed_folder
-            find("opce-storage-login-button[ng-version] button", visible: true, wait: 20).click
+            find("opce-storage-login-button[ng-version] button", visible: :visible, wait: 20).click
             wait_for { page }.to have_current_path(
               %r{/index.php/apps/oauth2/authorize\?client_id=.*&redirect_uri=.*&response_type=code&state=.*}
             )
@@ -416,7 +415,7 @@ RSpec.describe "Admin lists project mappings for a storage",
           end
         end
 
-        expect(page).to have_no_selector("dialog")
+        expect(page).to have_no_css("dialog")
         expect(page).to have_text("Successful deletion.")
         expect(page).to have_no_text(project.name)
 

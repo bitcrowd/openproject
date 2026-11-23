@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -941,7 +940,9 @@ RSpec.describe API::V3::WorkPackages::Schema::WorkPackageSchemaRepresenter do
       end
     end
 
-    describe "categories" do
+    describe "category allowed values",
+             with_flag: { work_package_multiple_categories: false },
+             with_settings: { work_package_multiple_categories: false } do
       it_behaves_like "has basic schema properties" do
         let(:path) { "category" }
         let(:type) { "Category" }
@@ -949,6 +950,7 @@ RSpec.describe API::V3::WorkPackages::Schema::WorkPackageSchemaRepresenter do
         let(:required) { false }
         let(:writable) { true }
         let(:location) { "_links" }
+        let(:description) { I18n.t("api_v3.attributes.category.deprecated") }
       end
 
       it_behaves_like "has a collection of allowed values" do
@@ -1055,6 +1057,58 @@ RSpec.describe API::V3::WorkPackages::Schema::WorkPackageSchemaRepresenter do
 
         it "announces that multiple values are allowed" do
           expect(subject).to be_json_eql(true.to_json).at_path("targetVersions/options/multiple")
+        end
+      end
+    end
+
+    describe "category",
+             with_flag: { work_package_multiple_categories: false },
+             with_settings: { work_package_multiple_categories: false } do
+      it "marks the deprecated category field as deprecated" do
+        expect(subject).to be_json_eql(true.to_json).at_path("category/deprecated")
+      end
+
+      context "when multiple categories is active",
+              with_flag: { work_package_multiple_categories: true },
+              with_settings: { work_package_multiple_categories: true } do
+        it "drops the deprecated category field from the schema" do
+          expect(subject).not_to have_json_path("category")
+        end
+      end
+    end
+
+    describe "categories",
+             with_flag: { work_package_multiple_categories: false },
+             with_settings: { work_package_multiple_categories: false } do
+      let(:permissions) { [:edit_work_packages] }
+
+      it_behaves_like "has basic schema properties" do
+        let(:path) { "categories" }
+        let(:type) { "[]Category" }
+        let(:name) { WorkPackage.human_attribute_name(:category) }
+        let(:required) { false }
+        let(:writable) { true }
+        let(:location) { "_links" }
+      end
+
+      it "announces the single value restriction while multiple categories is inactive" do
+        expect(subject).to be_json_eql(false.to_json).at_path("categories/options/multiple")
+      end
+
+      context "when multiple categories is active",
+              with_flag: { work_package_multiple_categories: true },
+              with_settings: { work_package_multiple_categories: true } do
+        it_behaves_like "has basic schema properties" do
+          let(:path) { "categories" }
+          let(:type) { "[]Category" }
+          let(:name) { WorkPackage.human_attribute_name(:categories) }
+          let(:required) { false }
+          let(:writable) { true }
+          let(:location) { "_links" }
+        end
+
+        it "announces that multiple values are allowed" do
+          expect(subject).to be_json_eql(true.to_json).at_path("categories/options/multiple")
         end
       end
     end
@@ -1206,6 +1260,51 @@ RSpec.describe API::V3::WorkPackages::Schema::WorkPackageSchemaRepresenter do
           it_behaves_like "does not link to allowed values" do
             let(:path) { "responsible" }
           end
+        end
+      end
+    end
+
+    describe "labels" do
+      it_behaves_like "has basic schema properties" do
+        let(:path) { "labels" }
+        let(:type) { "[]Label" }
+        let(:name) { I18n.t("activerecord.attributes.work_package.labels") }
+        let(:required) { false }
+        let(:writable) { true }
+        let(:location) { "_links" }
+      end
+
+      it_behaves_like "links to allowed values via collection link" do
+        let(:path) { "labels" }
+        let(:href) { api_v3_paths.labels_by_workspace(work_package.project_id) }
+      end
+
+      context "when not embedded" do
+        let(:embedded) { false }
+
+        it_behaves_like "does not link to allowed values" do
+          let(:path) { "labels" }
+        end
+      end
+
+      context "when not having a project (yet)" do
+        before { work_package.project = nil }
+
+        it_behaves_like "does not link to allowed values" do
+          let(:path) { "labels" }
+        end
+      end
+
+      context "when lacking the edit_work_packages permission" do
+        let(:permissions) { [] }
+
+        it_behaves_like "has basic schema properties" do
+          let(:path) { "labels" }
+          let(:type) { "[]Label" }
+          let(:name) { I18n.t("activerecord.attributes.work_package.labels") }
+          let(:required) { false }
+          let(:writable) { false }
+          let(:location) { "_links" }
         end
       end
     end
@@ -1530,6 +1629,15 @@ RSpec.describe API::V3::WorkPackages::Schema::WorkPackageSchemaRepresenter do
         original = joined_cache_key
 
         variant.update!(updated_at: 1.hour.from_now)
+        project.reload
+
+        expect(joined_cache_key).not_to eql(original)
+      end
+
+      it "changes the cache key when the form configuration in force is edited" do
+        original = joined_cache_key
+
+        variant.update!(attribute_groups: [["Edited group", %w(assignee)]])
         project.reload
 
         expect(joined_cache_key).not_to eql(original)

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,6 +30,21 @@
 require "spec_helper"
 
 RSpec.describe OpenProject::SsrfProtection do
+  describe ".head", :webmock do
+    include_context "with ssrf stubs"
+
+    before do
+      stub_request(:head, "https://example.com/").to_return(status: 204)
+    end
+
+    it "issues a HEAD request" do
+      response = described_class.head("https://example.com/")
+
+      expect(response.code).to eq("204")
+      expect(a_request(:head, "https://example.com/")).to have_been_made
+    end
+  end
+
   describe ".safe_ip?" do
     subject { described_class.safe_ip?(input) }
 

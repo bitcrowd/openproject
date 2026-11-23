@@ -20,8 +20,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -81,7 +80,7 @@ module Calendar
     end
 
     def summary_value(work_package)
-      strip_tags work_package.name
+      CGI.unescapeHTML(strip_tags(work_package.name))
     end
 
     def dtstamp_value(work_package)
@@ -142,10 +141,8 @@ module Calendar
     def truncated_work_package_description_value(work_package)
       return if work_package.description.blank?
 
-      stripped_text = truncate_formatted_text(
-        work_package.description.to_s,
-        length: 250,
-        replace_newlines: false
+      stripped_text = CGI.unescapeHTML(
+        truncate_formatted_text(work_package.description.to_s, length: 250, replace_newlines: false)
       )
 
       "\n#{WorkPackage.human_attribute_name(:description)}:\n#{stripped_text}"

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -45,17 +44,17 @@ RSpec.describe "Work package type configuration independence",
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("Configure manually")
-      expect(response.body).to include("Copy inherited settings")
+      expect(response.body).to include("Copy existing settings")
       expect(response.body).to include("Default settings")
-      expect(response.body).not_to include("Empty")
+      expect(response.body).not_to include("Start from scratch")
     end
 
     it "offers copy and empty for patterns" do
       get type_configuration_independence_dialog_path(type_id: type.id, aspect: TypeVariant::DEFAULTS),
           as: :turbo_stream
 
-      expect(response.body).to include("Copy inherited settings")
-      expect(response.body).to include("Empty")
+      expect(response.body).to include("Copy existing settings")
+      expect(response.body).to include("Start from scratch")
       expect(response.body).not_to include("Default settings")
     end
 
@@ -63,9 +62,9 @@ RSpec.describe "Work package type configuration independence",
       get type_configuration_independence_dialog_path(type_id: type.id, aspect: TypeVariant::PDF_EXPORT),
           as: :turbo_stream
 
-      expect(response.body).to include("Copy inherited settings")
+      expect(response.body).to include("Copy existing settings")
       expect(response.body).to include("Default settings")
-      expect(response.body).not_to include("Empty")
+      expect(response.body).not_to include("Start from scratch")
     end
 
     it "submits back to the variant it was opened for" do

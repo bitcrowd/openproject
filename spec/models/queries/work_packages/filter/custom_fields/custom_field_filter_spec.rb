@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -131,8 +130,8 @@ RSpec.describe Queries::WorkPackages::Filter::CustomFieldFilter do
   end
 
   describe ".key" do
-    it "is a regular expression" do
-      expect(described_class.key).to eql(/cf_(\d+)/)
+    it "is the custom field column name pattern" do
+      expect(described_class.key).to eq(CustomField::COLUMN_NAME_PATTERN)
     end
   end
 

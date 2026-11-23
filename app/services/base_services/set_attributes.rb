@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -99,7 +98,7 @@ module BaseServices
 
     def custom_field_ids_to_validate(params)
       # Leave custom_field_ids_to_validate empty when the model is not persisted,
-      # allowing the default behaviour to set the id's to be validated in the
+      # allowing the default behavior to set the id's to be validated in the
       # model.custom_values_to_validate method.
       model.persisted? ? custom_field_ids_from(params) : []
     end
@@ -112,7 +111,7 @@ module BaseServices
 
     def custom_field_ids_from(params)
       # 1. Retrieve custom fields set via the accessor `wp.custom_field_1 = 1`
-      custom_field_ids = params.keys.filter_map { |k| k[/^custom_field_(\d+)$/, 1]&.to_i }
+      custom_field_ids = params.keys.filter_map { CustomField.id_from_attribute_name(it) }
 
       # 2. Retrieve custom fields set via the `wp.custom_field_values = { 1 => 1}` hash.
       if params[:custom_field_values]

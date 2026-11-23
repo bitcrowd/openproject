@@ -1,0 +1,230 @@
+# frozen_string_literal: true
+
+#-- copyright
+# OpenProject is an open source project management software.
+# Copyright (C) the OpenProject GmbH
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License version 3.
+#
+# OpenProject is a fork of ChiliProject, which is a fork of Redmine. The copyright follows:
+# Copyright (C) 2006-2013 Jean-Philippe Lang
+# Copyright (C) 2010-2013 the ChiliProject Team
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+# See COPYRIGHT and LICENSE files for more details.
+#++
+
+require "spec_helper"
+
+RSpec.describe "Admin work package custom field projects", :skip_csrf, type: :rails_request do
+  shared_let(:admin) { create(:admin) }
+  shared_let(:feature) { create(:type, name: "Feature") }
+  shared_let(:epic) { create(:type, name: "Epic") }
+  shared_let(:using_project) { create(:project, name: "Using project", types: [feature, epic]) }
+  shared_let(:other_project) { create(:project, name: "Other project", types: [create(:type)]) }
+
+  let(:custom_field) do
+    create(:list_wp_custom_field, :project_specific_allowlist, types: [feature, epic], possible_values: %w[A B])
+  end
+  let(:projects_path) { projects_admin_settings_work_package_custom_field_path(custom_field) }
+  let(:values_path) { admin_settings_work_package_custom_field_project_specific_values_path(custom_field, using_project) }
+  let(:page) { Capybara.string(response.body) }
+  let(:project_specific_values_filter) do
+    { project_specific_values: { operator: "=", values: [custom_field.id.to_s] } }
+  end
+
+  it "denies non-admins" do
+    login_as create(:user)
+    get projects_path
+
+    expect(response).to have_http_status(:forbidden)
+  end
+
+  context "as an admin" do
+    before do
+      login_as(admin)
+    end
+
+    context "with project-specific values enabled" do
+      before do
+        create(:project_specific_value_restriction, project: using_project,
+                                                    custom_option: custom_field.custom_options.first)
+        get projects_path
+      end
+
+      it "lists the projects using the custom field with their types and enabled values" do
+        expect(response).to have_http_status(:ok)
+
+        row = page.find("[data-test-selector='custom-field-projects-row-#{using_project.id}']")
+        expect(row).to have_link("Feature")
+        expect(row).to have_link("Epic")
+        expect(row).to have_text("1 of 2")
+      end
+
+      it "shows None and All instead of counts when no or all values are enabled" do
+        unconfigured_project = create(:project, types: [feature])
+        fully_configured_project = create(:project, types: [feature])
+        custom_field.custom_options.each do |option|
+          create(:project_specific_value_restriction, project: fully_configured_project, custom_option: option)
+        end
+
+        get projects_path
+
+        expect(page.find("[data-test-selector='custom-field-projects-row-#{unconfigured_project.id}']"))
+          .to have_text(I18n.t("custom_fields.admin.projects.enabled_values.none"))
+        expect(page.find("[data-test-selector='custom-field-projects-row-#{fully_configured_project.id}']"))
+          .to have_text(I18n.t("custom_fields.admin.projects.enabled_values.all"))
+      end
+
+      it "does not list projects not using the custom field" do
+        expect(page).to have_no_text("Other project")
+      end
+
+      it "filters the projects by name" do
+        create(:project, name: "Another using project", types: [feature])
+
+        get projects_path, params: { filters: [{ name_and_identifier: { operator: "~", values: ["another"] } }].to_json }
+
+        expect(page).to have_link("Another using project")
+        expect(page).to have_no_link(using_project.name)
+      end
+
+      it "offers to only show the projects with project-specific values" do
+        expect(page).to have_link(I18n.t("custom_fields.admin.projects.quick_filter.with_project_specific_values"))
+      end
+
+      it "filters the projects with project-specific values" do
+        create(:project, name: "Unconfigured project", types: [feature])
+
+        get projects_path, params: { filters: [project_specific_values_filter].to_json }
+
+        expect(page).to have_link(using_project.name)
+        expect(page).to have_no_link("Unconfigured project")
+      end
+
+      context "with more projects than fit a page", with_settings: { per_page_options: "1, 100" } do
+        it "keeps the filters when paginating" do
+          another_project = create(:project, name: "Another using project", types: [feature])
+          create(:project_specific_value_restriction, project: another_project,
+                                                      custom_option: custom_field.custom_options.first)
+          filters = [{ name_and_identifier: { operator: "~", values: ["using"] } }, project_specific_values_filter]
+
+          get projects_path, params: { filters: filters.to_json }
+
+          next_page = page.first("a[href*='page=2']")[:href]
+          next_page_filters = JSON.parse(Rack::Utils.parse_query(URI(next_page).query)["filters"])
+
+          expect(next_page_filters).to include(*filters.map(&:deep_stringify_keys))
+        end
+      end
+
+      it "shows a dedicated empty state when no project matches the filters" do
+        get projects_path,
+            params: { filters: [{ name_and_identifier: { operator: "~", values: ["no such project"] } }].to_json }
+
+        expect(page).to have_text(I18n.t("custom_fields.admin.projects.filter_no_results.title"))
+        expect(page).to have_no_text(I18n.t("custom_fields.admin.projects.empty_state.title"))
+      end
+
+      it "shows the projects tab" do
+        expect(page).to have_link(I18n.t(:label_project_plural), href: projects_path)
+      end
+
+      it "links each project name to the project" do
+        expect(page).to have_link(using_project.name, href: project_path(using_project))
+      end
+
+      it "links each project to the configuration of its values" do
+        expect(page).to have_link(href: values_path)
+      end
+    end
+
+    context "without project-specific values enabled" do
+      let(:custom_field) { create(:list_wp_custom_field, types: [feature]) }
+
+      it "lists the projects with all global values and without project-specific values" do
+        get projects_path
+
+        expect(response).to have_http_status(:ok)
+        row = page.find("[data-test-selector='custom-field-projects-row-#{using_project.id}']")
+        expect(row).to have_link(using_project.name, href: project_path(using_project))
+        expect(row).to have_text(I18n.t("custom_fields.admin.projects.enabled_values.all"))
+        expect(row).to have_text("–")
+        expect(page).to have_no_link(href: values_path)
+        expect(page).to have_no_link(I18n.t("custom_fields.admin.projects.quick_filter.with_project_specific_values"))
+      end
+
+      it "shows no banner" do
+        get projects_path
+
+        expect(page).to have_no_css(".Banner")
+      end
+    end
+
+    context "with only additional project values allowed" do
+      let(:custom_field) do
+        create(:list_wp_custom_field, types: [feature], possible_values: %w[A B], allow_additional_project_values: true)
+      end
+
+      before do
+        create(:custom_option, custom_field:, value: "Own", project: using_project)
+        create(:custom_option, custom_field:, value: "Other", project: using_project)
+        get projects_path
+      end
+
+      it "links each project to the configuration of its values" do
+        expect(page).to have_link(href: values_path)
+      end
+
+      it "counts the global values and the values the project added separately" do
+        row = page.find("[data-test-selector='custom-field-projects-row-#{using_project.id}']")
+        expect(row).to have_css("[role='cell'][aria-colindex='3']",
+                                text: I18n.t("custom_fields.admin.projects.enabled_values.all"))
+        expect(row).to have_css("[role='cell'][aria-colindex='4']", text: "2")
+      end
+
+      it "tells that project admins can manage the values" do
+        expect(page).to have_css(".Banner", text: I18n.t("custom_fields.admin.projects.project_admins_manage_notice"))
+      end
+    end
+
+    context "with project admins managing the values" do
+      let(:custom_field) do
+        create(:list_wp_custom_field, :project_specific_allowlist,
+               types: [feature], possible_values: %w[A B], project_level_value_management: true)
+      end
+
+      it "tells that project admins can manage the values" do
+        get projects_path
+
+        expect(page).to have_css(".Banner", text: I18n.t("custom_fields.admin.projects.project_admins_manage_notice"))
+      end
+
+      context "when project admins can no longer add values but projects already added some" do
+        before { create(:custom_option, custom_field:, value: "Own", project: using_project) }
+
+        it "warns that the values stay available instead" do
+          get projects_path
+
+          expect(page).to have_css(".Banner",
+                                   text: I18n.t("custom_fields.admin.projects.additional_values_disabled_notice"))
+          expect(page).to have_no_text(I18n.t("custom_fields.admin.projects.project_admins_manage_notice"))
+        end
+      end
+    end
+  end
+end

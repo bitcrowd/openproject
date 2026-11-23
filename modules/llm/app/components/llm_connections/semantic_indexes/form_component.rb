@@ -1,0 +1,69 @@
+# frozen_string_literal: true
+
+#-- copyright
+# OpenProject is an open source project management software.
+# Copyright (C) the OpenProject GmbH
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License version 3.
+#
+# OpenProject is a fork of ChiliProject, which is a fork of Redmine. The copyright follows:
+# Copyright (C) 2006-2013 Jean-Philippe Lang
+# Copyright (C) 2010-2013 the ChiliProject Team
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# See COPYRIGHT and LICENSE files for more details.
+#++
+
+module LlmConnections
+  module SemanticIndexes
+    class FormComponent < ApplicationComponent
+      include OpPrimer::ComponentHelpers
+      include OpTurbo::Streamable
+
+      FORM_ID = "llm-semantic-index-form"
+
+      options connection: nil, autofocus: true
+
+      private
+
+      def locked? = model.persisted?
+
+      def wrapper_data
+        return {} if locked?
+
+        { controller: "refresh-on-form-changes",
+          "refresh-on-form-changes-turbo-stream-url-value": refresh_form_semantic_indexes_path }
+      end
+
+      def http_method
+        model.persisted? ? :patch : :post
+      end
+
+      def form_url
+        model.persisted? ? semantic_index_path(model) : semantic_indexes_path
+      end
+
+      def model_options
+        return if locked?
+
+        LlmConnections::SelectableModelsQuery
+          .new(connection, OpenProject::Llm::Features[:semantic_search],
+               bound_model: LlmModel.find_by(id: model.llm_model_id_in_database))
+          .call
+      end
+    end
+  end
+end

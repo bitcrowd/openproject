@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -86,6 +85,7 @@ module Type::Attributes
       OpenProject::Cache.fetch_request_cached("all_work_package_form_attributes",
                                               *wp_cf_cache_parts,
                                               EXCLUDED.length,
+                                              Setting::WorkPackageMultipleCategories.active?,
                                               merge_date) do
         calculate_all_work_package_form_attributes(merge_date)
       end
@@ -139,7 +139,11 @@ module Type::Attributes
       # We always want to include the priority even if its required
       return false if key == "priority"
 
-      EXCLUDED.include?(key) || definition[:required]
+      EXCLUDED.include?(key) || excluded_category_attribute?(key) || definition[:required]
+    end
+
+    def excluded_category_attribute?(key)
+      key == (Setting::WorkPackageMultipleCategories.active? ? "category" : "categories")
     end
 
     def merge_date_for_form_attributes(attributes)

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,7 +30,7 @@
 require "spec_helper"
 require "rack/test"
 
-RSpec.describe "API v3 Label resource", with_flag: { work_package_labels: true } do
+RSpec.describe "API v3 Label resource" do
   include Rack::Test::Methods
   include API::V3::Utilities::PathHelper
 
@@ -119,6 +118,78 @@ RSpec.describe "API v3 Label resource", with_flag: { work_package_labels: true }
         end
 
         it_behaves_like "forbidden response based on login_required"
+      end
+    end
+
+    describe "#post" do
+      let(:role) { create(:project_role, permissions: %i[view_work_packages edit_work_packages]) }
+      let(:name) { "Needs review" }
+
+      subject(:response) { last_response }
+
+      before do
+        allow(User).to receive(:current).and_return current_user
+
+        post api_v3_paths.labels, { name: }.to_json, "CONTENT_TYPE" => "application/json"
+      end
+
+      it "creates the label" do
+        expect(response).to have_http_status(:created)
+        expect(response.body).to be_json_eql("Needs review".to_json).at_path("name")
+        expect(Label.named("Needs review")).to exist
+      end
+
+      context "when a label with the same name in different casing exists" do
+        let(:name) { "URGENT" }
+
+        it "responds with the existing label instead of creating one" do
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to be_json_eql(urgent.id.to_json).at_path("id")
+          expect(Label.count).to eq(3)
+        end
+      end
+
+      context "with a blank name" do
+        let(:name) { "" }
+
+        it_behaves_like "constraint violation" do
+          let(:message) { "Name cannot be empty." }
+        end
+      end
+
+      context "without edit_work_packages permission" do
+        let(:role) { create(:project_role, permissions: [:view_work_packages]) }
+
+        it_behaves_like "unauthorized access"
+      end
+
+      context "for a user with a work package shared with them with edit rights" do
+        let(:current_user) do
+          create(:user).tap do |user|
+            create(:work_package_member,
+                   principal: user,
+                   entity: create(:work_package, project:),
+                   roles: [create(:edit_work_package_role)])
+          end
+        end
+
+        it "creates the label" do
+          expect(response).to have_http_status(:created)
+          expect(Label.named("Needs review")).to exist
+        end
+      end
+
+      context "for a user with a work package shared with them with view rights only" do
+        let(:current_user) do
+          create(:user).tap do |user|
+            create(:work_package_member,
+                   principal: user,
+                   entity: create(:work_package, project:),
+                   roles: [create(:view_work_package_role)])
+          end
+        end
+
+        it_behaves_like "unauthorized access"
       end
     end
   end

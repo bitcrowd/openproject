@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,5 +30,9 @@
 FactoryBot.define do
   factory :hierarchy_item, class: "CustomField::Hierarchy::Item" do
     sequence(:label) { |n| "Item #{n}" }
+
+    after(:create) do |item|
+      CustomFields::Hierarchy::Items::RebuildPositionCacheService.new(user: User.system, model: item).call
+    end
   end
 end

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -113,11 +112,12 @@ module OpenProject::TextFormatting
       # numeric-only.
       def self.regexp
         semantic_id = WorkPackage::SemanticIdentifier::ID_ROUTE_CONSTRAINT.source
+        project_identifier = "#{Projects::Identifier::CLASSIC_FORMAT_CHARS.source}|#{Projects::Identifier::SEMANTIC_FORMAT.source}"
         prefixes = allowed_prefixes.join("|")
         %r{
           (?<leading>[[[:space:]](,~\-\[>]|^)
           (?<escaped>!)?
-          (?<project_prefix>(?<project_identifier>[a-z0-9\-_]+):)?
+          (?<project_prefix>(?<project_identifier>#{project_identifier}):)?
           (?<prefix>#{prefixes})?
           (?:
             (?<hash_sep>\#+)(?<hash_id>#{semantic_id})

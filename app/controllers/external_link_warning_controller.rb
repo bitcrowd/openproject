@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -35,7 +34,6 @@ class ExternalLinkWarningController < ApplicationController
   no_authorization_required! :show
 
   before_action :parse_external_url
-  before_action :verify_capture_enabled
   before_action :optional_require_login
 
   def show; end
@@ -46,21 +44,10 @@ class ExternalLinkWarningController < ApplicationController
     params.permit(:url)
   end
 
-  def verify_capture_enabled
-    unless capture_enabled?
-      redirect_to @external_url, allow_other_host: true, status: :see_other
-    end
-  end
-
   def optional_require_login
-    return unless Setting.capture_external_links?
     return unless Setting.capture_external_links_require_login?
 
     require_login
-  end
-
-  def capture_enabled?
-    Setting.capture_external_links? && EnterpriseToken.allows_to?(:capture_external_links)
   end
 
   def parse_external_url

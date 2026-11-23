@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -59,10 +58,6 @@ module ResourcePlannerViews::WorkPackageList
     def sortable? = false
 
     def has_actions? = true
-
-    # Scopes this table's styling (see table_component.sass) without touching the
-    # shared border-box grid defaults used by every other table.
-    def container_class = class_names("op-resource-work-package-list", "-global": global?)
 
     def mobile_title
       I18n.t("resource_management.work_package_list.mobile_title")

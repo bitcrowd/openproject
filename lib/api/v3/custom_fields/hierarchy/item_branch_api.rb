@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -33,24 +32,14 @@ module API
     module CustomFields
       module Hierarchy
         class ItemBranchAPI < ::API::OpenProjectAPI
-          include Dry::Monads[:result]
-
           resource :branch do
             get do
-              ::CustomFields::Hierarchy::HierarchicalItemService
-                .new
-                .get_branch(item: @custom_field_item)
-                .fmap { |items| items.map { |item| HierarchicalItemAggregate.new(item:, depth: item.depth - 1) } }
-                .either(
-                  ->(items) do
-                    self_link = api_v3_paths.custom_field_item_branch(@custom_field_item.id)
-                    HierarchyItemCollectionRepresenter.new(items, self_link:, current_user:)
-                  end,
-                  ->(error) do
-                    msg = "#{I18n.t('api_v3.errors.code_500')} #{error}"
-                    raise ::API::Errors::SafeInternalError.new(msg)
-                  end
-                )
+              items = @custom_field_item.self_and_ancestors.reverse.map do |item|
+                HierarchicalItemAggregate.new(item:, depth: item.depth - 1, visible_ids: @visible_value_ids)
+              end
+
+              self_link = api_v3_paths.custom_field_item_branch(@custom_field_item.id)
+              HierarchyItemCollectionRepresenter.new(items, self_link:, current_user:)
             end
           end
         end

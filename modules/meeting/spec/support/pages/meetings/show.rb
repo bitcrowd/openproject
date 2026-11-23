@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -101,14 +100,17 @@ module Pages::Meetings
       click_link_or_button name
     end
 
-    def trigger_change_poll
-      script = <<~JS
-        var target = document.querySelector('#content-wrapper');
-        var controller = window.Stimulus.getControllerForElementAndIdentifier(target, 'poll-for-changes')
-        controller.triggerTurboStream();
-      JS
+    def trigger_change_poll(target: "#content-wrapper")
+      # Turbo applies a stream on the next repaint, so the poll only counts as done after it
+      page.evaluate_async_script(<<~JS, target)
+        const [selector, done] = arguments;
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector(selector), 'poll-for-changes');
+        const nextRepaint = (resolve) => (document.visibilityState === 'hidden' ? setTimeout(resolve) : requestAnimationFrame(resolve));
 
-      page.execute_script(script)
+        controller.triggerTurboStream()
+          .then(() => new Promise(nextRepaint))
+          .then(() => setTimeout(done));
+      JS
     end
 
     def add_agenda_item(type: MeetingAgendaItem, save: true, &)
@@ -280,7 +282,7 @@ module Pages::Meetings
       end
     end
 
-    def duplicate_item_in_next_meeting(item)
+    def duplicate_item_in_next_meeting(item, include_outcomes: false)
       open_menu(item) do
         click_on "Duplicate"
         click_on "Duplicate in next meeting"
@@ -289,6 +291,7 @@ module Pages::Meetings
 
       retry_block do
         page.within_modal "Duplicate in next meeting?" do
+          check "Include outcomes" if include_outcomes
           click_on "Duplicate"
         end
       end
@@ -579,8 +582,8 @@ module Pages::Meetings
       expect(page).to have_text(participant.name)
 
       if !editable
-        expect(page).to have_no_selector("[data-test-selector='attendance_button_#{participant.id}']", text: "Attended")
-        expect(page).to have_no_selector("[data-test-selector='attendance_button_#{participant.id}']", text: "Mark as attended")
+        expect(page).to have_no_css("[data-test-selector='attendance_button_#{participant.id}']", text: "Attended")
+        expect(page).to have_no_css("[data-test-selector='attendance_button_#{participant.id}']", text: "Mark as attended")
 
         return
       end
@@ -620,7 +623,7 @@ module Pages::Meetings
     end
 
     def uncheck_apply_to_upcoming
-      page.find('input[type="checkbox"][name="meeting_participant[apply_to_upcoming]"]').set(false)
+      page.find_field(type: "checkbox", name: "meeting_participant[apply_to_upcoming]").set(false)
     end
 
     def expect_apply_to_upcoming_checked

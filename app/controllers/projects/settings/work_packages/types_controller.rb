@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -37,6 +36,10 @@ class Projects::Settings::WorkPackages::TypesController < Projects::SettingsCont
 
   def index
     @types = ::Type.all
+    @created_by_migration = params[:created_by_migration].presence == WorkPackageTypes::MigrationFilterComponent::MIGRATED
+    @migrated_variants_exist = migrated_variants.exists?
+
+    render layout: false if turbo_frame_request?
   end
 
   def new
@@ -44,7 +47,7 @@ class Projects::Settings::WorkPackages::TypesController < Projects::SettingsCont
   end
 
   def create # rubocop:disable Metrics/AbcSize
-    variant = ::TypeVariant.find_by(id: params[:variant_id])
+    variant = ::TypeVariant.available_in(@project).find_by(id: params[:variant_id])
 
     return render_type_not_found if variant.nil?
 
@@ -86,6 +89,14 @@ class Projects::Settings::WorkPackages::TypesController < Projects::SettingsCont
 
   private
 
+  def migrated_variants
+    ::TypeVariant
+      .non_default_variants
+      .created_by_migration
+      .available_in(@project)
+      .where(type_id: @project.project_types.select(:type_id))
+  end
+
   # Reload so the repainted list no longer sees the association's cached types.
   def replace_types_list
     replace_via_turbo_stream(
@@ -98,5 +109,4 @@ class Projects::Settings::WorkPackages::TypesController < Projects::SettingsCont
 
     respond_to_with_turbo_streams(status: :unprocessable_entity)
   end
-
 end

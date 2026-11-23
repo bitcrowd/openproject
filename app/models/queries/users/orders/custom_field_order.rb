@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -40,7 +39,7 @@ class Queries::Users::Orders::CustomFieldOrder < Queries::Orders::Base
       scope.pluck(:id)
     end
 
-    /\Acf_(#{valid_ids.join('|')})\z/
+    CustomField.column_name_pattern_for(valid_ids)
   end
 
   def self.scope
@@ -50,7 +49,7 @@ class Queries::Users::Orders::CustomFieldOrder < Queries::Orders::Base
   def custom_field
     return @custom_field if defined?(@custom_field)
 
-    @custom_field = self.class.scope.find_by(id: attribute[/\Acf_(\d+)\z/, 1])
+    @custom_field = self.class.scope.find_by(id: CustomField.id_from_column_name(attribute))
   end
 
   def available?

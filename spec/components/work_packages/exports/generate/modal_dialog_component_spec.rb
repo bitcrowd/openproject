@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -133,9 +132,21 @@ RSpec.describe WorkPackages::Exports::Generate::ModalDialogComponent, type: :com
         toc: WorkPackage::PDFExport::Artefact::DEFAULT_TOC,
         include_lifecycle: WorkPackage::PDFExport::Artefact::DEFAULT_INCLUDE_LIFECYCLE,
         include_budget: WorkPackage::PDFExport::Artefact::DEFAULT_INCLUDE_BUDGET,
+        wiki_pages: [],
         hyphenation: false,
         hyphenation_language: component.hyphenation_default[:value]
       )
+    end
+
+    context "when the type configured wiki pages" do
+      before do
+        type.default_variant.pdf_export_templates.update_settings("artefact", "wiki_pages" => ["1:7", "1:3"])
+        type.default_variant.save!
+      end
+
+      it "pre-fills the dialog with them, in the configured order" do
+        expect(component.artefact_settings[:wiki_pages]).to eq(["1:7", "1:3"])
+      end
     end
 
     context "when the type has a stored default explicitly disabling the table of contents" do

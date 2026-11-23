@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -173,6 +172,16 @@ RSpec.describe OpenProject::TextFormatting,
 
       context "Link with quoted version" do
         subject { format_text('version:"1.0"') }
+
+        it { is_expected.to be_html_eql("<p class='op-uc-p'>#{version_link}</p>") }
+      end
+
+      context "with a quoted version of a project with a semantic identifier",
+              with_settings: { work_packages_identifier: "semantic" } do
+        let(:other_project) { create(:valid_project, identifier: "OTHERPROJ", public: true) }
+        let!(:version) { create(:version, name: "1.0", project: other_project) }
+
+        subject { format_text("#{other_project.identifier}:version:\"1.0\"") }
 
         it { is_expected.to be_html_eql("<p class='op-uc-p'>#{version_link}</p>") }
       end
@@ -430,6 +439,23 @@ RSpec.describe OpenProject::TextFormatting,
 
       context "Plain project link via name" do
         subject { format_text("project:\"#{subproject.name}\"") }
+
+        it {
+          expect(subject).to be_html_eql("<p class='op-uc-p'>#{link_to(subproject.name, project_url,
+                                                                       target: '_top',
+                                                                       aria: {
+                                                                         label: "#{subproject.name}: " \
+                                                                                'A dynamic link to a project placed ' \
+                                                                                'using a macro.'
+                                                                       },
+                                                                       class: 'project op-uc-link')}</p>")
+        }
+      end
+
+      context "with a semantic project identifier", with_settings: { work_packages_identifier: "semantic" } do
+        let(:subproject) { create(:valid_project, identifier: "SUBPROJ", parent: project, public: true) }
+
+        subject { format_text("project:#{subproject.identifier}") }
 
         it {
           expect(subject).to be_html_eql("<p class='op-uc-p'>#{link_to(subproject.name, project_url,

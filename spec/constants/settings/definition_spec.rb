@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -167,6 +166,12 @@ RSpec.describe Settings::Definition, :settings_reset do
          with_env: { "OPENPROJECT_REST__API__ENABLED" => "0" } do
         reset(:api_tokens_enabled)
         expect(all[:api_tokens_enabled].value).to be false
+      end
+
+      it "allows disabling autologin from ENV",
+         with_env: { "OPENPROJECT_AUTOLOGIN" => "0" } do
+        reset(:autologin)
+        expect(all[:autologin].value).to eq 0
       end
 
       it "overriding symbol configuration having allowed values from ENV will cast the value before validation check",

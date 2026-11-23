@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -46,7 +45,7 @@ RSpec.describe "create placeholder users" do
 
         new_placeholder_user = PlaceholderUser.order(Arel.sql("id DESC")).first
 
-        expect(current_path).to eql(edit_placeholder_user_path(new_placeholder_user.id))
+        expect(page).to have_current_path(edit_placeholder_user_path(new_placeholder_user.id))
       end
     end
 

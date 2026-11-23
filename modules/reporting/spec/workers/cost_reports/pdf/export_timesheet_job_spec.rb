@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -54,7 +53,7 @@ RSpec.describe CostReports::PDF::ExportTimesheetJob do
   #
   # @param extra_filters [Hash] A hash of attribute names and operator/value
   # pairs to add to the filter.
-  # Example: `{ custom_field_17: ["=", "value"], user_id: ["=", "me"]}`
+  # Example: `{ cf_17: ["=", "value"], user_id: ["=", "me"]}`
   def perform_cost_export(extra_filters: {})
     query = initial_filter_params.deep_dup
     extra_filters.each do |attribute_name, operator_and_value|

@@ -20,8 +20,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -33,6 +32,23 @@ module API
         resources :notifications do
           after_validation do
             authorize_by_with_raise(current_user.logged?)
+          end
+
+          namespace :summary do
+            before do
+              header "Cache-Control", "no-store"
+            end
+
+            after_validation do
+              raise API::Errors::Unauthenticated unless current_user.active?
+
+              guard_feature_flag(:progressive_web_app)
+            end
+
+            get do
+              NotificationSummaryRepresenter.new(PushSubscriptions::NotificationSummary.new(current_user),
+                                                 current_user:)
+            end
           end
 
           helpers do

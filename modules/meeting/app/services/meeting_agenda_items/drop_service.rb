@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -152,7 +151,7 @@ module MeetingAgendaItems
 
     def target_section(new_section_id)
       # allows from backlog to current meeting
-      target_section = if @old_section.backlog? && @meeting.backlog == @old_section
+      target_section = if @meeting.recurring? && @old_section.backlog? && @meeting.backlog == @old_section
                          MeetingSection
                          .joins(:meeting)
                          .where(meetings: { recurring_meeting_id: @meeting.recurring_meeting_id })

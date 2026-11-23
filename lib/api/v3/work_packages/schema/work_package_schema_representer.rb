@@ -20,8 +20,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -37,12 +36,14 @@ module API
 
           # type_variant is part of the key on top of type: the configuration in force changes
           # when the project resolves the family to a different variant, which touches neither
-          # the project's nor the type's timestamp.
-          cached_representer key_parts: %i[project type type_variant],
+          # the project's nor the type's timestamp. form_configuration is a record of its own,
+          # shared between variants, so editing it touches neither of the above either.
+          cached_representer key_parts: %i[project type type_variant form_configuration],
                              dependencies: -> {
                                all_permissions_granted_to_user_under_project +
                                  [Setting.work_package_done_ratio,
-                                  Setting::WorkPackageMultipleVersions.active?]
+                                  Setting::WorkPackageMultipleVersions.active?,
+                                  Setting::WorkPackageMultipleCategories.active?]
                              }
 
           custom_field_injector type: :schema_representer
@@ -279,6 +280,11 @@ module API
                                    required: false,
                                    href_callback: ->(*) { assignee_user_autocompleter }
 
+          schema_with_allowed_link :labels,
+                                   type: "[]Label",
+                                   required: false,
+                                   href_callback: ->(*) { labels_autocompleter }
+
           schema_with_allowed_collection :type,
                                          value_representer: Types::TypeRepresenter,
                                          link_factory: ->(type) {
@@ -299,6 +305,8 @@ module API
                                          },
                                          has_default: true
 
+          # Deprecated in favor of `categories`
+          # Removed from the API if multiple categories is enabled on the instance
           schema_with_allowed_collection :category,
                                          value_representer: Categories::CategoryRepresenter,
                                          link_factory: ->(category) {
@@ -307,9 +315,30 @@ module API
                                              title: category.name
                                            }
                                          },
-                                         required: false
+                                         required: false,
+                                         deprecated: true,
+                                         writable: ->(*) { represented.writable?(:categories) },
+                                         show_if: ->(*) { !Setting::WorkPackageMultipleCategories.active? },
+                                         description: -> { I18n.t("api_v3.attributes.category.deprecated") }
 
-          # Deprecated in favour of `targetVersions`
+          schema_with_allowed_collection :categories,
+                                         type: "[]Category",
+                                         name_source: -> {
+                                           attribute = Setting::WorkPackageMultipleCategories.active? ? :categories : :category
+                                           WorkPackage.human_attribute_name(attribute)
+                                         },
+                                         value_representer: Categories::CategoryRepresenter,
+                                         link_factory: ->(category) {
+                                           {
+                                             href: api_v3_paths.category(category.id),
+                                             title: category.name
+                                           }
+                                         },
+                                         writable: ->(*) { represented.writable?(:categories) },
+                                         required: false,
+                                         options: -> { { multiple: Setting::WorkPackageMultipleCategories.active? } }
+
+          # Deprecated in favor of `targetVersions`
           # Removed from the API if multiple_versions is enabled on the instance
           schema_with_allowed_collection :version,
                                          value_representer: Versions::VersionRepresenter,
@@ -445,6 +474,7 @@ module API
              I18n.locale,
              represented.project,
              represented.type_variant,
+             represented.form_configuration,
              represented.available_custom_fields.sort_by(&:id)]
               .flatten
               .compact
@@ -458,6 +488,12 @@ module API
               .flatten
               .uniq
               .sort
+          end
+
+          def labels_autocompleter
+            project_id = represented.work_package&.project_id
+
+            api_v3_paths.labels_by_workspace(project_id) if project_id
           end
 
           def assignee_user_autocompleter

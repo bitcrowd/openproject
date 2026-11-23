@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -56,6 +55,12 @@ RSpec.describe WorkPackageTypes::Patterns::TokenPropertyMapper do
   shared_let(:observed_in_version_rows) do
     [work_package, work_package_parent].map do |wp|
       create(:work_package_version, work_package: wp, version: observed_version, kind: :observed_in)
+    end
+  end
+
+  shared_let(:labeling_rows) do
+    [work_package, work_package_parent].map do |wp|
+      create(:labeling, labelable: wp, label: create(:label))
     end
   end
 
@@ -114,6 +119,21 @@ RSpec.describe WorkPackageTypes::Patterns::TokenPropertyMapper do
 
       expect { token.call(context, nil) }.not_to raise_error
       expect(token.call(context, nil)).not_to be_nil
+    end
+  end
+
+  describe ".static_tokens" do
+    before do
+      allow(described_class).to receive(:static_token_definitions).and_return([])
+
+      formatter = WorkPackageTypes::Patterns::Formatters::DefaultFormatter
+      described_class.add_static_attribute(:shown, :work_package, -> { "Shown" }, ->(wp) { wp.subject }, formatter)
+      described_class.add_static_attribute(:hidden, :work_package, -> { "Hidden" }, ->(wp) { wp.subject }, formatter,
+                                           enabled_fn: -> { false })
+    end
+
+    it "leaves out tokens whose enabled_fn returns false" do
+      expect(described_class.static_tokens.map(&:key)).to eq([:shown])
     end
   end
 
@@ -179,6 +199,22 @@ RSpec.describe WorkPackageTypes::Patterns::TokenPropertyMapper do
       enabled, disabled = subject
       expect(detect(enabled, :"custom_field_#{cf.id}")).to be_nil
       expect(detect(disabled, :"custom_field_#{cf.id}")&.label).to eq(cf.name)
+    end
+
+    context "with labels" do
+      it "returns the label tokens as enabled" do
+        enabled, = subject
+
+        expect(detect(enabled, :labels)&.label).to eq(WorkPackage.human_attribute_name(:labels))
+        expect(detect(enabled, :parent_labels)&.label).to eq(WorkPackage.human_attribute_name(:labels))
+      end
+
+      it "resolves the label names" do
+        enabled, = subject
+
+        expect(detect(enabled, :labels).call(work_package, nil)).to eq(work_package.labels.first.name)
+        expect(detect(enabled, :parent_labels).call(work_package_parent, nil)).to eq(work_package_parent.labels.first.name)
+      end
     end
 
     context "when defining an instance date format", with_settings: { date_format: "%d.%m.%Y" } do
@@ -279,10 +315,7 @@ RSpec.describe WorkPackageTypes::Patterns::TokenPropertyMapper do
     describe "hierarchy custom fields", with_ee: %i[custom_field_hierarchies] do
       let!(:hierarchy_custom_field) do
         create(:hierarchy_wp_custom_field).tap do |custom_field|
-          service = CustomFields::Hierarchy::HierarchicalItemService.new
-          contract_class = CustomFields::Hierarchy::InsertListItemContract
-          item = service.insert_item(contract_class:, parent: custom_field.hierarchy_root, label: "Item Value",
-                                     short: "IV").value!
+          item = create(:hierarchy_item, parent: custom_field.hierarchy_root, label: "Item Value", short: "IV")
 
           work_package.type.default_variant.custom_field_ids |= [custom_field.id]
 
@@ -314,9 +347,7 @@ RSpec.describe WorkPackageTypes::Patterns::TokenPropertyMapper do
     describe "weighted item list custom fields", with_ee: %i[weighted_item_lists] do
       let!(:wil_custom_field) do
         create(:weighted_item_list_wp_custom_field).tap do |custom_field|
-          service = CustomFields::Hierarchy::HierarchicalItemService.new
-          contract_class = CustomFields::Hierarchy::InsertWeightedItemContract
-          item = service.insert_item(contract_class:, parent: custom_field.hierarchy_root, label: "Item Value", weight: 42).value!
+          item = create(:hierarchy_item, parent: custom_field.hierarchy_root, label: "Item Value", weight: 42)
 
           work_package.type.default_variant.custom_field_ids |= [custom_field.id]
 

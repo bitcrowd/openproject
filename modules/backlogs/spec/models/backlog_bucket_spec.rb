@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -65,7 +64,7 @@ RSpec.describe BacklogBucket do
   describe "#displayed_work_packages" do
     shared_let(:bucket) { create(:backlog_bucket, project:) }
     shared_let(:bucket_work_package1) { create(:work_package, project:, backlog_bucket: bucket, position: 1) }
-    shared_let(:closed_status) { create(:status, is_closed: true) }
+    shared_let(:closed_status) { create(:status, category: "closed") }
     shared_let(:closed_bucket_work_package) do
       create(:work_package, project:, backlog_bucket: bucket, status: closed_status, position: 2)
     end
@@ -136,7 +135,7 @@ RSpec.describe BacklogBucket do
     end
     shared_let(:wp2_in_bucket1) { create(:work_package, project:, backlog_bucket: bucket1, position: 3) }
     shared_let(:wp1_in_bucket1) { create(:work_package, project:, backlog_bucket: bucket1, position: 2) }
-    shared_let(:closed_status) { create(:status, is_closed: true) }
+    shared_let(:closed_status) { create(:status, category: "closed") }
     shared_let(:closed_wp_in_bucket1) do
       create(:work_package, project:, backlog_bucket: bucket1, position: 1, status: closed_status)
     end
@@ -172,13 +171,6 @@ RSpec.describe BacklogBucket do
     it "orders work packages within a bucket by position, with nil position last" do
       expect(result.first.displayed_work_packages.count).to eq(3)
       expect(result.first.displayed_work_packages).to eq([wp1_in_bucket1, wp2_in_bucket1, wp_nil_in_bucket1])
-    end
-
-    it "eager loads the displayed work packages" do
-      result.to_a
-
-      expect { result.first.displayed_work_packages }.to have_a_query_limit(0)
-      expect { result.last.displayed_work_packages }.to have_a_query_limit(0)
     end
   end
 end

@@ -22,15 +22,18 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 module Import
   class JiraInstanceMetaDataJob < ApplicationJob
+    # Declared before the concurrency extension, so that its retry_on keeps handling exceeded limits.
+    rescue_from StandardError, with: :transition_to_error
+
     include GoodJob::ActiveJobExtensions::Concurrency
+    include JiraJobLogging
 
     good_job_control_concurrency_with(
       total_limit: 2,
@@ -44,18 +47,25 @@ module Import
     end
 
     def perform(jira_import_id)
-      jira_import = Import::JiraImport.find(jira_import_id)
-      jira = jira_import.jira
-      @client = Import::JiraClient.new(url: jira.url, personal_access_token: jira.personal_access_token)
-      jira_import.update!(available: collect_metadata)
-      jira_import.transition_to!(:instance_meta_done)
-    rescue StandardError => e
-      jira_import&.transition_to!(:instance_meta_error, error: e.message, error_backtrace: e.backtrace)
+      @jira_import = Import::JiraImport.find(jira_import_id)
+      jira = @jira_import.jira
+      connection_check = Import::Jiras::CheckConnectionService.new(jira).call
+      return stop_after_failed_connection_check(@jira_import) if connection_check.failure?
+
+      @client = jira.client
+      @jira_import.update!(available: collect_metadata)
+      @jira_import.transition_to!(:instance_meta_done)
+    end
+
+    def stop_after_failed_connection_check(jira_import)
+      Rails.logger.warn "Fetching instance meta data stopped by the failed connection check"
+      jira_import.transition_to!(:instance_meta_error, error: I18n.t(:"admin.jira.run.connection_check_error"))
     end
 
     def collect_metadata
       issue_types_count = @client.issue_types_count
       statuses_count = @client.statuses_count
+      resolutions_count = @client.resolutions_count
       issues_count = @client.issues_count
       users_count = @client.applicationrole.inject(0) do |users_count, application|
         users_count + application["userCount"]
@@ -66,6 +76,7 @@ module Import
         "projects" => projects,
         "total_issues" => issues_count,
         "total_statuses" => statuses_count,
+        "total_resolutions" => resolutions_count,
         "total_issue_types" => issue_types_count,
         "total_users" => users_count,
         "server_info" => server_info
@@ -74,6 +85,9 @@ module Import
 
     def collect_projects
       @client.projects.filter_map do |project|
+        with_log_context(jira_object_type: "project", jira_object_id_or_name: project["key"]) do
+          Rails.logger.debug "Fetched project"
+        end
         next unless project_browsable?(project["key"])
 
         { "id" => project["id"], "key" => project["key"], "name" => project["name"] }
@@ -85,10 +99,19 @@ module Import
       true
     rescue Import::JiraClient::ApiError => e
       if e.status == 400
+        with_log_context(jira_object_type: "project", jira_object_id_or_name: project_key) do
+          Rails.logger.warn "Project is not browsable (#{e.message}), excluding it from instance meta data"
+        end
         false
       else
         raise e
       end
+    end
+
+    private
+
+    def transition_to_error(error)
+      @jira_import&.transition_to!(:instance_meta_error, error: error.message, error_backtrace: error.backtrace)
     end
   end
 end

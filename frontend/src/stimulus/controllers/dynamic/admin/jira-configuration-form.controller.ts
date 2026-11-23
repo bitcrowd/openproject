@@ -25,86 +25,30 @@
 // See COPYRIGHT and LICENSE files for more details.
 //++
 
-import {Controller} from '@hotwired/stimulus';
-import * as Turbo from '@hotwired/turbo';
-import {useMeta} from 'stimulus-use';
+import { Controller } from '@hotwired/stimulus';
 
 export default class extends Controller {
-    static targets = ['button', 'progressBanner', 'urlInput', 'tokenInput'];
+  static targets = ['button'];
 
-    declare readonly buttonTargets:HTMLButtonElement[];
-    declare readonly progressBannerTarget:HTMLButtonElement;
-    declare readonly urlInputTarget:HTMLInputElement;
-    declare readonly tokenInputTarget:HTMLInputElement;
+  declare readonly buttonTargets:HTMLButtonElement[];
 
-    static metaNames = ['csrf-token'];
-    declare readonly csrfToken:string;
+  connect():void {
+    document.addEventListener('turbo:before-cache', this.clearBeforeCache);
+  }
 
-    static values = {
-        url: String,
-        id: String
-    };
+  disconnect():void {
+    document.removeEventListener('turbo:before-cache', this.clearBeforeCache);
+  }
 
-    declare urlValue:string;
-    declare idValue:string;
+  private clearBeforeCache = ():void => {
+    this.element.querySelectorAll('input').forEach((input:HTMLInputElement) => {
+      input.value = '';
+    });
+  };
 
-    connect():void {
-        useMeta(this, {suffix: false});
-        document.addEventListener('turbo:before-cache', this.clearBeforeCache);
-    }
-
-    disconnect():void {
-        document.removeEventListener('turbo:before-cache', this.clearBeforeCache);
-    }
-
-    private clearBeforeCache = ():void => {
-        this.element.querySelectorAll('input').forEach((input:HTMLInputElement) => {
-            input.value = '';
-        });
-    };
-
-    disableButtons():void {
-        this.buttonTargets.forEach(button => {
-            button.disabled = true;
-        });
-    }
-
-    async testConnection(event:Event):Promise<void> {
-        event.preventDefault();
-
-        const url = this.urlInputTarget.value.trim();
-        const token = this.tokenInputTarget?.value.trim();
-
-        this.disableButtons();
-        this.progressBannerTarget.hidden = false;
-
-        try {
-            const formData = new FormData();
-            formData.append('url', url);
-            if (token) {
-                formData.append('personal_access_token', token);
-            }
-            if (this.idValue) {
-                formData.append('id', this.idValue);
-            }
-
-            const response = await fetch(this.urlValue, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'text/vnd.turbo-stream.html',
-                    'X-CSRF-Token': this.csrfToken,
-                },
-            });
-
-            Turbo.renderStreamMessage(await response.text());
-        } catch (error) {
-            console.error(error);
-        } finally {
-            this.buttonTargets.forEach(button => {
-                button.disabled = false;
-            });
-            this.progressBannerTarget.hidden = true;
-        }
-    }
+  disableButtons():void {
+    this.buttonTargets.forEach((button) => {
+      button.disabled = true;
+    });
+  }
 }

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -45,6 +44,15 @@ module Patterns
     # list: that keyboard path is the consumer's, see the Sibling lists tab.
     # @display min_height 320px
     def sibling_lists
+      render_with_template
+    end
+
+    # Chapters reorder among themselves, articles reorder within a chapter and
+    # move to another one. "Release notes" is `confined`: it reorders in its own
+    # chapter and every other article list refuses it. Persistence fails as in
+    # the other previews, so the rows roll back after each drop.
+    # @display min_height 440px
+    def nested_lists
       render_with_template
     end
   end

@@ -20,14 +20,17 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 See COPYRIGHT and LICENSE files for more details.
 
 ++#%>
 
 <% html_title(t(:label_my_account), t("my_account.notifications_and_email.title")) -%>
+
+<% content_for :header_tags do %>
+  <meta name="turbo-cache-control" content="no-cache">
+<% end %>
 
 <%= render(My::Notifications::ShowPageHeaderComponent.new) %>
 
@@ -41,6 +44,8 @@ See COPYRIGHT and LICENSE files for more details.
           update_email_alerts_url: { action: "update_email_alerts" }
         )
       ) %>
+<% elsif params[:tab] == "push" && OpenProject::WebPush.enabled? %>
+  <%= render(My::PushSubscriptions::ShowPageComponent.new(user: @user, current_session: session)) %>
 <% else %>
   <%= render(
         My::Notifications::ShowPageComponent.new(

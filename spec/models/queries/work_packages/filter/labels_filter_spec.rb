@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -40,12 +39,8 @@ RSpec.describe Queries::WorkPackages::Filter::LabelsFilter do
     let(:human_name) { "Labels" }
 
     describe "#available?" do
-      it "is true with the feature flag enabled", with_flag: { work_package_labels: true } do
+      it "is true" do
         expect(instance).to be_available
-      end
-
-      it "is false with the feature flag disabled", with_flag: { work_package_labels: false } do
-        expect(instance).not_to be_available
       end
     end
 

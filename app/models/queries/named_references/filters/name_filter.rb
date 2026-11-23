@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -42,6 +41,8 @@ class Queries::NamedReferences::Filters::NameFilter < Queries::Filters::Base
   end
 
   def where
+    return if blank_search?
+
     case operator
     when "~", "**"
       where_contains
@@ -55,6 +56,12 @@ class Queries::NamedReferences::Filters::NameFilter < Queries::Filters::Base
   end
 
   private
+
+  def blank_search? = values.compact_blank.empty?
+
+  def validate_presence_of_values
+    super unless blank_search?
+  end
 
   def columns
     ["#{model.table_name}.name", "COALESCE(#{model.table_name}.description, '')"]

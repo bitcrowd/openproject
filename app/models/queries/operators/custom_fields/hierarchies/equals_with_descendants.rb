@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -38,9 +37,7 @@ module Queries
 
           def self.sql_for_field(values, db_table, db_field)
             items = CustomField::Hierarchy::Item.find(values)
-            service = ::CustomFields::Hierarchy::HierarchicalItemService.new
-
-            actual_values = items.map { |item| service.get_descendants(item:).value! }.flatten.map(&:id).uniq
+            actual_values = items.flat_map(&:self_and_descendant_ids).uniq
 
             Equals.sql_for_field(actual_values, db_table, db_field)
           end

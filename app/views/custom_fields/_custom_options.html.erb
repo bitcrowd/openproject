@@ -1,4 +1,4 @@
-<%# -- copyright
+<%#-- copyright
 OpenProject is an open source project management software.
 Copyright (C) the OpenProject GmbH
 
@@ -20,12 +20,11 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 See COPYRIGHT and LICENSE files for more details.
 
-++# %>
+++#%>
 <% content_controller "admin--custom-fields",
                       "admin--custom-fields-multi-select-value": @custom_field.multi_value? %>
 
@@ -38,6 +37,7 @@ See COPYRIGHT and LICENSE files for more details.
         <col>
         <col>
         <col>
+        <col>
         <col data-highlight="false">
       </colgroup>
       <thead>
@@ -47,6 +47,15 @@ See COPYRIGHT and LICENSE files for more details.
             <div class="generic-table--sort-header">
                 <span>
                   <%= t("activerecord.attributes.custom_value.value") %>
+                </span>
+            </div>
+          </div>
+        </th>
+        <th>
+          <div class="generic-table--sort-header-outer">
+            <div class="generic-table--sort-header">
+                <span>
+                  <%= t("custom_fields.project_specific_values.label") %>
                 </span>
             </div>
           </div>
@@ -93,9 +102,13 @@ See COPYRIGHT and LICENSE files for more details.
                                     no_label: true %>
               </span>
             </td>
+            <td class="custom-option-project" data-test-selector="custom-option-project">
+              <%= custom_option.project&.name %>
+            </td>
             <td class="custom-option-default-value">
               <%= co_f.check_box :default_value,
                                  container_class: "custom-option-default-value",
+                                 disabled: custom_option.project_id.present?,
                                  data: {
                                    "admin--custom-fields-target": "customOptionDefaults",
                                    action: "click->admin--custom-fields#uncheckOtherDefaults"

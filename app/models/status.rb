@@ -22,14 +22,17 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 class Status < ApplicationRecord
   include Lists::MoveAfterAnchor
+
+  enum :category, { to_do: "to_do", in_progress: "in_progress", closed: "closed" }
+
+  scope :not_closed, -> { where("#{table_name}.category IS DISTINCT FROM 'closed'") }
 
   SORTABLE_LIST_TYPE = "status"
 
@@ -74,6 +77,26 @@ class Status < ApplicationRecord
 
   def self.order_by_position
     order(:position)
+  end
+
+  # Maps each given status to the number of distinct workflows whose transitions reference it
+  def self.workflow_counts(statuses)
+    ids = statuses.map(&:id)
+    return {} if ids.empty?
+
+    workflow_ids = Hash.new { |hash, key| hash[key] = Set.new }
+    Workflows::StatusTransition.touching_statuses(ids)
+      .pluck(:workflow_id, :old_status_id, :new_status_id)
+      .each do |workflow_id, old_id, new_id|
+        workflow_ids[old_id] << workflow_id
+        workflow_ids[new_id] << workflow_id
+      end
+
+    workflow_ids.slice(*ids).transform_values(&:size)
+  end
+
+  def workflow_count
+    Workflows::StatusTransition.touching_statuses(id).distinct.count(:workflow_id)
   end
 
   def self.can_readonly?

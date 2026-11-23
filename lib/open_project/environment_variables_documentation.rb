@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -53,11 +52,12 @@ module OpenProject
     RANDOM_DEFAULTS = %i[
       hashed_token_pepper
       installation_uuid
+      web_push_vapid_private_key
     ].freeze
 
     # `real_time_text_collaboration_enabled` derives its default from the two
     # hocuspocus settings, `default_projects_modules` from that one - as values, so
-    # a configured instance documents itself. Mapped to the override neutralising
+    # a configured instance documents itself. Mapped to the override neutralizing
     # each; `docs:env_vars` refuses to run while any is set.
     DERIVED_DEFAULT_INPUTS = {
       collaborative_editing_hocuspocus_url: "OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL=",

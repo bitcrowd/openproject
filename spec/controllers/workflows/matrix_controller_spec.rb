@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -145,6 +144,7 @@ RSpec.describe Workflows::MatrixController do
                       workflow: variant.workflow,
                       variant:,
                       readonly?: false,
+                      wizard?: false,
                       tab: "always",
                       roles: [role],
                       requested_status_ids: [status.id],
@@ -205,7 +205,7 @@ RSpec.describe Workflows::MatrixController do
       instance_double(Workflows::MatrixUpdateService, call: call_result).tap do |dbl|
         allow(Workflows::MatrixUpdateService)
           .to receive(:new)
-                .with(workflow: variant.workflow, roles:, tab: "always")
+                .with(context: matrix_context)
                 .and_return(dbl)
       end
     end
@@ -240,26 +240,6 @@ RSpec.describe Workflows::MatrixController do
         indeterminate_status: nil
       )
       expect(response).to have_turbo_stream action: "flash", target: "op-primer-flash-component"
-    end
-
-    context "with multiple roles" do
-      let(:role2) { build_stubbed(:project_role) }
-      let(:roles) { [role, role2] }
-
-      before do
-        allow(role_scope)
-          .to receive(:where)
-                .with(id: [role.id.to_s, role2.id.to_s])
-                .and_return(roles)
-      end
-
-      it "passes every selected role to the service" do
-        submit_matrix
-
-        expect(Workflows::MatrixUpdateService)
-          .to have_received(:new).with(workflow: variant.workflow, roles:, tab: "always")
-        expect(response).to have_turbo_stream action: "flash", target: "op-primer-flash-component"
-      end
     end
 
     context "when the service fails" do

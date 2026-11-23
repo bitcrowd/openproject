@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -99,14 +98,14 @@ RSpec.describe ResourcePlannerViews::WorkPackageTimeline::AllocationBarComponent
       render_inline(described_class.new(allocation:, visible_principal_ids: Set.new, candidate_count: 3))
 
       expect(page).to have_css(".op-rm-timeline-bar--badge", text: "3")
-      expect(page).to have_css("tool-tip", text: "3 members of this project match the allocation's filter criteria.")
+      expect(page).to have_css("tool-tip", text: "3 members of this project match the criteria of the placeholder user.")
     end
 
     it "describes a single match in the singular" do
       render_inline(described_class.new(allocation:, visible_principal_ids: Set.new, candidate_count: 1))
 
       expect(page).to have_css(".op-rm-timeline-bar--badge", text: "1")
-      expect(page).to have_css("tool-tip", text: "1 member of this project matches the allocation's filter criteria.")
+      expect(page).to have_css("tool-tip", text: "1 member of this project matches the criteria of the placeholder user.")
     end
 
     it "is omitted when nothing matches" do

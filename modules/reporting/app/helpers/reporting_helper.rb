@@ -20,8 +20,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -269,16 +268,5 @@ module ReportingHelper
                    end
     end
     delimited
-  end
-
-  ##
-  # Finds the Filter-Class for as specific filter name while being careful with the filter_name parameter as it is user input.
-  def filter_class(filter_name)
-    klass = CostQuery::Filter.const_get(filter_name.to_s.camelize)
-    return klass if klass.is_a? Class
-
-    nil
-  rescue NameError
-    nil
   end
 end

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -45,12 +44,22 @@ module WorkPackageTypes
       private
 
       def context
-        @context ||= WorkPackageTypes::FormConfiguration::EditorContext
-                       .for_variant(model, scope_project: helpers.variant_scope_project)
+        @context ||=
+          if form_mode == :new
+            WorkPackageTypes::FormConfiguration::EditorContext.new(form_configuration: model.form_configuration)
+          else
+            WorkPackageTypes::FormConfiguration::EditorContext
+              .for_variant(model, scope_project: helpers.variant_scope_project)
+          end
       end
 
       def reload_url
         @back_url || variant_creation_wizard_path(helpers.variant_scope_project, model, step: :form_configuration)
+      end
+
+      def form_mode
+        started_id = helpers.params[:started_form_configuration_id].presence&.to_i
+        model.form_configuration_id == started_id ? :new : :existing
       end
 
       def no_filter_query

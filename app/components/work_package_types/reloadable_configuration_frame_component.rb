@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -39,15 +38,18 @@ module WorkPackageTypes
     FRAME_ID = "type-configuration-frame"
     RELOAD_EVENT_NAME = "op-dispatched:types:configuration-changed"
 
-    def initialize(reload_url:, reload_from_location: false)
+    def initialize(reload_url:, reload_from_location: false, target: nil)
       super()
 
       @reload_url = reload_url
       @reload_from_location = reload_from_location
+      @target = target
     end
 
     def call
-      helpers.turbo_frame_tag(FRAME_ID, class: "op-reloadable-configuration-frame", data: frame_data) { content }
+      helpers.turbo_frame_tag(FRAME_ID, class: "op-reloadable-configuration-frame", target: @target, data: frame_data) do
+        content
+      end
     end
 
     private

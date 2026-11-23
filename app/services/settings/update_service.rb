@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -72,6 +71,8 @@ class Settings::UpdateService < BaseServices::BaseContracted
       trigger_update_job_for_progress_mode_change(old_value, new_value)
     elsif name == :total_percent_complete_mode
       trigger_update_job_for_total_percent_complete_mode_change(old_value, new_value)
+    elsif name == :web_push_enabled && ActiveModel::Type::Boolean.new.cast(new_value) == false
+      PushSubscription.delete_all
     end
   end
 

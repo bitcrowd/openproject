@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -265,6 +264,40 @@ RSpec.describe "Meeting Presentation Mode", :js do
       expect(page).to have_no_text("Second Item")
       expect(page).to have_no_text("Blockers")
     end
+  end
+
+  it "holds back refreshes while an outcome is being written" do
+    allow_any_instance_of(Meetings::PresentationMode::ShowComponent) # rubocop:disable RSpec/AnyInstance
+      .to receive(:check_for_updates_interval)
+            .and_return(0)
+    meeting.update!(state: :in_progress)
+
+    visit project_meeting_presentation_path(project, meeting)
+    expect(page).to have_text("First Item")
+
+    show_page.add_outcome_from_menu(first_agenda_item)
+    field = outcome_field_for(first_agenda_item)
+    field.set_value "Draft outcome"
+
+    MeetingAgendaItems::UpdateService
+      .new(model: first_agenda_item, user: User.system)
+      .call(title: "Updated Item")
+      .on_failure { |result| raise "Failed to update agenda item in background: #{result.errors.full_messages}" }
+
+    show_page.trigger_change_poll(target: ".op-meeting-presentation")
+
+    show_page.expect_outcome_form(first_agenda_item)
+    field.expect_value "Draft outcome"
+    expect(page).to have_no_text("Updated Item")
+
+    show_page.save_outcome(first_agenda_item)
+
+    show_page.in_outcome_component(first_agenda_item) do
+      show_page.expect_outcome "Draft outcome"
+    end
+
+    show_page.trigger_change_poll(target: ".op-meeting-presentation")
+    expect(page).to have_text("Updated Item")
   end
 
   context "with an empty meeting" do

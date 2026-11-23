@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,6 +31,7 @@ module Admin
   class DepartmentsController < ::ApplicationController
     include OpTurbo::ComponentStream
     include GroupsHelper
+    include TreeViewFormValues
 
     layout :admin_or_frame_layout
 
@@ -114,7 +114,7 @@ module Admin
     end
 
     def change_parent
-      new_parent_id = parse_new_parent_id(params[:new_parent_id])
+      new_parent_id = selected_tree_view_value(params[:new_parent_id])
       service_call = ::Groups::UpdateService
         .new(user: current_user, model: @group)
         .call(parent_id: new_parent_id)
@@ -220,13 +220,6 @@ module Admin
 
     def find_group
       @group = Group.visible.organizational_units.includes(:members, :users, :group_detail).find(params[:id])
-    end
-
-    def parse_new_parent_id(input)
-      return nil if input.blank?
-
-      value = MultiJSON.load(Array(input).first, symbolize_keys: true)[:value]
-      value.presence
     end
 
     def respond_parent_changed(service_call)

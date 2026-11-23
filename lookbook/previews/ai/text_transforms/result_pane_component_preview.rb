@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -81,7 +80,7 @@ module AI
       private
 
       def render_pane(status:, events:, scope: "document")
-        run = AI::TextTransformRun.new(status:, action: AI::TextTransformAction.new(label: "Fix grammar"))
+        run = AI::TextTransformRun.new(status:, action: AI::TextAction.new(label: "Fix grammar"))
         events.each.with_index(1) { |(kind, payload), seq| run.events.build(kind:, payload:, seq:) }
         pane = AI::TextTransforms::ResultPaneState.new(run:, scope:, request_id: SecureRandom.uuid)
 

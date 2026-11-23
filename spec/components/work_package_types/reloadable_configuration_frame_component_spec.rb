@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,6 +40,18 @@ RSpec.describe WorkPackageTypes::ReloadableConfigurationFrameComponent, type: :c
     expect(frame["data-controller"]).to eq("reload-frame-on-event")
     expect(frame["data-reload-frame-on-event-event-name-value"]).to eq(described_class::RELOAD_EVENT_NAME)
     expect(frame["data-reload-frame-on-event-url-value"]).to eq("/reload/here")
+  end
+
+  it "leaves navigation from inside the frame to the frame by default" do
+    render_inline(described_class.new(reload_url: "/reload/here")) { "The wrapped editor" }
+
+    expect(page.find("turbo-frame##{described_class::FRAME_ID}")[:target]).to be_nil
+  end
+
+  it "can send navigation from inside the frame to the whole page" do
+    render_inline(described_class.new(reload_url: "/reload/here", target: "_top")) { "The wrapped editor" }
+
+    expect(page.find("turbo-frame##{described_class::FRAME_ID}")[:target]).to eq("_top")
   end
 
   it "has no src, so it is not fetched on page load" do

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,10 +40,8 @@ RSpec.describe "Work package filtering by hierarchy custom field", :js, with_ee:
       type.default_variant.custom_field_ids |= [cf.id]
     end
   end
-  let(:service) { CustomFields::Hierarchy::HierarchicalItemService.new }
-  let(:contract_class) { CustomFields::Hierarchy::InsertListItemContract }
-  let!(:luke) { service.insert_item(contract_class:, parent: hierarchy_root, label: "luke").value! }
-  let!(:leia) { service.insert_item(contract_class:, parent: hierarchy_root, label: "leia").value! }
+  let!(:luke) { create(:hierarchy_item, parent: hierarchy_root, label: "luke") }
+  let!(:leia) { create(:hierarchy_item, parent: hierarchy_root, label: "leia") }
 
   let!(:wp_luke) do
     create(:work_package, project:, subject: "Luke's wp").tap do |wp|
@@ -96,7 +93,7 @@ RSpec.describe "Work package filtering by hierarchy custom field", :js, with_ee:
     end
 
     context "when equals with descendants" do
-      let!(:grogu) { service.insert_item(contract_class:, parent: luke, label: "Grogu").value! }
+      let!(:grogu) { create(:hierarchy_item, parent: luke, label: "Grogu") }
       let!(:wp_grogu) do
         create(:work_package, project:, subject: "Grogu's wp").tap do |wp|
           wp.custom_field_values = { hierarchy_cf.id => grogu.id }

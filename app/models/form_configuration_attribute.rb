@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -52,8 +51,8 @@ class FormConfigurationAttribute < ApplicationRecord
 
   def self.reference_for(key)
     key = key.to_s
-    if (custom_field_id = key[/\Acustom_field_(\d+)\z/, 1])
-      { custom_field_id: custom_field_id.to_i, attribute_key: nil }
+    if (custom_field_id = CustomField.id_from_attribute_name(key))
+      { custom_field_id:, attribute_key: nil }
     else
       { custom_field_id: nil, attribute_key: key }
     end

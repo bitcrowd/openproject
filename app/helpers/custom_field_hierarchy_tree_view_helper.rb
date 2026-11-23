@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,6 +40,18 @@ module CustomFieldHierarchyTreeViewHelper
     end
 
     add_sub_tree(tree_view, hierarchy_hash, item_options)
+  end
+
+  def with_project_specific_label(label, item)
+    return label if item.project_id.nil?
+
+    project_specific = render(Primer::Beta::Text.new(font_size: :small, color: :muted, ml: 2)) do
+      I18n.t("custom_fields.project_specific_values.label")
+    end
+
+    render(Primer::BaseComponent.new(tag: :span, display: :inline_flex, align_items: :baseline)) do
+      safe_join([label, project_specific])
+    end
   end
 
   def standard_tree_view_item_formatter

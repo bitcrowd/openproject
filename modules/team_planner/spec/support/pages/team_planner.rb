@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -82,7 +81,7 @@ module Pages
         "2-week" => :resourceTimelineTwoWeeks
       }[text]
 
-      expect(page).to have_current_path(/cview=#{param}/)
+      expect(page).to have_current_query_params(a_hash_including("cview" => param.to_s))
     end
 
     def switch_view_mode(text)

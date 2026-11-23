@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,14 +31,12 @@
 # a single filter parameterized by the custom field id, in the same way the rest
 # of the Queries:: stack handles custom fields.
 class Queries::CostReports::Filters::CustomFieldFilter < Queries::CostReports::Filters::CostReportFilter
-  KEY = /\Acf_(\d+)\z/
-
   def self.key
-    KEY
+    CustomField::COLUMN_NAME_PATTERN
   end
 
   def self.all_for(context = nil)
-    available_custom_fields.map { |cf| create!(name: :"cf_#{cf.id}", context:) }
+    available_custom_fields.map { |cf| create!(name: cf.column_name.to_sym, context:) }
   end
 
   # Only the formats the engine can generate a join for have a matching
@@ -55,7 +52,7 @@ class Queries::CostReports::Filters::CustomFieldFilter < Queries::CostReports::F
   end
 
   def custom_field_id
-    name.to_s[KEY, 1]
+    CustomField.id_from_column_name(name)
   end
 
   def available?
@@ -94,7 +91,7 @@ class Queries::CostReports::Filters::CustomFieldFilter < Queries::CostReports::F
     when "bool"
       [[I18n.t(:general_text_yes), "t"], [I18n.t(:general_text_no), "f"]]
     when "list"
-      custom_field.possible_values.map { |option| [option.value, option.value] }
+      engine_filter.available_values(project: context&.project)
     end
   end
 end

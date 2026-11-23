@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -44,20 +43,36 @@ module My
       end
 
       def tabs
-        [
-          {
-            name: "notifications",
-            path: helpers.my_notifications_path(tab: "notifications"),
-            label: t("my_account.notifications_and_email.tabs.notifications"),
-            data: { turbo: false }
-          },
-          {
-            name: "reminders",
-            path: helpers.my_notifications_path(tab: "reminders"),
-            label: t("my_account.notifications_and_email.tabs.email_reminders"),
-            data: { turbo: false }
-          }
-        ]
+        [notifications_tab, reminders_tab, (push_tab if OpenProject::WebPush.enabled?)].compact
+      end
+
+      private
+
+      def notifications_tab
+        {
+          name: "notifications",
+          path: helpers.my_notifications_path(tab: "notifications"),
+          label: t("my_account.notifications_and_email.tabs.notifications"),
+          data: { turbo: false }
+        }
+      end
+
+      def reminders_tab
+        {
+          name: "reminders",
+          path: helpers.my_notifications_path(tab: "reminders"),
+          label: t("my_account.notifications_and_email.tabs.email_reminders"),
+          data: { turbo: false }
+        }
+      end
+
+      def push_tab
+        {
+          name: "push",
+          path: helpers.my_notifications_path(tab: "push"),
+          label: t("my_account.notifications_and_email.tabs.browser_push"),
+          data: { turbo: false }
+        }
       end
     end
   end

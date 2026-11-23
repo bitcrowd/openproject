@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,6 +30,13 @@
 Rails.application.routes.draw do
   root to: "homescreen#index", as: "home"
   rails_relative_url_root = OpenProject::Configuration["rails_relative_url_root"] || ""
+
+  constraints(->(_) { OpenProject::FeatureDecisions.progressive_web_app_active? }) do
+    get "manifest" => "pwa/manifest#show", as: :pwa_manifest, format: false
+    get "offline" => "pwa/offline#show", as: :pwa_offline, format: false
+  end
+
+  get "service-worker" => "pwa/service_worker#show", as: :pwa_service_worker, format: false
 
   # Route for error pages
   get "/404", to: "errors#not_found"
@@ -66,7 +72,8 @@ Rails.application.routes.draw do
   # Redirect wp short url for work packages to full URL
   get "/wp(/)" => redirect("#{rails_relative_url_root}/work_packages")
   get "/wp/*rest" => redirect { |params, _req|
-    "#{rails_relative_url_root}/work_packages/#{URI::RFC2396_Parser.new.escape(params[:rest])}"
+    target = "#{rails_relative_url_root}/work_packages/#{URI::RFC2396_Parser.new.escape(params[:rest])}"
+    params[:format].to_s.match?(/\A[A-Za-z0-9]+\z/) ? "#{target}.#{params[:format]}" : target
   }, as: :work_package_short
 
   # Add catch method for Rack OmniAuth to allow route helpers
@@ -166,17 +173,25 @@ Rails.application.routes.draw do
     resources :settings, controller: "settings_tab", only: %i[index]
 
     if administration
-      resource :projects, controller: "projects_tab", only: %i[edit update] do
+      resource :projects, controller: "projects_tab", only: %i[edit] do
         collection do
           post :enable_all, to: "projects_tab#enable_all_projects"
+        end
 
-          get :new_link
-          get :tree
-          post :link
-          delete :unlink
+        scope module: :projects_tab do
+          resource :link, only: %i[new create destroy] do
+            scope module: :links do
+              resource :deletion, only: %i[new]
+              resources :candidates, only: %i[index]
+            end
+          end
 
-          get :new_switch
-          post :switch
+          resource :switch, only: %i[new create] do
+            resource :confirmation, only: %i[new], module: :switches
+            resource :impact, only: %i[create], module: :switches
+          end
+
+          resource :menu, only: %i[show]
         end
       end
     end
@@ -236,22 +251,26 @@ Rails.application.routes.draw do
       get :change_dialog
       patch :change
 
-      get :start_dialog
-      post :start
-
       if administration
+        get :start_dialog
+        post :start
+
         get :configure_dialog
         post :configure
         post :create
       end
 
-      resource :matrix, only: %i[show update], controller: "/workflows/matrix" do
-        get :status_dialog
-        post :confirm_statuses
+      resource :matrix, only: administration ? %i[show update] : %i[show], controller: "/workflows/matrix" do
+        if administration
+          get :status_dialog
+          post :confirm_statuses
+        end
       end
 
-      resource :copy, only: %i[new], controller: "/workflows/copies" do
-        resource :from_role, only: %i[create], controller: "/workflows/copies/from_roles"
+      if administration
+        resource :copy, only: %i[new], controller: "/workflows/copies" do
+          resource :from_role, only: %i[create], controller: "/workflows/copies/from_roles"
+        end
       end
     end
 
@@ -270,7 +289,9 @@ Rails.application.routes.draw do
       end
     end
 
-    resource :creation_wizard, controller: "creation_wizard", only: %i[show update]
+    resource :creation_wizard, controller: "creation_wizard", only: %i[show update] do
+      get :projects if administration
+    end
   end
 
   resources :types, module: "work_package_types", only: %i[index destroy] do
@@ -347,6 +368,9 @@ Rails.application.routes.draw do
     collection do
       get :projects_tree
     end
+    member do
+      get :types_dialog
+    end
   end
 
   resources :workflows, only: %i[new create edit update destroy], controller: "workflows/workflows" do
@@ -357,6 +381,7 @@ Rails.application.routes.draw do
 
     member do
       get :edit_dialog
+      get :deletion_dialog
     end
 
     resource :matrix, only: %i[show update], controller: "workflows/matrix" do
@@ -373,12 +398,20 @@ Rails.application.routes.draw do
     collection do
       get :projects_tree
     end
+    member do
+      get :types_dialog
+    end
   end
 
   resources :form_configurations,
             path: "forms",
-            only: %i[edit update destroy],
+            only: %i[create edit update destroy],
             controller: "form_configurations/form_configurations" do
+    collection do
+      get :configure_dialog
+      post :configure
+    end
+
     member do
       get :edit_dialog
       get :reset_dialog
@@ -389,17 +422,22 @@ Rails.application.routes.draw do
     resource :group, only: %i[create edit update destroy], controller: "form_configurations/groups" do
       post :add_group
       post :cancel_edit
-      put :drop
-      put :move
       patch :update_query
     end
 
-    resources :rows, only: %i[destroy], controller: "form_configurations/rows", param: :row_key do
+    resources :groups, only: [], controller: "form_configurations/groups" do
       member do
-        put :drop
         put :move
       end
     end
+
+    resources :attributes, only: [], controller: "form_configurations/attributes" do
+      member do
+        put :move
+      end
+    end
+
+    resources :rows, only: %i[destroy], controller: "form_configurations/rows", param: :row_key
   end
 
   get "custom_style/:digest/logo/:field/:filename" => "custom_styles#logo_download",
@@ -486,6 +524,15 @@ Rails.application.routes.draw do
     end
   end
 
+  namespace :ai do
+    resources :text_transform_panes, only: %i[create show destroy], param: :uuid do
+      member do
+        post :apply
+        post :cancel
+      end
+    end
+  end
+
   namespace :projects do
     resource :menu, only: %i[show]
     resource :filters, only: %i[show]
@@ -530,7 +577,7 @@ Rails.application.routes.draw do
           post :toggle
           post :update_name_settings
           post :update_submission_settings
-          post :update_artifact_export_settings
+          post :update_artefact_export_settings
           post :refresh_submission_form
           post :toggle_project_custom_field
           put :enable_all_of_section
@@ -565,9 +612,11 @@ Rails.application.routes.draw do
           resources :types, only: %i[index new create destroy] do
             resource :switch, only: %i[new create], controller: "types/switches" do
               resource :impact, only: :create, controller: "types/switches/impacts"
+              resource :confirmation, only: :new, controller: "types/switches/confirmations"
             end
           end
           resource :categories, only: %i[show update]
+          resource :custom_fields, only: %i[show]
         end
         resource :work_packages_import, only: %i[show create], controller: "work_packages_import" do
           member do
@@ -594,6 +643,7 @@ Rails.application.routes.draw do
     end
 
     member do
+      get :hover_card, to: "projects/hover_card#show"
       get "settings", to: redirect("projects/%{id}/settings/general/")
 
       get "export_project_initiation", to: "projects#export_project_initiation_pdf"
@@ -696,16 +746,21 @@ Rails.application.routes.draw do
 
     resources :forums do
       resources :topics, controller: "messages", except: [:index] do
+        resource :accepted_solution, only: %i[create destroy], controller: "messages/accepted_solutions"
+
         member do
           get :quote
+          get :replies
           post :reply, as: "reply_to"
+        end
+
+        resource :work_package, only: %i[new create], controller: "messages/work_packages" do
+          post :refresh_form
         end
       end
 
       member do
-        get :confirm_destroy
-        get :move
-        post :move
+        put :move
       end
     end
 
@@ -772,6 +827,7 @@ Rails.application.routes.draw do
     member do
       get "/hover_card" => "project_phases/hover_card#show", as: "hover_card"
     end
+    resource :status, only: :update, controller: "project_phases/status"
   end
 
   resources :admin, controller: :admin, only: :index do
@@ -866,35 +922,6 @@ Rails.application.routes.draw do
       end
     end
 
-    resource :llm_connection, only: %i[show update], controller: "admin/llm_connections" do
-      collection do
-        delete :api_key, action: :delete_api_key
-        get :delete_api_key_dialog
-        get :disconnect_dialog
-        post :disconnect
-      end
-
-      resource :health_status_report, only: %i[show create], controller: "admin/llm_health_status" do
-        post :create_health_status_report
-      end
-    end
-
-    resources :llm_models, only: %i[index new create edit update destroy], controller: "admin/llm_models" do
-      collection do
-        get :search, defaults: { format: :turbo_stream }
-        post :refresh
-        patch :defaults, action: :update_defaults
-      end
-
-      member do
-        get :delete_dialog
-      end
-    end
-
-    # Keyed by feature key rather than by record id: the binding is an attribute
-    # of a registered feature, and a feature may not have a row yet.
-    resources :llm_feature_bindings, only: %i[index update], controller: "admin/llm_feature_bindings"
-
     resources :mcp_configurations, only: %i[index update], controller: "admin/mcp_configurations" do
       collection do
         post :multi_update
@@ -932,6 +959,11 @@ Rails.application.routes.draw do
       resource :incoming_mails, controller: "/admin/settings/incoming_mails_settings", only: %i[show update]
       resource :aggregation, controller: "/admin/settings/aggregation_settings", only: %i[show update]
       resource :mail_notifications, controller: "/admin/settings/mail_notifications_settings", only: %i[show update]
+      resource :push_notifications, controller: "/admin/settings/push_notifications_settings", only: %i[show update] do
+        post :check
+        get :renew_key_dialog
+        post :renew_key
+      end
       resource :api, controller: "/admin/settings/api_settings", only: %i[show update]
       # It is important to have this named something else than "work_packages".
       # Otherwise the angular ui-router will also recognize that as a WorkPackage page and apply according classes.
@@ -1017,8 +1049,6 @@ Rails.application.routes.draw do
         member do
           delete "options/:option_id", action: "delete_option", as: :delete_option_of
           post :reorder_alphabetical
-          put :move
-          put :drop
 
           get :attribute_help_text
           put :update_attribute_help_text
@@ -1044,20 +1074,18 @@ Rails.application.routes.draw do
       resources :user_custom_field_sections, controller: "/admin/settings/user_custom_field_sections",
                                              only: %i[create update destroy] do
         member do
-          put :move
           put :drop
         end
         collection do
           get :new_link
         end
-        resources :built_in_attributes,
-                  controller: "/admin/settings/user_custom_field_sections/built_in_attributes",
-                  param: :key,
-                  only: [] do
-          member do
-            put :move
-            put :drop
-          end
+      end
+
+      resources :user_custom_field_section_fields,
+                controller: "/admin/settings/user_custom_field_sections/fields",
+                param: :key, only: [] do
+        member do
+          put :drop
         end
       end
 
@@ -1070,8 +1098,27 @@ Rails.application.routes.draw do
           put :update_attribute_help_text
 
           get :list_items
+          get :projects
+
+          get :forms
+          get :types_and_variants
 
           get :deletion_dialog
+        end
+
+        resources :project_specific_values,
+                  path: "projects/:project_id",
+                  controller: "/admin/settings/work_package_custom_fields/project_specific_values",
+                  only: %i[index new create edit update destroy] do
+          member do
+            post :toggle
+            post :make_global
+            get :deletion_dialog
+          end
+          collection do
+            post :enable_all
+            post :disable_all
+          end
         end
       end
 
@@ -1079,6 +1126,7 @@ Rails.application.routes.draw do
         member do
           delete "options/:option_id", action: "delete_option", as: :delete_option_of
           post :reorder_alphabetical
+          put :drop
 
           get :attribute_help_text
           put :update_attribute_help_text
@@ -1093,6 +1141,7 @@ Rails.application.routes.draw do
         member do
           delete "options/:option_id", action: "delete_option", as: :delete_option_of
           post :reorder_alphabetical
+          put :drop
 
           get :attribute_help_text
           put :update_attribute_help_text
@@ -1129,12 +1178,13 @@ Rails.application.routes.draw do
 
     namespace :import do
       get "/", to: redirect("/admin/import/jira")
-      resources :jira, controller: "/admin/import/jira/instances" do
+      resources :jira, controller: "/admin/import/jira" do
         collection do
-          post :test
+          post :test_connection
         end
         member do
-          delete :delete_token
+          patch :test_connection
+          delete :clear_credential
         end
         resources :run, controller: "/admin/import/jira/import_runs", module: :jiras, except: %i[new index] do
           member do
@@ -1177,7 +1227,7 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :text_transform_actions, except: :show do
+    resources :text_actions, except: :show do
       member do
         get :deletion_dialog
         post :toggle
@@ -1187,7 +1237,6 @@ Rails.application.routes.draw do
       collection do
         put :enable_all
         put :disable_all
-        post :toggle_setting
       end
     end
 
@@ -1462,6 +1511,8 @@ Rails.application.routes.draw do
 
     resources :sessions, controller: "my/sessions", as: "my_sessions", only: %i[index destroy]
     resources :auto_login_tokens, controller: "my/auto_login_tokens", as: "my_auto_login_tokens", only: %i[destroy]
+    resources :push_subscriptions, controller: "my/push_subscriptions", as: "my_push_subscriptions",
+                                   only: %i[create destroy]
 
     get "/banner" => "my/enterprise_banners#show", as: "show_enterprise_banner"
     post "/dismiss_banner" => "my/enterprise_banners#dismiss", as: "dismiss_enterprise_banner"
@@ -1483,19 +1534,19 @@ Rails.application.routes.draw do
       delete :revoke_ical_meeting_token
     end
 
-    get "/work/(:mode-:view_mode)(/:date)" => "work#index",
-        as: :work,
+    get "/time/(:mode-:view_mode)(/:date)" => "time_management#index",
+        as: :time,
         constraints: {
           mode: /day|week|workweek|month/,
           view_mode: /list|calendar|stack/,
           date: /(\d{4}-\d{2}-\d{2}|today)/
         }
-    get "/work/refresh" => "work#refresh",
-        as: :work_refresh
+    get "/time/refresh" => "time_management#refresh",
+        as: :time_refresh
 
-    get "/time-tracking(/)" => redirect("#{rails_relative_url_root}/my/work")
+    get "/time-tracking(/)" => redirect("#{rails_relative_url_root}/my/time")
     get "/time-tracking/*rest" => redirect { |params, _req|
-      "#{rails_relative_url_root}/my/work/#{URI::RFC2396_Parser.new.escape(params[:rest])}"
+      "#{rails_relative_url_root}/my/time/#{URI::RFC2396_Parser.new.escape(params[:rest])}"
     }
   end
 

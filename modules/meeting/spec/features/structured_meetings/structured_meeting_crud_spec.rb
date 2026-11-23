@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -319,7 +318,7 @@ RSpec.describe "Meetings CRUD",
     click_on "Create meeting"
 
     # check for dialog form validations
-    expect(page).to have_content "Title can't be blank."
+    expect(page).to have_text "Title can't be blank."
     fill_in "Title", with: "Some title"
     click_on "Create meeting"
     expect_and_dismiss_flash(type: :success, message: I18n.t(:notice_successful_create))

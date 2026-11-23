@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -62,6 +61,16 @@ module Workflows
              layout: false
     end
 
+    def types_dialog
+      record = ::Workflow.find(params.expect(:id))
+
+      respond_with_dialog(
+        WorkPackageTypes::NamedReferences::Index::TypesDialogComponent.new(
+          record:, model_class:, variants: ordered_variants.where(workflow_id: record.id)
+        )
+      )
+    end
+
     private
 
     def model_class = ::Workflow
@@ -69,24 +78,11 @@ module Workflows
     def load_query
       @query = ::Queries::Workflows::WorkflowQuery.new
 
-      @query.where(:name, "~", [name_term]) if name_term.present?
-      @query.where(:type_id, "=", filtered_type_ids) if filtered_type_ids.any?
-      @query.where(:project_id, "=", filtered_project_ids) if filtered_project_ids.any?
+      requested_filters.each do |filter|
+        @query.where(filter[:attribute], filter[:operator], filter[:values])
+      end
 
       @query
-    end
-
-    def name_term = @name_term ||= values_for(::Queries::Workflows::Filters::NameFilter.key).first.to_s.strip
-
-    def filtered_type_ids = @filtered_type_ids ||= values_for(::Queries::Workflows::Filters::TypeFilter.key)
-
-    def filtered_project_ids = @filtered_project_ids ||= values_for(::Queries::Workflows::Filters::ProjectFilter.key)
-
-    def values_for(filter_key)
-      requested_filters
-        .select { |filter| filter[:attribute].to_s == filter_key.to_s }
-        .flat_map { |filter| Array(filter[:values]).map(&:to_s) }
-        .compact_blank
     end
 
     def requested_filters
@@ -100,12 +96,10 @@ module Workflows
     def filtered? = requested_filters.any?
 
     def results_component
-      table = Index::TableComponent.new(records: workflows,
-                                        variants: workflow_variants,
-                                        role_counts: workflow_role_counts,
-                                        filtered: filtered?)
-
-      WorkPackageTypes::NamedReferences::Index::ResultsComponent.new(table:)
+      Index::TableComponent.new(records: workflows,
+                                variants: workflow_variants,
+                                role_counts: workflow_role_counts,
+                                filtered: filtered?)
     end
 
     def sub_header_component
@@ -114,20 +108,22 @@ module Workflows
 
     def workflows
       @workflows ||= begin
-        page = @query.results.includes(:project).page(page_param).per_page(per_page_param)
+        page = @query.results.page(page_param).per_page(per_page_param)
         page = page.page(page.total_pages) if page.out_of_bounds? && page.total_pages.positive?
         page
       end
     end
 
     def workflow_variants
-      @workflow_variants ||= TypeVariant
-                               .where(workflow_id: workflow_ids)
-                               .includes(:type, :projects)
-                               .joins(:type)
-                               .merge(::Type.order(:position))
-                               .in_display_order
-                               .group_by(&:workflow_id)
+      @workflow_variants ||= ordered_variants.where(workflow_id: workflow_ids).group_by(&:workflow_id)
+    end
+
+    def ordered_variants
+      TypeVariant
+        .includes(:type, :projects)
+        .joins(:type)
+        .merge(::Type.order(:position))
+        .in_display_order
     end
 
     def workflow_role_counts

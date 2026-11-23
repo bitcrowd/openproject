@@ -22,13 +22,14 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
+#++
+
 module DevelopmentData
   # Seeds a handful of user attributes that fit the demo project's mix of
-  # conference organisation and software delivery work. The values are assigned
+  # conference organization and software delivery work. The values are assigned
   # to the users created by the DepartmentSeeder.
   class UserCustomFieldsSeeder < Seeder
     JOB_TITLES = [
@@ -100,7 +101,7 @@ module DevelopmentData
         {
           name: "Job title",
           field_format: "list",
-          editable: false,
+          user_self_editable: false,
           possible_values: JOB_TITLES,
           # Only claim the semantic key when no other field already owns it.
           semantic_key: UserCustomField.for_semantic_key(:job_title) ? nil : "job_title"
@@ -109,20 +110,20 @@ module DevelopmentData
           name: "Spoken languages",
           field_format: "list",
           multi_value: true,
-          editable: true,
+          user_self_editable: true,
           possible_values: SPOKEN_LANGUAGES
         },
         {
           name: "Key skills",
           field_format: "list",
           multi_value: true,
-          editable: true,
+          user_self_editable: true,
           possible_values: KEY_SKILLS
         },
         {
           name: "Job start date",
           field_format: "date",
-          editable: false
+          user_self_editable: false
         }
       ]
     end

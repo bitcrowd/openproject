@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -33,6 +32,8 @@ module Notifications
   # The job is scheduled to run every 15 minutes.
   class ScheduleDateAlertsNotificationsJob < ApplicationJob
     include Cron::QuarterHourScheduleJob
+
+    queue_as :transactional
 
     def perform
       Service.new(every_quarter_hour_between_predecessor_cron_at_and_own_cron_at).call

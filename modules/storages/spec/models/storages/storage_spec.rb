@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -40,6 +39,26 @@ RSpec.describe Storages::Storage do
 
     it "excludes non exposed storage types" do
       expect(described_class.provider_types[:inexistent]).to be_nil
+    end
+  end
+
+  describe ".provider_type_for" do
+    it "returns the provider class for its class name" do
+      expect(described_class.provider_type_for("Storages::NextcloudStorage")).to eq(Storages::NextcloudStorage)
+    end
+
+    it "returns nil for a class that is not a storage provider" do
+      expect(described_class.provider_type_for("User")).to be_nil
+    end
+  end
+
+  describe ".shorten_provider_type" do
+    it "returns the short name of the provider" do
+      expect(described_class.shorten_provider_type("Storages::NextcloudStorage")).to eq("nextcloud")
+    end
+
+    it "returns an empty string for a class that is not a storage provider" do
+      expect(described_class.shorten_provider_type("User")).to eq("")
     end
   end
 

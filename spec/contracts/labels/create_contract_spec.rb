@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -58,6 +57,21 @@ RSpec.describe Labels::CreateContract do
     end
 
     it_behaves_like "contract user is unauthorized"
+  end
+
+  context "when a work package is shared with the user with edit rights" do
+    let(:current_user) do
+      create(:user).tap do |user|
+        create(:work_package_member,
+               principal: user,
+               entity: create(:work_package, project:),
+               roles: [create(:edit_work_package_role)])
+      end
+    end
+
+    it "is valid" do
+      expect_contract_valid
+    end
   end
 
   include_examples "contract reuses the model errors" do

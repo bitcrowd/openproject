@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -31,6 +30,10 @@
 module Import
   class JiraCreateProjectVersionsJob < ProgressableJob
     include Import::JiraOpenProjectReferenceCreation
+    include Import::JiraJobUtils
+    include Import::JiraJobLogging
+
+    self.jira_object_type = "version"
 
     def text
       jira_project_name = Import::JiraProject.find(arguments[1]).payload["name"]
@@ -52,9 +55,9 @@ module Import
     end
 
     def build_enumerator(jira_import_id, jira_project_id, cursor:)
+      jira_project = jira_project(jira_project_id)
       @jira_import = Import::JiraImport.find(jira_import_id)
       @jira_import.jira
-      jira_project = Import::JiraProject.find(jira_project_id)
 
       @project = JiraOpenProjectReference.find_by!(
         jira_entity_id: jira_project.id,
@@ -69,12 +72,11 @@ module Import
     end
 
     # rubocop:disable-next Metrics/AbcSize
-    def each_iteration(jira_version, jira_import_id, jira_project_id)
+    def each_iteration(jira_version, _jira_import_id, _jira_project_id)
       payload = jira_version.payload
       jira_version_name = payload.fetch("name")
-      Rails.logger.tagged("jira_import_id:#{jira_import_id}",
-                          "jira_project_id:#{jira_project_id}",
-                          "jira_version_name:#{jira_version_name}") do
+      with_log_context(jira_object_id_or_name: jira_version_name) do
+        Rails.logger.debug "Creating project version"
         ActiveRecord::Base.transaction do
           version = Version.create!(
             project_id: @project.id,

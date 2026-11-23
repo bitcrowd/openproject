@@ -22,36 +22,93 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 module WorkPackageTypes
   module ProjectsTab
-    class TableComponent < ::Projects::TableComponent
-      include ::Projects::Concerns::TableComponent::StreamablePaginationLinksConstraints
+    class TableComponent < OpPrimer::BorderBoxTableComponent
+      include WorkPackageTypes::VariantRoutes
 
-      def columns
-        @columns ||= query.selects.grep_v(Queries::Selects::NotExistingSelect)
+      columns :name, :variant
+      main_column :name, :variant
+      mobile_labels :variant
+
+      WIZARD_PAGINATION_PARAMS = %w[filters step back_url started_form_configuration_id].freeze
+
+      attr_reader :variant
+
+      def initialize(rows:, variant:, filtered:, wizard: false)
+        super(rows:)
+
+        @variant = variant
+        @filtered = filtered
+        @wizard = wizard
       end
 
-      def sortable? = false
+      def container_id = "project-table"
 
-      def use_quick_action_table_headers? = false
+      def container_data
+        {
+          controller: "sortable-lists sortable-lists--list sortable-lists--menu-source",
+          sortable_lists__menu_source_url_value: variant_projects_menu_path(variant),
+          sortable_lists__menu_source_menu_label_key_value: "js.types.projects.action_menu.menu_label",
+          sortable_lists_sortable_lists__menu_source_outlet: "##{container_id}",
+          sortable_lists_selection_enabled_value: true,
+          sortable_lists_drag_disabled: true,
+          sortable_lists_announcement_scope_value: "js.types.projects.selection",
+          sortable_lists_sortable_lists__list_outlet: "##{container_id}",
+          sortable_lists_sortable_lists__item_outlet: "##{container_id} [data-controller~='sortable-lists--item']",
+          sortable_lists__list_type_value: RowComponent::SELECTION_TYPE,
+          sortable_lists__list_accepted_type_value: RowComponent::SELECTION_TYPE,
+          sortable_lists__list_name_value: Project.model_name.human(count: 2),
+          "sortable-lists--list-rows-container-element": ":scope > .#{rows_container_class}"
+        }
+      end
 
-      def variant = params[:variant]
+      def headers
+        [
+          [:name, { caption: Project.model_name.human }],
+          [:variant, { caption: I18n.t("types.edit.projects.variant_column") }]
+        ]
+      end
+
+      def has_actions? = true
+
+      def mobile_title = I18n.t("types.edit.projects.tab")
+
+      def wizard? = @wizard
+
+      def pagination_params
+        if wizard?
+          { params: { controller: "/work_package_types/creation_wizard", action: "show" },
+            allowed_params: WIZARD_PAGINATION_PARAMS, turbo_action: "advance" }
+        else
+          { params: { controller: "/work_package_types/projects_tab", action: "edit" }, turbo_action: "advance" }
+        end
+      end
 
       # Inviting the admin to add a project reads as a lie when they have just searched for one:
       # the table is empty because of the filter, not because the variant has no projects.
-      def empty_row_message
-        if params[:filtered]
+      def blank_title
+        if @filtered
           I18n.t("types.edit.projects.empty_state.no_results")
+        else
+          I18n.t("types.edit.projects.empty_state.title")
+        end
+      end
+
+      def blank_description
+        if @filtered
+          I18n.t(:no_results_title_text)
         else
           I18n.t("types.edit.projects.empty_state.description")
         end
       end
+
+      def blank_icon = :project
     end
   end
 end

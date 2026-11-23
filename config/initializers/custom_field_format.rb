@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -104,6 +103,7 @@ OpenProject::CustomFieldFormat.tap do |formats|
                    label: :label_weighted_item_list,
                    only: %w(Project WorkPackage),
                    order: 14,
+                   multi_value_possible: %w(Project),
                    enterprise_feature: :weighted_item_lists,
                    formatter: "CustomValue::HierarchyStrategy")
 

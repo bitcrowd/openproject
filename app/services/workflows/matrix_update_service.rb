@@ -22,27 +22,28 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 module Workflows
   class MatrixUpdateService
-    def initialize(workflow:, roles:, tab:)
-      @workflow = workflow
-      @roles = roles
-      @tab = tab
+    def initialize(context:)
+      @context = context
     end
 
     def call(status: nil, indeterminate_status: nil)
+      return ServiceResult.failure if context.readonly? || !context.explicit_selection?
+
       persist(transitions: matrix(status), indeterminate: matrix(indeterminate_status))
     end
 
     private
 
-    attr_reader :workflow, :roles, :tab
+    attr_reader :context
+
+    delegate :workflow, :roles, :tab, to: :context
 
     def persist(transitions:, indeterminate:)
       results = []

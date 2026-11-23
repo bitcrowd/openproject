@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -47,7 +46,10 @@ module Backlogs
     end
 
     SprintId = Data.define(:id) do
-      def list_type = "sprint"
+      def self.list_type = "sprint"
+      delegate :list_type, to: :class
+
+      def lock_record = Sprint.find_by(id:)
 
       def list_id = id
 
@@ -63,7 +65,10 @@ module Backlogs
     end
 
     BucketId = Data.define(:id) do
-      def list_type = "backlog_bucket"
+      def self.list_type = "backlog_bucket"
+      delegate :list_type, to: :class
+
+      def lock_record = BacklogBucket.find_by(id:)
 
       def list_id = id
 
@@ -80,6 +85,8 @@ module Backlogs
 
     InboxId = Data.define do
       def list_type = "inbox"
+
+      def lock_record = nil
 
       def list_id = nil
 

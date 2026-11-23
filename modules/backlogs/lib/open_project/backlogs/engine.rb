@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -51,7 +50,7 @@ module OpenProject::Backlogs
              author_url: "https://www.openproject.org",
              bundled: true,
              settings:) do
-      project_module :backlogs, dependencies: :work_package_tracking do
+      project_module :backlogs, dependencies: %i[work_package_tracking board_view] do
         enabled_by_default!
 
         permission :view_sprints,
@@ -66,7 +65,7 @@ module OpenProject::Backlogs
                    permissible_on: :project,
                    dependencies: %i[view_work_packages show_board_views]
 
-        permission :select_backlog_types_and_statuses,
+        permission :manage_backlogs_configuration,
                    {
                      "projects/settings/backlogs": %i[show update rebuild_positions],
                      "projects/settings/backlog_estimation_units": %i[show update]
@@ -150,7 +149,9 @@ module OpenProject::Backlogs
 
     assets %w(enterprise/multiple-active-sprints-light.png enterprise/multiple-active-sprints-dark.png)
 
-    patches %i[WorkPackage Project]
+    patches %i[PermittedParams
+               WorkPackage
+               Project]
 
     patch_with_namespace :Projects, :CopyService
     patch_with_namespace :Projects, :SetAttributesService
@@ -169,25 +170,13 @@ module OpenProject::Backlogs
     extend_api_response(:v3, :work_packages, :schema, :work_package_schema,
                         &::OpenProject::Backlogs::Patches::API::WorkPackageSchemaRepresenter.extension)
 
-    add_api_path :sprint do |id|
-      "#{root}/sprints/#{id}"
-    end
-
-    add_api_path :sprints do
-      "#{root}/sprints"
-    end
+    add_api_resource_paths :sprint, only: %i[index show]
 
     add_api_path :project_sprints do |id|
       "#{root}/projects/#{id}/sprints"
     end
 
-    add_api_path :backlog_buckets do
-      "#{root}/backlog_buckets"
-    end
-
-    add_api_path :backlog_bucket do |id|
-      "#{root}/backlog_buckets/#{id}"
-    end
+    add_api_resource_paths :backlog_bucket, only: %i[index show]
 
     add_api_path :project_backlog_buckets do |id|
       "#{root}/projects/#{id}/backlog_buckets"
@@ -207,7 +196,7 @@ module OpenProject::Backlogs
       Rails.application.config.after_initialize do
         # When the backlogs module is first enabled on a project, automatically populate
         # the project's done_statuses with all statuses that are globally marked as closed
-        # (is_closed: true). This mirrors the form behavior where these statuses are
+        # (category: "closed"). This mirrors the form behavior where these statuses are
         # pre-selected and disabled, so users never have to visit the settings page just
         # to get sensible defaults.
         OpenProject::Notifications.subscribe(OpenProject::Events::MODULE_ENABLED) do |payload|
@@ -217,7 +206,7 @@ module OpenProject::Backlogs
           project = enabled_module.project
           next unless project
 
-          mandatory_ids = Status.where(is_closed: true).pluck(:id)
+          mandatory_ids = Status.closed.pluck(:id)
           next if mandatory_ids.empty?
 
           merged_ids = project.done_statuses.reorder(nil).pluck(:id) | mandatory_ids

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -108,8 +107,8 @@ module Components
         expect(page).to have_no_selector(selector)
       end
 
-      def expect_disabled_tab(name)
-        expect(page).to have_css("#{selector} [data-qa-tab-disabled]", text: name.upcase, wait: 10)
+      def expect_no_tab(name)
+        expect(page).to have_no_css("#{selector} .op-tab-row--link", text: name.upcase)
       end
 
       def selected_tab(name)

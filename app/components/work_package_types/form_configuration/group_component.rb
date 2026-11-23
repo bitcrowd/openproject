@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -33,6 +32,7 @@ module WorkPackageTypes
     class GroupComponent < ApplicationComponent
       include OpTurbo::Streamable
       include OpPrimer::ComponentHelpers
+      include AttributeItemData
 
       def initialize(group:, context:, ee_available: false, first: false, last: false, edit_mode: false,
                      form_model: nil)
@@ -48,7 +48,7 @@ module WorkPackageTypes
       end
 
       def wrapper_uniq_by
-        @group[:key].presence || @instance_uid
+        @group[:id].presence || @group[:key].presence || @instance_uid
       end
 
       def edit_mode?
@@ -80,13 +80,15 @@ module WorkPackageTypes
       private
 
       def wrapper_data
-        {
+        data = {
           group_type: @group[:type].to_s,
           group_key: @group[:key].to_s,
-          group_query: @group[:query],
+          group_temporary: (true if temporary_group?),
           update_query_url: update_query_path,
           edit_mode: (true if edit_mode?)
-        }.compact.merge(draggable_item_config)
+        }.compact
+
+        merge_data({ data: }, { data: item_data })
       end
 
       def group_name
@@ -97,33 +99,50 @@ module WorkPackageTypes
         @group[:temporary]
       end
 
-      def draggable_item_config
-        return {} if readonly? || @group[:key].blank? || temporary_group?
-
-        {
-          "draggable-id": @group[:key],
-          "draggable-type": "group",
-          "drop-url": @context.group_path(:drop, key: @group[:key])
-        }
+      def sortable?
+        !readonly? && @group[:id].present? && !temporary_group?
       end
 
-      def row_drop_target_config
-        return {} if readonly? || query_group? || @group[:key].blank? || temporary_group?
+      def item_data
+        return {} unless sortable?
 
         {
-          "admin--type-form-configuration--rows-drag-and-drop-target": "container",
-          "target-container-accessor": ".Box > ul",
-          "target-id": @group[:key],
-          "target-allowed-drag-type": "attribute"
-        }
+          controller: "sortable-lists--item",
+          sortable_lists__item_id_value: @group[:id],
+          sortable_lists__item_type_value: SortableTypes::GROUP,
+          sortable_lists__item_label_value: group_name,
+          sortable_lists__item_mobility_value: ("fixed" if edit_mode?)
+        }.compact
+      end
+
+      def box_data
+        return {} unless sortable?
+
+        preview = { sortable_lists__item_target: "preview" }
+        return preview if query_group?
+
+        merge_data(
+          { data: preview },
+          {
+            data: {
+              controller: "sortable-lists--list",
+              sortable_lists__list_type_value: SortableTypes::ATTRIBUTE,
+              sortable_lists__list_accepted_type_value: SortableTypes::ATTRIBUTE,
+              sortable_lists__list_id_value: @group[:id],
+              sortable_lists__list_name_value: group_name
+            }
+          }
+        )
+      end
+
+      def row_data(attribute)
+        return {} if readonly?
+
+        attribute_item_data(attribute)
       end
 
       def update_query_path
         @context.group_path(:update_query, key: @group[:key])
-      end
-
-      def row_drop_path(attribute)
-        @context.row_path(:drop, row_key: attribute[:key])
       end
     end
   end

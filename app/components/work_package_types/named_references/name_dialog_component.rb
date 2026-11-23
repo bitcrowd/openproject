@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -35,24 +34,35 @@ module WorkPackageTypes
       include OpPrimer::ComponentHelpers
       include OpTurbo::Streamable
 
-      def initialize(record:, model_class:, copy_from_id: nil, ask_copy_source: true, url: nil)
+      def initialize(record:, model_class:, copy_from_id: nil, ask_copy_source: true, url: nil, creating: false)
         super()
 
         @record = record
         @model_class = model_class
+        @copy_from_id = copy_from_id
+        @creating = creating
         @form_arguments = { record:, model_class:, copy_from_id:, ask_copy_source:, url: }
       end
 
       private
 
-      attr_reader :record, :model_class, :form_arguments
+      attr_reader :record, :model_class, :copy_from_id, :creating, :form_arguments
 
       def dialog_id = NameFormComponent.dialog_id(model_class)
 
       def form_id = NameFormComponent.form_id(model_class)
 
       def title
-        record.persisted? ? reference_translate("form.edit_title") : reference_translate("form.new_title")
+        return reference_translate("form.copy_title", name: copy_source.name) if copy_source
+        return reference_translate("form.edit_title") if record.persisted? && !creating
+
+        reference_translate("form.save_title")
+      end
+
+      def copy_source
+        return @copy_source if defined?(@copy_source)
+
+        @copy_source = copy_from_id.present? ? model_class.find_by(id: copy_from_id) : nil
       end
 
       def submit_label

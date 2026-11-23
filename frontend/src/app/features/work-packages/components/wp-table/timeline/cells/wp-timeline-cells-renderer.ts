@@ -26,9 +26,10 @@
 //++
 
 import { Injector } from '@angular/core';
+import { runCleanup } from 'core-app/shared/helpers/angular/owned-ui-cleanup';
 import { States } from 'core-app/core/states/states.service';
 import { HalResourceEditingService } from 'core-app/shared/components/fields/edit/services/hal-resource-editing.service';
-import { LazyInject } from 'core-app/shared/helpers/angular/lazy-inject.decorator';
+import { lazyInject } from 'core-app/shared/helpers/angular/lazy-inject';
 import { WorkPackageTimelineTableController } from '../container/wp-timeline-container.directive';
 import { RenderInfo } from '../wp-timeline';
 import { TimelineCellRenderer } from './timeline-cell-renderer';
@@ -37,9 +38,9 @@ import { WorkPackageTimelineCell } from './wp-timeline-cell';
 
 export class WorkPackageTimelineCellsRenderer {
   // Injections
-  @LazyInject() public states:States;
+  public readonly states = lazyInject(States, { injector: () => this.injector });
 
-  @LazyInject() public halEditing:HalResourceEditingService;
+  public readonly halEditing = lazyInject(HalResourceEditingService, { injector: () => this.injector });
 
   public cells:Record<string, WorkPackageTimelineCell> = {};
 
@@ -51,6 +52,12 @@ export class WorkPackageTimelineCellsRenderer {
       milestone: new TimelineMilestoneCellRenderer(this.injector, wpTimeline),
       generic: new TimelineCellRenderer(this.injector, wpTimeline),
     };
+  }
+
+  public destroy():void {
+    const cells = Object.values(this.cells);
+    this.cells = {};
+    cells.forEach((cell) => runCleanup(() => cell.clear()));
   }
 
   public hasCell(wpId:string) {
@@ -102,7 +109,7 @@ export class WorkPackageTimelineCellsRenderer {
         return;
       }
 
-      const state = this.states.workPackages.get(wpId);
+      const state = this.states().workPackages.get(wpId);
       if (state.isPristine()) {
         return;
       }
@@ -137,11 +144,11 @@ export class WorkPackageTimelineCellsRenderer {
   }
 
   private renderInfoFor(wpId:string, isDuplicatedCell?:boolean, withAlternativeLabels?:boolean):RenderInfo {
-    const wp = this.states.workPackages.get(wpId).value!;
+    const wp = this.states().workPackages.get(wpId).value!;
     return {
       viewParams: this.wpTimeline.viewParameters,
       workPackage: wp,
-      change: this.halEditing.changeFor(wp),
+      change: this.halEditing().changeFor(wp),
       isDuplicatedCell,
       withAlternativeLabels,
     };

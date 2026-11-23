@@ -22,14 +22,15 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 module Import
   module JiraJobUtils
+    extend ActiveSupport::Concern
+
     def prepare_jira_import_ivars(jira_import_id)
       @jira_import = Import::JiraImport.find(jira_import_id)
       jira = @jira_import.jira
@@ -37,6 +38,16 @@ module Import
       @updated_at = Time.zone.now
       @created_at = @updated_at
       @jira_client = jira.client
+    end
+
+    def jira_project(jira_project_id)
+      @jira_project ||= Import::JiraProject.find(jira_project_id)
+    end
+
+    # The Jira project key (e.g. "DPPP") is what users recognize, unlike the internal
+    # Import::JiraProject id these jobs are otherwise passed around and tag their logs with.
+    def jira_project_key(jira_project_id)
+      jira_project(jira_project_id).payload["key"]
     end
   end
 end

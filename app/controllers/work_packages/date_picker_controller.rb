@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# -- copyright
+#-- copyright
 # OpenProject is an open source project management software.
 # Copyright (C) the OpenProject GmbH
 #
@@ -22,16 +22,13 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
-# ++
+#++
 
 class WorkPackages::DatePickerController < ApplicationController
-  ERROR_PRONE_ATTRIBUTES = %i[start_date
-                              due_date
-                              duration].freeze
+  DATE_FIELDS = %i[start_date due_date duration].freeze
 
   layout false
 
@@ -73,7 +70,7 @@ class WorkPackages::DatePickerController < ApplicationController
 
     if service_call.errors
                    .map(&:attribute)
-                   .intersect?(ERROR_PRONE_ATTRIBUTES)
+                   .intersect?(DATE_FIELDS)
       render_form(status: :unprocessable_entity)
     else
       render json: {
@@ -122,7 +119,7 @@ class WorkPackages::DatePickerController < ApplicationController
   end
 
   def focused_field
-    return params[:focused_field] if params[:focused_field].present?
+    return params[:focused_field] if date_field?(params[:focused_field])
 
     trigger = params[:field]
 
@@ -146,6 +143,10 @@ class WorkPackages::DatePickerController < ApplicationController
     else
       :start_date
     end
+  end
+
+  def date_field?(field)
+    DATE_FIELDS.include?(field&.to_sym)
   end
 
   def find_work_package
@@ -277,7 +278,7 @@ class WorkPackages::DatePickerController < ApplicationController
     # Check which param was not touched
     missing_param = [start_date, due_date, duration].select(&:nil?)
 
-    # If two values are deleted and one is untouched, return tru
+    # If two values are deleted and one is untouched, return true
     empty_params.length == 2 && missing_param.length == 1
   end
 

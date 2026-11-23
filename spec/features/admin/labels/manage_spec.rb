@@ -22,15 +22,14 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 require "spec_helper"
 
-RSpec.describe "Managing labels", :js, with_flag: { work_package_labels: true } do
+RSpec.describe "Managing labels", :js do
   shared_let(:admin) { create(:admin) }
 
   current_user { admin }
@@ -115,6 +114,7 @@ RSpec.describe "Managing labels", :js, with_flag: { work_package_labels: true } 
     end
 
     expect_flash(message: "Successful deletion.")
+    expect(Labels::JournalizeDeletionJob).to have_been_enqueued
     expect(page).to have_no_test_selector(row_selector(label))
     expect(Label.where(id: label.id)).not_to exist
     expect(Labeling.where(label_id: label.id)).not_to exist
@@ -146,15 +146,5 @@ RSpec.describe "Managing labels", :js, with_flag: { work_package_labels: true } 
     wait_for_network_idle
     expect(page).to have_test_selector(row_selector(alpha))
     expect(page).to have_test_selector(row_selector(beta))
-  end
-
-  it "hides the menu entry and the page when the feature flag is inactive",
-     with_flag: { work_package_labels: false } do
-    visit admin_index_path
-
-    within("#menu-sidebar") { expect(page).to have_no_link("Labels") }
-
-    visit admin_labels_path
-    expect(page).to have_text("[Error 404]")
   end
 end

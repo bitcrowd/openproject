@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -181,7 +180,7 @@ RSpec.describe Principals::DeleteJob, type: :model do
     shared_examples_for "hourly_rate handling" do
       let(:hourly_rate) do
         build(:hourly_rate,
-              user: principal,
+              principal: principal,
               project:)
       end
 
@@ -237,6 +236,23 @@ RSpec.describe Principals::DeleteJob, type: :model do
       end
 
       it { expect(Notification.find_by(id: notification.id)).to be_nil }
+    end
+
+    shared_examples_for "push subscription handling" do
+      let!(:subscription) { create(:push_subscription, user: principal) }
+      let!(:other_subscription) { create(:push_subscription) }
+
+      before do
+        job
+      end
+
+      it "removes the principal's push subscriptions" do
+        expect(PushSubscription.find_by(id: subscription.id)).to be_nil
+      end
+
+      it "leaves other users' push subscriptions" do
+        expect(PushSubscription.find_by(id: other_subscription.id)).to eq(other_subscription)
+      end
     end
 
     shared_examples_for "private query handling" do
@@ -537,6 +553,7 @@ RSpec.describe Principals::DeleteJob, type: :model do
       it_behaves_like "rss token handling"
       it_behaves_like "backup token handling"
       it_behaves_like "notification handling"
+      it_behaves_like "push subscription handling"
       it_behaves_like "private query handling"
       it_behaves_like "persisted view and query handling"
       it_behaves_like "issue category handling"

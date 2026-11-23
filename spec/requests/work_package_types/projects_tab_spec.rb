@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -66,6 +65,27 @@ RSpec.describe "Work package type projects tab", :skip_csrf, type: :rails_reques
   def listed
     [on_base, on_hardware, on_firmware, without_the_type]
       .select { |project| page.has_css?("#project-table", text: project.name) }
+  end
+
+  describe "the listing's frame" do
+    it "reloads the filters and table from the address bar, with links leaving the frame" do
+      get edit_type_projects_path(type_id: type.id)
+
+      frame = page.find("turbo-frame#type-configuration-frame")
+
+      expect(frame["data-reload-frame-on-event-reload-from-location-value"]).to eq("true")
+      expect(frame[:target]).to eq("_top")
+      expect(frame).to have_css("#project-table")
+      expect(frame).to have_field("name_and_identifier", visible: :all)
+    end
+  end
+
+  describe "a page past the last one", with_settings: { per_page_options: "1, 100" } do
+    it "shows the last page instead" do
+      get edit_type_projects_path(type_id: type.id, per_page: 1, page: 9)
+
+      expect(listed).to contain_exactly(Project.where(id: [on_base, on_hardware, on_firmware]).order(:lft).last)
+    end
   end
 
   describe "the variant a tab defaults to" do

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -36,19 +35,19 @@ RSpec.describe Admin::Settings::UsersSettings::UserConsentForm, type: :forms do
   let(:form_arguments) { { url: "/foo", scope: :settings } }
 
   it "renders", :aggregate_failures do
-    expect(page).to have_field "Consent required", type: :checkbox, fieldset: "User Consent" do |field|
+    expect(page).to have_field "Consent required", type: :checkbox, fieldset: "User consent" do |field|
       expect(field["name"]).to eq "settings[consent_required]"
     end
 
-    expect(page).to have_select "Consent information text", fieldset: "User Consent", selected: "English" do |field|
+    expect(page).to have_select "Consent information text", fieldset: "User consent", selected: "English" do |field|
       expect(field["name"]).to eq "settings[consent_info_lang]"
     end
 
-    expect(page).to have_field "Consent time", type: :checkbox, fieldset: "User Consent"
+    expect(page).to have_field "Consent time", type: :checkbox, fieldset: "User consent"
 
     expect(page).to have_field "Consent contact mail address",
                                type: :email,
-                               fieldset: "User Consent",
+                               fieldset: "User consent",
                                accessible_description: I18n.t("consent.contact_mail_instructions") do |field|
       expect(field["name"]).to eq "settings[consent_decline_mail]"
     end

@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -62,6 +61,16 @@ module FormConfigurations
              layout: false
     end
 
+    def types_dialog
+      record = ::FormConfiguration.find(params.expect(:id))
+
+      respond_with_dialog(
+        WorkPackageTypes::NamedReferences::Index::TypesDialogComponent.new(
+          record:, model_class:, variants: ordered_variants.where(form_configuration_id: record.id)
+        )
+      )
+    end
+
     private
 
     def model_class = ::FormConfiguration
@@ -69,26 +78,11 @@ module FormConfigurations
     def load_query
       @query = ::Queries::FormConfigurations::FormConfigurationQuery.new
 
-      @query.where(:name, "~", [name_term]) if name_term.present?
-      @query.where(:type_id, "=", filtered_type_ids) if filtered_type_ids.any?
-      @query.where(:project_id, "=", filtered_project_ids) if filtered_project_ids.any?
+      requested_filters.each do |filter|
+        @query.where(filter[:attribute], filter[:operator], filter[:values])
+      end
 
       @query
-    end
-
-    def name_term = @name_term ||= values_for(::Queries::FormConfigurations::Filters::NameFilter.key).first.to_s.strip
-
-    def filtered_type_ids = @filtered_type_ids ||= values_for(::Queries::FormConfigurations::Filters::TypeFilter.key)
-
-    def filtered_project_ids
-      @filtered_project_ids ||= values_for(::Queries::FormConfigurations::Filters::ProjectFilter.key)
-    end
-
-    def values_for(filter_key)
-      requested_filters
-        .select { |filter| filter[:attribute].to_s == filter_key.to_s }
-        .flat_map { |filter| Array(filter[:values]).map(&:to_s) }
-        .compact_blank
     end
 
     def requested_filters
@@ -102,12 +96,10 @@ module FormConfigurations
     def filtered? = requested_filters.any?
 
     def results_component
-      table = WorkPackageTypes::NamedReferences::Index::TableComponent.new(records: forms,
-                                                                           variants: form_variants,
-                                                                           model_class:,
-                                                                           filtered: filtered?)
-
-      WorkPackageTypes::NamedReferences::Index::ResultsComponent.new(table:)
+      WorkPackageTypes::NamedReferences::Index::TableComponent.new(records: forms,
+                                                                   variants: form_variants,
+                                                                   model_class:,
+                                                                   filtered: filtered?)
     end
 
     def sub_header_component
@@ -123,13 +115,15 @@ module FormConfigurations
     end
 
     def form_variants
-      @form_variants ||= TypeVariant
-                           .where(form_configuration_id: forms.map(&:id))
-                           .includes(:type, :projects)
-                           .joins(:type)
-                           .merge(::Type.order(:position))
-                           .in_display_order
-                           .group_by(&:form_configuration_id)
+      @form_variants ||= ordered_variants.where(form_configuration_id: forms.map(&:id)).group_by(&:form_configuration_id)
+    end
+
+    def ordered_variants
+      TypeVariant
+        .includes(:type, :projects)
+        .joins(:type)
+        .merge(::Type.order(:position))
+        .in_display_order
     end
 
     def candidate_projects

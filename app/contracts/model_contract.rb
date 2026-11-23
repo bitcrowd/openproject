@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -41,12 +40,12 @@ class ModelContract < BaseContract
   # attribute as writable and, on first use per store column, declares the
   # column itself as writable iff every dirty key in it is one that has been
   # registered via `stored_attribute`.
-  def self.stored_attribute(name, store:)
+  def self.stored_attribute(name, store:, **options, &)
     store = store.to_sym
     register_store_column(store) unless stored_keys_per_store.key?(store)
     stored_keys_per_store[store] << name.to_s
 
-    attribute name
+    attribute(name, options, &)
   end
 
   def self.register_store_column(store)

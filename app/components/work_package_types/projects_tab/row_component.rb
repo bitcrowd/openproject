@@ -22,56 +22,75 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
 module WorkPackageTypes
   module ProjectsTab
-    class RowComponent < ::Projects::RowComponent
-      include OpTurbo::Streamable
+    class RowComponent < OpPrimer::BorderBoxRowComponent
       include WorkPackageTypes::VariantRoutes
 
-      def wrapper_uniq_by
-        "project-#{project.id}"
+      SELECTION_TYPE = "type_project"
+
+      alias_method :project, :model
+
+      def row_data
+        {
+          test_selector: "type-projects-row-#{project.id}",
+          controller: "sortable-lists--item contextual-action-menu",
+          sortable_lists__item_id_value: project.id,
+          sortable_lists__item_type_value: SELECTION_TYPE,
+          sortable_lists__item_label_value: project.name
+        }
       end
 
-      def menu_items
-        @menu_items ||= [switch_variant_item, remove_item].compact
+      def row_tabindex = 0
+
+      def name
+        render(Projects::InfoLineComponent.new(project:))
+      end
+
+      def variant
+        safe_join([render(Primer::Beta::Text.new) { applied_variant.display_name }, variant_caption].compact)
+      end
+
+      def button_links
+        [action_menu]
       end
 
       private
 
-      def variant = @table.variant
+      def table_variant = table.variant
 
-      def switch_variant_item
-        return unless variant.type.variants.many?
+      def applied_variant = @applied_variant ||= project.type_variant(table_variant.type)
 
-        {
-          scheme: :default,
-          icon: :"list-ordered",
-          label: I18n.t("types.edit.projects.actions.switch_variant"),
-          href: new_switch_variant_projects_path(variant, project_id: project.id),
-          data: { controller: "async-dialog" }
-        }
+      def variant_caption
+        return if applied_variant.default?
+
+        render(Primer::Beta::Text.new(color: :muted, ml: 2)) do
+          if applied_variant.project_owned?
+            I18n.t("projects.settings.types.project_specific_variant")
+          else
+            I18n.t("types.index.variant_label")
+          end
+        end
       end
 
-      def remove_item
-        {
-          scheme: :danger,
-          icon: :trash,
-          label: I18n.t("types.edit.projects.actions.remove_from_project"),
-          href: unlink_variant_projects_path(variant, project_id: project.id, page: current_page),
-          data: { turbo_method: :delete, turbo_confirm: confirm_removal }
-        }
-      end
-
-      def confirm_removal
-        I18n.t("types.edit.projects.actions.confirm_remove",
-               project: project.name,
-               type: variant.type.name)
+      def action_menu
+        render(
+          Primer::Alpha::ActionMenu.new(
+            menu_id: RowMenuComponent.menu_id(project),
+            src: variant_projects_menu_path(table_variant, ids: [project.id], invoker_id: project.id),
+            anchor_align: :end,
+            test_selector: "type-projects-row-menu"
+          )
+        ) do |menu|
+          menu.with_show_button(icon: "kebab-horizontal",
+                                "aria-label": t("js.types.projects.action_menu.menu_label", count: 1),
+                                scheme: :invisible)
+        end
       end
     end
   end

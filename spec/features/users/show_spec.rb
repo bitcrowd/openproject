@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -61,11 +60,15 @@ RSpec.describe "index users", :js do
     expect(page).to have_text(group.name)
   end
 
-  context "as another user" do
+  context "as another user sharing a project" do
+    shared_let(:shared_role) { create(:project_role, permissions: %i[view_project]) }
+    shared_let(:shared_project) { create(:project, members: { user => shared_role, other_user => shared_role }) }
+
     current_user { other_user }
 
     it "does not show the group" do
       visit user_path(user)
+      expect(page).to have_text user.name
       expect(page).to have_no_text group.name
     end
   end

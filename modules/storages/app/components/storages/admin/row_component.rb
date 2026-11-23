@@ -22,12 +22,10 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
-#
 
 module Storages::Admin
   class RowComponent < OpPrimer::BorderBoxRowComponent
@@ -50,7 +48,7 @@ module Storages::Admin
 
     def provider_type
       render(
-        Primer::Beta::Truncate.new(font_weight: :light, data: { test_selector: "storage-provider" })
+        Primer::Beta::Truncate.new(test_selector: "storage-provider")
       ) { I18n.t("storages.provider_types.#{storage.short_provider_type}.name") }
     end
 
@@ -60,16 +58,13 @@ module Storages::Admin
           user: storage.creator,
           size: :mini,
           link: false,
-          show_name: true,
-          name_classes: "hidden-for-tablet-and-small-laptops"
+          show_name: true
         )
       )
     end
 
     def created_at
-      render(Primer::Beta::Text.new(font_weight: :light)) do
-        I18n.t("activity.item.created_on", datetime: helpers.format_time(storage.created_at)).capitalize
-      end
+      I18n.t("activity.item.created_on", datetime: helpers.format_time(storage.created_at)).capitalize
     end
 
     private

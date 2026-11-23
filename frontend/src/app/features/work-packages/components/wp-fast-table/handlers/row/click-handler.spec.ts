@@ -26,8 +26,11 @@
 //++
 
 import { usePlatform } from 'core-common/testing/platform';
-import { fireEvent } from '@testing-library/dom';
+import { fireEvent, within } from '@testing-library/dom';
+import { UrlParamsService } from 'core-app/core/navigation/url-params.service';
 import { buildTable, TableHarness } from '../../testing/table-harness';
+import { OpTableActionsService } from 'core-app/features/work-packages/components/wp-table/table-actions/table-actions.service';
+import { OpUnlinkTableAction } from 'core-app/features/work-packages/components/wp-table/table-actions/actions/unlink-table-action';
 
 describe('RowClickHandler', () => {
   let harness:TableHarness;
@@ -90,15 +93,18 @@ describe('RowClickHandler', () => {
 
   it('starts the next range at the Select All event target', () => {
     harness.click('1');
+    harness.row('3').focus();
     fireEvent.keyDown(harness.row('3'), { key: 'a', ctrlKey: true });
     harness.click('4', { shiftKey: true });
 
     expect(selectedIds()).toEqual(['3', '4']);
   });
 
-  it('disposes Select All with the table view', async () => {
+  it('disposes Select All with the table view', () => {
     const row = harness.row('3');
-    await harness.destroy();
+    row.focus();
+    expect(row).toHaveFocus();
+    harness.table.destroy();
     const event = new KeyboardEvent('keydown', {
       key: 'a', ctrlKey: true, bubbles: true, cancelable: true,
     });
@@ -109,39 +115,47 @@ describe('RowClickHandler', () => {
     expect(selectedIds()).toEqual([]);
   });
 
-  it.each([false, true])('uses the clicked occurrence when a work package appears twice (reverse: %s)', async (reverse) => {
-    await harness.render([{ id: '1' }, { id: '3' }, { id: '2' }, { id: '4' }]);
-    const primaryRow = harness.row('2');
-    harness.addRelationRow('2', '1');
+  describe('with a relation row', () => {
+    beforeEach(async () => {
+      await harness.destroy();
+      harness = buildTable({
+        workPackages: [{ id: '1' }, { id: '2' }, { id: '3' }, { id: '4' }],
+        relations: [{ from: '1', to: '2', type: 'follows', reverseType: 'precedes' }],
+        columns: ['id', 'subject', { id: 'relationsOfTypeFollows', relationType: 'follows' }],
+      });
+      harness.expand('1', 'relationsOfTypeFollows');
+      await harness.render([{ id: '1' }, { id: '3' }, { id: '2' }, { id: '4' }]);
+    });
 
-    const rows = reverse ? [harness.row('4'), primaryRow] : [primaryRow, harness.row('4')];
-    rows.forEach((row, index) => fireEvent.click(row, { shiftKey: index === 1 }));
+    it.each([false, true])('uses the clicked occurrence when a work package appears twice (reverse: %s)', (reverse) => {
+      const primaryRow = harness.row('2');
 
-    expect(selectedIds()).toEqual(['2', '4']);
-  });
+      const rows = reverse ? [harness.row('4'), primaryRow] : [primaryRow, harness.row('4')];
+      rows.forEach((row, index) => fireEvent.click(row, { shiftKey: index === 1 }));
 
-  it('anchors Select All at the targeted duplicate occurrence', async () => {
-    await harness.render([{ id: '1' }, { id: '3' }, { id: '2' }, { id: '4' }]);
-    const primaryRow = harness.row('2');
-    harness.addRelationRow('2', '1');
-    harness.click('1');
+      expect(selectedIds()).toEqual(['2', '4']);
+    });
 
-    expect(fireEvent.keyDown(primaryRow, { key: 'a', ctrlKey: true })).toBe(false);
-    harness.click('4', { shiftKey: true });
+    it('anchors Select All at the targeted duplicate occurrence', () => {
+      harness.click('1');
 
-    expect(selectedIds()).toEqual(['2', '4']);
-  });
+      harness.row('2').focus();
+      expect(fireEvent.keyDown(harness.row('2'), { key: 'a', ctrlKey: true })).toBe(false);
+      harness.click('4', { shiftKey: true });
 
-  it('clears an anchor when only its other occurrence survives', () => {
-    const primaryRow = harness.row('2');
-    const relationRow = harness.addRelationRow('2', '1');
-    fireEvent.click(primaryRow);
-    primaryRow.remove();
-    harness.querySpace.tableRendered.putValue(harness.table.renderedRows.filter((row) => row.classIdentifier !== primaryRow.dataset.classIdentifier));
-    harness.click('4', { shiftKey: true });
-    expect(selectedIds()).toEqual(['4']);
-    expect(harness.row('4')).toHaveClass('-checked');
-    expect(relationRow).not.toHaveClass('-checked');
+      expect(selectedIds()).toEqual(['2', '4']);
+    });
+
+    it('clears an anchor when only its other occurrence survives', async () => {
+      fireEvent.click(harness.row('2'));
+      await harness.render([{ id: '1' }, { id: '3' }, { id: '4' }]);
+
+      harness.click('4', { shiftKey: true });
+
+      expect(selectedIds()).toEqual(['4']);
+      expect(harness.row('4')).toHaveClass('-checked');
+      expect(harness.relationRow('1', '2')).not.toHaveClass('-checked');
+    });
   });
 
   it('keeps the range anchored to the first selected row', () => {
@@ -188,6 +202,89 @@ describe('RowClickHandler', () => {
     fireEvent.doubleClick(harness.row('2').querySelector('td')!);
     expect(harness.selection.getSelectedWorkPackageIds()).toEqual(['2']);
     expect(harness.focus.focusedWorkPackage).toBe('2');
+  });
+
+  describe('with a row action control', () => {
+    let actionHarness:TableHarness;
+    const unlink = vi.fn();
+
+    beforeEach(async () => {
+      await harness.destroy();
+      actionHarness = buildTable({
+        workPackages: [{ id: '1' }, { id: '2' }],
+        configuration: { actionsColumnEnabled: true },
+        providers: [{
+          provide: OpTableActionsService,
+          useFactory: () => {
+            const actions = new OpTableActionsService();
+            actions.setActions(OpUnlinkTableAction.factoryFor('remove-child-action', 'Remove child', unlink));
+            return actions;
+          },
+        }],
+      });
+      harness = actionHarness;
+      await actionHarness.render();
+    });
+
+    const removeButton = () => within(actionHarness.row('2')).getByRole('button', { name: 'Remove child' });
+
+    it('leaves the row selection alone when the control is clicked', () => {
+      fireEvent.click(removeButton());
+
+      expect(unlink).toHaveBeenCalledOnce();
+      expect(actionHarness.selection.isEmpty).toBe(true);
+    });
+
+    it('does not open the row when the control is double-clicked', () => {
+      const clicked:boolean[] = [];
+      actionHarness.outputs.itemClicked.subscribe(({ double }) => clicked.push(double));
+
+      fireEvent.doubleClick(removeButton());
+
+      expect(clicked).toEqual([]);
+    });
+  });
+
+  describe('with the details pane open', () => {
+    const openOn = async (routingId:string) => {
+      await harness.destroy();
+      harness = buildTable({
+        workPackages: [{ id: '1' }, { id: '2' }],
+        providers: [{
+          provide: UrlParamsService,
+          useValue: {
+            currentDetailsRouteParams: () => ({ routingId, tab: 'activity' }),
+            basePathWithoutDetails: () => '/work_packages',
+          },
+        }],
+      });
+      await harness.render();
+      return vi.spyOn(Turbo, 'visit').mockImplementation(() => undefined);
+    };
+
+    it('switches it to the clicked row and keeps the tab', async () => {
+      const visit = await openOn('1');
+      try {
+        harness.click('2');
+
+        expect(visit).toHaveBeenCalledOnce();
+        expect(visit.mock.calls[0][0]).toContain('/work_packages/details/2/activity');
+        expect(visit.mock.calls[0][1]).toMatchObject({ frame: 'content-bodyRight', action: 'advance' });
+      } finally {
+        visit.mockRestore();
+      }
+    });
+
+    it('leaves it alone when the clicked row is already shown', async () => {
+      const visit = await openOn('1');
+      try {
+        harness.click('1');
+
+        expect(visit).not.toHaveBeenCalled();
+      } finally {
+        visit.mockRestore();
+      }
+    });
   });
 
   it('marks the clicked row as the current work package', () => {

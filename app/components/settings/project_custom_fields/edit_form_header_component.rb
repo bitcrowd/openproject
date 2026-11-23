@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -34,54 +33,11 @@ module Settings
       def initialize(custom_field:, selected:)
         super
         @custom_field = custom_field
+        @selected = selected
       end
 
       def tabs
-        tabs = [
-          {
-            name: "project_custom_field_edit",
-            path: edit_admin_settings_project_custom_field_path(@custom_field),
-            label: t(:label_details)
-          }
-        ]
-
-        if @custom_field.hierarchical_list?
-          tabs << {
-            name: "items",
-            path: admin_settings_project_custom_field_items_path(@custom_field),
-            label: t(:label_item_plural)
-          }
-        elsif @custom_field.list?
-          tabs << {
-            name: "items",
-            path: list_items_admin_settings_project_custom_field_path(@custom_field),
-            label: t(:label_item_plural)
-          }
-        end
-
-        if @custom_field.user?
-          tabs << {
-            name: "role_assignment",
-            path: role_assignment_admin_settings_project_custom_field_path(@custom_field),
-            label: t("custom_fields.admin.role_assignment.title")
-          }
-        end
-
-        tabs <<
-          {
-            name: "project_custom_field_project_mappings",
-            path: project_mappings_admin_settings_project_custom_field_path(@custom_field),
-            label: t(:label_project_mappings)
-          }
-
-        tabs <<
-          {
-            name: "attribute_help_text",
-            path: attribute_help_text_admin_settings_project_custom_field_path(@custom_field),
-            label: AttributeHelpText.human_attribute_name(:help_text)
-          }
-
-        tabs
+        [details_tab, values_tab, role_assignment_tab, project_mappings_tab, help_text_tab].compact
       end
 
       def page_title
@@ -101,6 +57,58 @@ module Settings
 
       def hide_description?
         @custom_field.field_format_calculated_value? && !EnterpriseToken.allows_to?(:calculated_values)
+      end
+
+      private
+
+      def details_tab
+        {
+          name: "project_custom_field_edit",
+          path: edit_admin_settings_project_custom_field_path(@custom_field),
+          label: t(:label_details)
+        }
+      end
+
+      def values_tab
+        if @custom_field.hierarchical_list?
+          {
+            name: "items",
+            path: admin_settings_project_custom_field_items_path(@custom_field),
+            label: t(:label_value_plural)
+          }
+        elsif @custom_field.list?
+          {
+            name: "items",
+            path: list_items_admin_settings_project_custom_field_path(@custom_field),
+            label: t(:label_value_plural)
+          }
+        end
+      end
+
+      def role_assignment_tab
+        return unless @custom_field.user?
+
+        {
+          name: "role_assignment",
+          path: role_assignment_admin_settings_project_custom_field_path(@custom_field),
+          label: t("custom_fields.admin.role_assignment.title")
+        }
+      end
+
+      def project_mappings_tab
+        {
+          name: "project_custom_field_project_mappings",
+          path: project_mappings_admin_settings_project_custom_field_path(@custom_field),
+          label: t(:label_project_mappings)
+        }
+      end
+
+      def help_text_tab
+        {
+          name: "attribute_help_text",
+          path: attribute_help_text_admin_settings_project_custom_field_path(@custom_field),
+          label: AttributeHelpText.human_attribute_name(:help_text)
+        }
       end
     end
   end

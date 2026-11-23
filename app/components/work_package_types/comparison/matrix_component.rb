@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -49,7 +48,7 @@ module WorkPackageTypes
       delegate :columns, :sections, :type, to: :comparison
 
       def grid_style
-        "grid-template-columns: #{LABEL_WIDTH}px repeat(#{columns.size}, minmax(#{COLUMN_WIDTH}px, 1fr))"
+        "grid-template-columns: #{LABEL_WIDTH}px repeat(#{columns.size}, #{COLUMN_WIDTH}px)"
       end
 
       def section_label(section) = t("types.comparison.sections.#{section}")

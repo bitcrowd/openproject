@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -36,4 +35,5 @@ Rails.application.config.to_prepare do
   Highlighting::Registry.register_model key: "color", model: Color
 
   Highlighting::Registry.register_static key: "project_status", values: Projects::Statuses::AVAILABLE
+  Highlighting::Registry.register_static key: "project_phase_status", values: Projects::PhaseStatuses::AVAILABLE
 end

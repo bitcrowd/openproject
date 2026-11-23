@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -32,12 +31,17 @@ module WorkPackages::Scopes::IncludeSpentTime
   extend ActiveSupport::Concern
 
   class_methods do
+    # Returns the spent time of the work package and its descendants.
+    # The visibility check is carried out on the database level and is
+    # carried out on the projection. Therefore, `pluck` and `except(:select)` must not be used.
     def include_spent_time(user, work_package = nil)
-      scope = left_join_self_and_descendants(user, work_package)
+      hours = sum_over_visible_descendants(user, "#{visible_time_entries_cte.name}.hours")
+
+      scope = left_join_self_and_descendants(work_package)
               .with(visible_time_entries_cte.name => allowed_to_view_time_entries(user))
               .joins(join_visible_time_entries.join_sources)
               .group(:id)
-              .select("SUM(#{visible_time_entries_cte.name}.hours) AS hours")
+              .select(hours => :hours)
 
       if work_package
         scope.where(id: work_package.id)
@@ -60,18 +64,12 @@ module WorkPackages::Scopes::IncludeSpentTime
 
     def entity_join
       visible_time_entries_cte[:entity_type].eq("WorkPackage").and(
-        visible_time_entries_cte[:entity_id].eq(wp_descendants[:id])
+        visible_time_entries_cte[:entity_id].eq(wp_descendants_table[:id])
       )
     end
 
     def wp_table
       @wp_table ||= arel_table
-    end
-
-    def wp_descendants
-      # Relies on a table called descendants to exist in the scope
-      # which is provided by left_join_self_and_descendants
-      @wp_descendants ||= wp_table.alias("descendants")
     end
 
     def visible_time_entries_cte

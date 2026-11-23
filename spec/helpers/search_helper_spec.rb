@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -102,7 +101,7 @@ RSpec.describe "search/index" do
     let(:event) do
       instance_double(WorkPackage,
                       last_journal: journal,
-                      last_loaded_journal: journal,
+                      last_loaded_visible_journal: journal,
                       event_description:,
                       attachment_ids: [42],
                       attachments: [build_stubbed(:attachment, filename: attachment_filename)]).tap do |e|
@@ -204,6 +203,43 @@ RSpec.describe "search/index" do
         expect(helper.highlight_tokens_in_event(event, tokens))
           .to eql '<p class="op-uc-p">The description of the event</p>'
       end
+    end
+
+    context "with the token in both a hidden internal note and an earlier public note" do
+      let(:tokens) { %w(secret) }
+      let(:public_note) { build_stubbed(:work_package_journal, notes: "A public secret", version: 2) }
+      let(:hidden_internal_note) do
+        build_stubbed(:work_package_journal, notes: "An internal secret", internal: true, version: 3)
+      end
+
+      before do
+        allow(event).to receive_messages(last_loaded_journal: hidden_internal_note,
+                                         last_loaded_visible_journal: public_note)
+      end
+
+      it "shows the text of the public note" do
+        expect(helper.highlight_tokens_in_event(event, tokens))
+          .to eql 'A public <span class="search-highlight token-0">secret</span>'
+      end
+    end
+  end
+
+  describe "#with_notes_anchor" do
+    let(:tokens) { %w(secret) }
+    let(:public_note) { build_stubbed(:work_package_journal, notes: "A public secret", version: 2) }
+    let(:hidden_internal_note) do
+      build_stubbed(:work_package_journal, notes: "An internal secret", internal: true, version: 3)
+    end
+    let(:event) do
+      instance_double(WorkPackage,
+                      last_journal: hidden_internal_note,
+                      last_loaded_journal: hidden_internal_note,
+                      last_loaded_visible_journal: public_note,
+                      event_url: { controller: "/work_packages", action: :show, id: 1 })
+    end
+
+    it "anchors to the latest note visible to the user instead of the latest note overall" do
+      expect(helper.with_notes_anchor(event, tokens)).to include(anchor: "note-1")
     end
   end
 end

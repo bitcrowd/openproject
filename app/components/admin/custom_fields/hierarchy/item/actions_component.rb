@@ -22,8 +22,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -49,9 +48,11 @@ module Admin
             with_item_group(menu) { edit_action_item(menu) }
 
             with_item_group(menu) do
-              add_above_action_item(menu)
-              add_below_action_item(menu)
-              add_sub_item_action_item(menu)
+              if item.parent.project_id.nil?
+                add_above_action_item(menu)
+                add_below_action_item(menu)
+              end
+              add_sub_item_action_item(menu) if item.project_id.nil?
             end
 
             with_item_group(menu) { change_parent_item(menu) }
@@ -144,7 +145,7 @@ module Admin
                    end
 
             menu.with_item(
-              label: I18n.t(:button_add_sub_item),
+              label: I18n.t(:button_add_sub_value),
               tag: :a,
               href:,
               content_arguments: { data: { turbo_frame: ItemsComponent.wrapper_key } }

@@ -20,8 +20,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
@@ -43,7 +42,7 @@ RSpec.describe "Team planner",
       click_link "Team planners"
     end
 
-    expect(page).to have_content "There is currently nothing to display."
+    expect(page).to have_text "There is currently nothing to display."
     page.find_test_selector("add-team-planner-button").click
 
     expect_angular_frontend_initialized
@@ -75,7 +74,7 @@ RSpec.describe "Team planner",
     let(:user_outside_project) { create(:user, firstname: "Not", lastname: "In Project") }
     let(:type_task) { create(:type_task) }
     let(:type_bug) { create(:type_bug) }
-    let(:closed_status) { create(:status, is_closed: true) }
+    let(:closed_status) { create(:status, category: "closed") }
 
     let(:other_task) do
       create(:work_package,
